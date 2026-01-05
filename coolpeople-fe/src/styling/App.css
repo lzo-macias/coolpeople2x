@@ -1,0 +1,103 @@
+/*
+figma styles
+
+black: 222222
+grey: 777777
+white: FFFFFF
+borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
+
+*/
+
+
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* Horizontal page navigation */
+.pages-container {
+  flex: 1;
+  display: flex;
+  transition: transform 0.3s ease-out;
+  height: 100%;
+}
+
+.page {
+  min-width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Home/Reels page scroll container */
+.scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Home Section */
+.home-section {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 80px;
+  background-color: var(--bg-primary);
+}
+
+.reel-peek-section {
+  margin: 0 16px;
+  margin-top: auto;
+}
+
+/* Reels Section */
+.reels-section {
+  scroll-snap-type: y mandatory;
+}
+
+.reels-section .reel-card {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Search placeholder */
+.search-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: white;
+  color: #333;
+}
+
+.search-placeholder h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.search-placeholder p {
+  color: #888;
+}
+
+/* Profile overlay */
+.profile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  z-index: 1000;
+  overflow-y: auto;
+}

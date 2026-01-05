@@ -1,0 +1,192 @@
+.comments-section {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  max-width: 430px;
+  margin: 0 auto;
+}
+
+/* Video preview at top */
+.comments-video-preview {
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.comments-video-preview {
+  cursor: pointer;
+}
+
+/* Drag handle */
+.drag-handle {
+  background: #f5f5f5;
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-indicator {
+  width: 40px;
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.video-thumbnail {
+  width: 100%;
+  height: 200px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.cp-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Comments container */
+.comments-container {
+  flex: 1;
+  overflow-y: auto;
+  background: #f5f5f5;
+}
+
+.cp-comments-section,
+.regular-comments-section {
+  background: #ffffff;
+}
+
+.cp-comments-section {
+  border-bottom: none;
+}
+
+/* CP Divider - gradient line */
+.cp-divider {
+  padding: 8px 16px;
+  cursor: pointer;
+  background: #f5f5f5;
+  transition: all 0.3s ease;
+}
+
+.cp-divider:hover {
+  background: #ebebeb;
+}
+
+.cp-divider-line {
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
+  border-radius: 2px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cp-divider-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  background-color: #f5f5f5;
+}
+
+/* Comment input */
+.comment-input-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.input-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.comment-input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+}
+
+.comment-input::placeholder {
+  color: #999;
+}
+
+.input-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.input-action-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-action-btn:hover {
+  color: #333;
+}
+
+/* Override comment styles for light background */
+.comments-section .comment {
+  background: #ffffff;
+}
+
+.comments-section .comment-username {
+  color: #333;
+}
+
+.comments-section .comment-text {
+  color: #333;
+}
+
+.comments-section .comment-action-btn {
+  color: #666;
+}
+
+.comments-section .comment-action-btn:hover {
+  color: #333;
+}
+
+.comments-section .comment-likes {
+  color: #666;
+}

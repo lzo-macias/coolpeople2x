@@ -1,0 +1,16 @@
+.reels-feed {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.reels-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.reels-feed .reel-card {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}

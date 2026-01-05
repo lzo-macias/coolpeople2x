@@ -1,0 +1,107 @@
+.scoreboard-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.user-avatar-container {
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-cyan);
+  object-fit: cover;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-party {
+  font-size: 12px;
+  color: #888;
+}
+
+.user-sparkline {
+  flex-shrink: 0;
+  width: 60px;
+}
+
+.user-score-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.user-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+
+.user-change {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.user-change.positive {
+  background: #00cc66;
+  color: white;
+}
+
+.user-change.negative {
+  background: #ff4444;
+  color: white;
+}
+
+.favorite-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #ddd;
+  background: white;
+  color: #888;
+}
+
+.favorite-btn.favorited {
+  background: #fff8e6;
+  border-color: #ffc107;
+  color: #333;
+}
+
+.star-icon {
+  color: #ffc107;
+  font-size: 12px;
+}
+
+.favorite-btn:not(.favorited) .star-icon {
+  color: #ccc;
+}

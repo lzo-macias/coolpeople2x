@@ -1,0 +1,30 @@
+.scoreboard-chart {
+  position: relative;
+  padding: 8px 0;
+  background: white;
+  margin: 0;
+}
+
+.scoreboard-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-avatars {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  pointer-events: none;
+}
+
+.chart-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  object-fit: cover;
+}
