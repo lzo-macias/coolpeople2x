@@ -41,6 +41,11 @@
   filter: none !important;
 }
 
+/* Themed icons (bouncing balls, etc) - no filter, uses themed SVG */
+.nav-icon-themed {
+  filter: none !important;
+}
+
 /* Dark mode: selected icons become white */
 .nav-icon-active {
   filter: brightness(0) invert(1);

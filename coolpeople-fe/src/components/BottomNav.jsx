@@ -5,10 +5,16 @@ function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {}
   const isLight = theme === 'light'
 
   // Regular icons always use darkmode (grey #777777) as base
-  // Plus icon uses themed version (simple grey in dark, colorful gradient in light)
-  const getIconPath = (iconName, isCreateIcon = false) => {
-    if (isCreateIcon) {
+  // Plus icon uses themed versions, bouncingballs only themed in dark mode
+  const getIconPath = (iconName, isThemed = false) => {
+    if (isThemed) {
       const t = isLight ? 'lightmode' : 'darkmode'
+      // Bouncingballs: themed in dark mode only, gray version in light mode
+      if (iconName === 'bouncingballs') {
+        return isLight
+          ? `${iconBasePath}/darkmode/bouncingballs-darkmode.svg`  // gray for light mode
+          : `${iconBasePath}/darkmode/bouncingballs-darkmode.svg`  // themed for dark mode
+      }
       return `${iconBasePath}/${t}/${iconName}-icon-${t}.svg`
     }
     // All other icons use darkmode grey version
@@ -17,13 +23,13 @@ function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {}
 
   // Navigation items config
   const navItems = [
-    { id: 'create', icon: 'plus', isCreate: true },
+    { id: 'create', icon: 'plus', isThemed: true },
     { id: 'search', icon: 'explore' },
     { id: 'scoreboard', icon: 'scoreboard' },
     { id: 'home', icon: 'home' },
     { id: 'messages', icon: 'messages' },
     { id: 'profile', icon: 'userprofile' },
-    { id: 'campaign', icon: 'mycampaign', hasNotification: true },
+    { id: 'campaign', icon: 'bouncingballs', isThemed: true, hasNotification: true },
   ]
 
   return (
@@ -32,20 +38,31 @@ function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {}
         const isActive = currentPage === item.id
         const notificationCount = notifications[item.id]
 
-        // Plus icon always uses its themed version (no color filtering)
-        const iconClass = item.isCreate
-          ? 'nav-icon nav-icon-create'
-          : `nav-icon ${isActive ? 'nav-icon-active' : ''}`
+        // Themed icons handling
+        const isCreateBtn = item.id === 'create'
+        const isCampaignBtn = item.id === 'campaign'
+
+        let iconClass = 'nav-icon'
+        if (isCreateBtn) {
+          iconClass = 'nav-icon nav-icon-create'
+        } else if (isCampaignBtn) {
+          // Campaign: themed (no filter) in dark mode, regular active filter in light mode
+          iconClass = isLight
+            ? `nav-icon ${isActive ? 'nav-icon-active' : ''}`
+            : 'nav-icon nav-icon-themed'
+        } else {
+          iconClass = `nav-icon ${isActive ? 'nav-icon-active' : ''}`
+        }
 
         return (
           <button
             key={item.id}
-            className={`nav-item ${isActive ? 'active' : ''} ${item.isCreate ? 'create-btn' : ''}`}
-            onClick={() => !item.isCreate && onNavigate?.(item.id)}
+            className={`nav-item ${isActive ? 'active' : ''} ${isCreateBtn ? 'create-btn' : ''}`}
+            onClick={() => !isCreateBtn && onNavigate?.(item.id)}
           >
             <div className="nav-icon-wrapper">
               <img
-                src={getIconPath(item.icon, item.isCreate)}
+                src={getIconPath(item.icon, item.isThemed)}
                 alt={item.id}
                 className={iconClass}
               />

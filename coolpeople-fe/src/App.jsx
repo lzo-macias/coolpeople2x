@@ -90,31 +90,16 @@ function App() {
           <Scoreboard onOpenProfile={handleOpenProfile} />
         </div>
 
-        {/* Home/Reels Page */}
+        {/* Home Page - Now Reels */}
         <div className="page">
-          <div className="scroll-container">
-            {/* Home Section */}
-            <section className="home-section">
-              <NominationStories />
-              <NominationCard />
-              <InviteFriends />
-
-              {/* Reel preview peeking */}
-              <div className="reel-peek-section">
-                <ReelCard reel={mockReels[0]} isPreview={true} />
-              </div>
-            </section>
-
-            {/* Reels Section - scroll down to enter */}
-            <section className="reels-section">
-              {mockReels.map((reel) => (
-                <ReelCard
-                  key={reel.id}
-                  reel={reel}
-                  onOpenComments={() => handleOpenComments(reel)}
-                />
-              ))}
-            </section>
+          <div className="reels-feed">
+            {mockReels.map((reel) => (
+              <ReelCard
+                key={reel.id}
+                reel={reel}
+                onOpenComments={() => handleOpenComments(reel)}
+              />
+            ))}
           </div>
         </div>
 

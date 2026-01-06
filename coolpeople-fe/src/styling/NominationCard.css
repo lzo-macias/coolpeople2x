@@ -1,5 +1,5 @@
 .nomination-card-container {
-  padding: 0 24px;
+  padding: 0 16px;
   margin-bottom: 24px;
 }
 
@@ -7,7 +7,7 @@
   background-color: var(--bg-card);
   border-radius: var(--border-radius);
   border: 2px solid var(--accent-cyan);
-  aspect-ratio: 1/1;
+  aspect-ratio: 4/3;
   display: flex;
   align-items: center;
   justify-content: center;

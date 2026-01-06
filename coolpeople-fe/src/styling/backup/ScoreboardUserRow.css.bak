@@ -1,28 +1,20 @@
 .scoreboard-user-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 16px;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .user-avatar-container {
   flex-shrink: 0;
-  cursor: pointer;
-}
-
-.user-avatar-ring {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid #ccc;
-  padding: 2px;
 }
 
 .user-avatar {
-  width: 100%;
-  height: 100%;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
+  border: 3px solid var(--accent-cyan);
   object-fit: cover;
 }
 
@@ -35,33 +27,36 @@
 }
 
 .user-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #222;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-party {
-  font-size: 11px;
+  font-size: 12px;
   color: #888;
 }
 
 .user-sparkline {
   flex-shrink: 0;
-  width: 70px;
+  width: 60px;
 }
 
 .user-score-section {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
   min-width: 80px;
 }
 
 .user-score {
   font-size: 14px;
   font-weight: 700;
-  color: #222;
+  color: #333;
 }
 
 .user-change {
@@ -72,33 +67,41 @@
 }
 
 .user-change.positive {
-  background: #22c55e;
+  background: #00cc66;
   color: white;
 }
 
 .user-change.negative {
-  background: #ef4444;
+  background: #ff4444;
   color: white;
 }
 
-.user-favorited {
+.favorite-btn {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
   font-size: 10px;
-  color: #888;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #ddd;
+  background: white;
+  color: #888;
 }
 
-.user-favorited.active {
-  color: #222;
+.favorite-btn.favorited {
+  background: #fff8e6;
+  border-color: #ffc107;
+  color: #333;
 }
 
-.user-favorited .star-icon {
-  color: #fbbf24;
-  font-size: 11px;
+.star-icon {
+  color: #ffc107;
+  font-size: 12px;
 }
 
-.user-favorited:not(.active) .star-icon {
+.favorite-btn:not(.favorited) .star-icon {
   color: #ccc;
 }

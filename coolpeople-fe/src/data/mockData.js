@@ -317,7 +317,7 @@ export const mockScoreboard = [
     avatar: 'https://i.pravatar.cc/60?img=12',
     party: 'The Pink Lady Party',
     score: 48134.89,
-    change: 301.26,
+    change: -301.26,
     isFavorited: true,
     sparklineData: generateSparklineData('down', 15),
     chartData: [1.0, 1.2, 1.4, 1.6, 1.9, 2.1, 2.3, 2.4, 2.6, 2.8, 2.9],

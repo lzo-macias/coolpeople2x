@@ -91,19 +91,8 @@ function CommentsSection({ reel, onClose }) {
           className="video-thumbnail"
           style={{ backgroundImage: `url(${reel?.thumbnail})` }}
         >
-          <span className="cp-badge">CP</span>
+          {/* <span className="cp-badge">CP</span> */}
         </div>
-      </div>
-
-      {/* Drag handle */}
-      <div
-        className="drag-handle"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-      >
-        <div className="drag-indicator"></div>
       </div>
 
       {/* Comments container */}
@@ -111,8 +100,13 @@ function CommentsSection({ reel, onClose }) {
         {/* CP Comments section */}
         {dividerState !== 'hidden' && (
           <div className="cp-comments-section">
-            {visibleCPComments.map((comment) => (
-              <Comment key={comment.id} comment={comment} isCP={true} />
+            {visibleCPComments.map((comment, index) => (
+              <div key={comment.id} className="cp-comment-wrapper">
+                <Comment comment={comment} isCP={true} />
+                {index === visibleCPComments.length - 1 && (
+                  <span className="leave-verified-comment">leave a verified comment</span>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -120,7 +114,9 @@ function CommentsSection({ reel, onClose }) {
         {/* CP Divider - gradient line */}
         <div className="cp-divider" onClick={handleDividerClick}>
           <div className="cp-divider-line">
-            <span className="cp-divider-text">CP</span>
+            <span className="cp-divider-text-bg">
+              <span className="cp-divider-text">CP</span>
+            </span>
           </div>
         </div>
 

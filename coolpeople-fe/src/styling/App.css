@@ -69,6 +69,24 @@ borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
   scroll-snap-stop: always;
 }
 
+/* Reels Feed (Home Page) */
+.reels-feed {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.reels-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.reels-feed .reel-card {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
 /* Search placeholder */
 .search-placeholder {
   display: flex;

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardChart from './ScoreboardChart'
@@ -24,68 +24,11 @@ function Scoreboard({ onOpenProfile }) {
   const [users, setUsers] = useState(mockScoreboard)
   const [timePeriod, setTimePeriod] = useState('this month')
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
-  const [activeSection, setActiveSection] = useState(0)
-  const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
-
-  // Mock current user's party (null if not in a party)
-  const currentUserParty = 'Democrat'
 
   const today = new Date()
   const dateString = `${today.getDate()} of ${today.toLocaleString('en-US', { month: 'long' }).toLowerCase()}`
 
   const favoritedUsers = users.filter(u => u.isFavorited)
-
-  // Frontrunners - sorted by score (highest first)
-  const frontrunnerUsers = [...users].sort((a, b) => {
-    const scoreA = typeof a.score === 'number' ? a.score : parseFloat(String(a.score).replace(/,/g, ''))
-    const scoreB = typeof b.score === 'number' ? b.score : parseFloat(String(b.score).replace(/,/g, ''))
-    return scoreB - scoreA
-  }).slice(0, 10)
-
-  // Nominated users (users who have been nominated)
-  const nominatedUsers = users.filter(u => {
-    const score = typeof u.score === 'number' ? u.score : parseFloat(String(u.score || 0).replace(/,/g, ''))
-    return score > 0
-  })
-
-  // Party users (same party as current user)
-  const partyUsers = currentUserParty
-    ? users.filter(u => u.party === currentUserParty)
-    : []
-
-  // Define sections
-  const sections = [
-    { id: 'favorited', label: 'Favorited Users', users: favoritedUsers },
-    { id: 'frontrunners', label: 'Frontrunners', users: frontrunnerUsers },
-    { id: 'nominated', label: 'Nominated', users: nominatedUsers },
-  ]
-
-  // Add party section if user is in a party
-  if (currentUserParty) {
-    sections.push({ id: 'party', label: `${currentUserParty} Party`, users: partyUsers })
-  }
-
-  const handleSwipe = (e) => {
-    // Accumulate horizontal scroll delta
-    swipeRef.current.accumulatedDelta += e.deltaX
-
-    // Threshold for triggering a swipe
-    const threshold = 50
-
-    if (swipeRef.current.accumulatedDelta > threshold) {
-      // Swipe left - go to next section
-      if (activeSection < sections.length - 1) {
-        setActiveSection(activeSection + 1)
-      }
-      swipeRef.current.accumulatedDelta = 0
-    } else if (swipeRef.current.accumulatedDelta < -threshold) {
-      // Swipe right - go to previous section
-      if (activeSection > 0) {
-        setActiveSection(activeSection - 1)
-      }
-      swipeRef.current.accumulatedDelta = 0
-    }
-  }
 
   const handleToggleFavorite = (userId) => {
     setUsers(users.map(user =>
@@ -99,10 +42,7 @@ function Scoreboard({ onOpenProfile }) {
     <div className="scoreboard-page">
       {/* Header */}
       <div className="scoreboard-header">
-        <div className="scoreboard-header-left">
-          <h1 className="scoreboard-title">Scoreboard</h1>
-          <p className="scoreboard-date">{dateString}</p>
-        </div>
+        <h1 className="scoreboard-title">Scoreboard</h1>
         <button
           className="view-toggle"
           onClick={() => setViewMode(viewMode === 'global' ? 'local' : 'global')}
@@ -111,34 +51,18 @@ function Scoreboard({ onOpenProfile }) {
         </button>
       </div>
 
-      {/* Users sections with horizontal swipe */}
-      <div className="users-sections-container">
-        <div className="section-header">
-          <span className="section-title">{sections[activeSection].label}</span>
-          <div className="section-dots">
-            {sections.map((_, index) => (
-              <span
-                key={index}
-                className={`section-dot ${activeSection === index ? 'active' : ''}`}
-                onClick={() => setActiveSection(index)}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="sections-content" onWheel={handleSwipe}>
-          {sections[activeSection].users.length > 0 ? (
-            sections[activeSection].users.map(user => (
-              <ScoreboardUserRow
-                key={user.userId}
-                user={user}
-                onToggleFavorite={handleToggleFavorite}
-                onOpenProfile={onOpenProfile}
-              />
-            ))
-          ) : (
-            <div className="section-empty">No users in this section</div>
-          )}
-        </div>
+      <p className="scoreboard-date">{dateString}</p>
+
+      {/* Favorited users list */}
+      <div className="favorited-users">
+        {favoritedUsers.map(user => (
+          <ScoreboardUserRow
+            key={user.userId}
+            user={user}
+            onToggleFavorite={handleToggleFavorite}
+            onOpenProfile={onOpenProfile}
+          />
+        ))}
       </div>
 
       {/* Time period dropdown */}
@@ -177,10 +101,10 @@ function Scoreboard({ onOpenProfile }) {
       </div>
 
       {/* CoolPeople Title */}
-      {/* <h1 className="coolpeople-title">CoolPeople</h1> */}
+      <h1 className="coolpeople-title">CoolPeople</h1>
 
       {/* Current Front Runner Section */}
-      {/* <div className="front-runner-section">
+      <div className="front-runner-section">
         {frontRunners.map(runner => (
           <div
             key={runner.id}
@@ -197,7 +121,7 @@ function Scoreboard({ onOpenProfile }) {
             <span className="front-runner-nominations">{runner.nominations} Nominations</span>
           </div>
         ))}
-      </div> */}
+      </div>
     </div>
   )
 }

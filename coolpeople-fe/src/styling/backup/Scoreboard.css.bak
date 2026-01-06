@@ -7,28 +7,15 @@
 .scoreboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 14px;
-  padding-top: 20px;
-}
-
-.scoreboard-header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  padding: 16px;
+  padding-top: 24px;
 }
 
 .scoreboard-title {
   font-size: 16px;
   font-weight: 600;
-  color: #222;
-  margin: 0;
-}
-
-.scoreboard-date {
-  font-size: 21px;
-  font-weight: 400;
-  color: #666;
+  color: #333;
   margin: 0;
 }
 
@@ -36,76 +23,36 @@
   background: none;
   border: none;
   color: #888;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
-  padding: 6px 0;
+  padding: 8px;
 }
 
 .view-toggle:hover {
   color: #333;
 }
 
-/* Users Sections Container */
-.users-sections-container {
-  background: white;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #eee;
-}
-
-.section-title {
-  font-size: 13px;
+.scoreboard-date {
+  font-size: 3vw;
   font-weight: 600;
-  color: #222;
-}
-
-.section-dots {
-  display: flex;
-  gap: 6px;
-}
-
-.section-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ddd;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
-}
-
-.section-dot:hover {
-  transform: scale(1.2);
-}
-
-.section-dot.active {
-  background: #00c4c4;
-}
-
-.sections-content {
-  background: white;
-}
-
-.section-empty {
-  padding: 24px;
-  text-align: center;
   color: #888;
-  font-size: 13px;
+  padding: 0 16px;
+  margin: 0 0 16px 0;
+}
+
+.favorited-users {
+  background: white;
 }
 
 .time-period-selector {
-  padding: 14px;
+  padding: 16px;
 }
 
 .time-period-dropdown {
-  padding: 7px 14px;
+  padding: 8px 16px;
   border: 1px solid #ddd;
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 14px;
   color: #333;
   background: white;
   cursor: pointer;

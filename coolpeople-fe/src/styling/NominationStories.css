@@ -26,7 +26,7 @@
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  padding: 3px;
+  padding: 1px;
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
   cursor: pointer;
 }
