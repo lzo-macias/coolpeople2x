@@ -294,7 +294,145 @@ export const mockParties = [
   { id: 'party-3', name: 'Independent', color: '#808080', members: 8950 },
   { id: 'party-4', name: 'Green', color: '#17AA5C', members: 3200 },
   { id: 'party-5', name: 'Libertarian', color: '#FED105', members: 2100 },
+  { id: 'party-6', name: 'The Pink Lady Party', color: '#e91e8c', members: 9999 },
 ]
+
+// Party Profiles (detailed data for party profile pages)
+export const mockPartyProfiles = {
+  'The Pink Lady Party': {
+    id: 'party-6',
+    name: 'The Pink Lady',
+    fullName: 'The Pink Lady Party',
+    avatar: 'https://i.pravatar.cc/150?img=12',
+    color: '#e91e8c',
+    members: '9,999',
+    followers: '1M',
+    change: '+301.26',
+    sparklineData: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
+    bio: 'A progressive party focused on equality, justice, and community empowerment.',
+  },
+  'Democrat': {
+    id: 'party-1',
+    name: 'Democrat',
+    fullName: 'Democratic Party',
+    avatar: 'https://i.pravatar.cc/150?img=20',
+    color: '#0015BC',
+    members: '15,420',
+    followers: '2.5M',
+    change: '+150.50',
+    sparklineData: [40, 42, 45, 48, 50, 52, 55, 58, 60, 62, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88],
+    bio: 'Fighting for working families and a stronger middle class.',
+  },
+  'Republican': {
+    id: 'party-2',
+    name: 'Republican',
+    fullName: 'Republican Party',
+    avatar: 'https://i.pravatar.cc/150?img=22',
+    color: '#E81B23',
+    members: '14,280',
+    followers: '2.3M',
+    change: '+120.30',
+    sparklineData: [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80],
+    bio: 'Preserving liberty, freedom, and traditional values.',
+  },
+  'Independent': {
+    id: 'party-3',
+    name: 'Independent',
+    fullName: 'Independent',
+    avatar: 'https://i.pravatar.cc/150?img=25',
+    color: '#808080',
+    members: '8,950',
+    followers: '800K',
+    change: '+45.20',
+    sparklineData: [35, 38, 40, 42, 45, 48, 50, 52, 55, 58, 60, 62, 65, 68, 70, 72, 74, 76, 78, 80],
+    bio: 'Independent thinking for independent voters.',
+  },
+  'Green': {
+    id: 'party-4',
+    name: 'Green',
+    fullName: 'Green Party',
+    avatar: 'https://i.pravatar.cc/150?img=30',
+    color: '#17AA5C',
+    members: '3,200',
+    followers: '350K',
+    change: '+89.15',
+    sparklineData: [30, 35, 38, 42, 45, 50, 55, 58, 62, 65, 68, 72, 75, 78, 80, 82, 85, 88, 90, 92],
+    bio: 'Environmental justice and sustainable futures for all.',
+  },
+  'Libertarian': {
+    id: 'party-5',
+    name: 'Libertarian',
+    fullName: 'Libertarian Party',
+    avatar: 'https://i.pravatar.cc/150?img=35',
+    color: '#FED105',
+    members: '2,100',
+    followers: '250K',
+    change: '+32.80',
+    sparklineData: [25, 28, 32, 35, 38, 42, 45, 48, 52, 55, 58, 62, 65, 68, 70, 72, 75, 78, 80, 82],
+    bio: 'Maximum freedom, minimum government.',
+  },
+}
+
+// Participant profiles (users who haven't opted into social credit)
+export const mockParticipants = {
+  'participant-1': {
+    id: 'participant-1',
+    username: 'William.Hiya',
+    avatar: 'https://i.pravatar.cc/150?img=12',
+    party: null, // Independent
+    nominations: '9,999',
+    followers: '1M',
+    isFollowing: false,
+    hasOptedIn: false,
+    posts: [
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+    ],
+  },
+  'participant-2': {
+    id: 'participant-2',
+    username: 'William.Hiya',
+    avatar: 'https://i.pravatar.cc/150?img=12',
+    party: 'The Pink Lady Party', // In a party
+    nominations: '9,999',
+    followers: '1M',
+    isFollowing: false,
+    hasOptedIn: false,
+    posts: [
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+    ],
+  },
+  'participant-own': {
+    id: 'participant-own',
+    username: 'William.Hiya',
+    avatar: 'https://i.pravatar.cc/150?img=12',
+    party: null, // Independent
+    nominations: '9,999',
+    followers: '1M',
+    isFollowing: false,
+    hasOptedIn: false, // Shows "opt in" link
+    posts: [
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
+    ],
+  },
+}
 
 // Scoreboard data
 export const mockScoreboard = [
@@ -421,16 +559,18 @@ export const mockScoreboard = [
 ]
 
 // Comments data
+// profileType: 'candidate' (opted into social credit) or 'participant' (not opted in)
 export const mockComments = {
   'reel-1': {
     cpComments: [
       {
         id: 'cp-1',
         userId: 'user-1',
-        username: 'datguy.wippa',
+        username: 'Lzo.macias',
         avatar: 'https://i.pravatar.cc/40?img=15',
         party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem',
+        profileType: 'candidate', // Opted into social credit
+        text: 'This is exactly what we need more of in politics! Real people making real change.',
         likes: 23,
         isCP: true,
         replies: [],
@@ -439,11 +579,12 @@ export const mockComments = {
       {
         id: 'cp-2',
         userId: 'user-2',
-        username: 'datguy.wippa',
+        username: 'Sarah.Politics',
         avatar: 'https://i.pravatar.cc/40?img=16',
-        party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem',
-        likes: 23,
+        party: 'Democrat',
+        profileType: 'participant', // Not opted in, in a party
+        text: 'Love seeing this kind of engagement from the community. Keep it up!',
+        likes: 45,
         isCP: true,
         replies: [],
         createdAt: '2024-01-15T10:45:00Z',
@@ -451,11 +592,12 @@ export const mockComments = {
       {
         id: 'cp-3',
         userId: 'user-3',
-        username: 'datguy.wippa',
+        username: 'Mike.Independent',
         avatar: 'https://i.pravatar.cc/40?img=17',
-        party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem',
-        likes: 23,
+        party: null, // Independent participant
+        profileType: 'participant',
+        text: 'As an independent voter, this really speaks to me. Great content!',
+        likes: 18,
         isCP: true,
         replies: [],
         createdAt: '2024-01-15T10:30:00Z',
@@ -465,11 +607,12 @@ export const mockComments = {
       {
         id: 'reg-1',
         userId: 'user-4',
-        username: 'datguy.wippa',
+        username: 'William.Hiya',
         avatar: 'https://i.pravatar.cc/40?img=18',
         party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem',
-        likes: 23,
+        profileType: 'candidate', // Candidate profile
+        text: 'Really inspiring message here. This is why I got into politics.',
+        likes: 67,
         isCP: false,
         replies: [],
         createdAt: '2024-01-15T09:00:00Z',
@@ -477,23 +620,25 @@ export const mockComments = {
       {
         id: 'reg-2',
         userId: 'user-5',
-        username: 'datguy.wippa',
+        username: 'Alex.Voter',
         avatar: 'https://i.pravatar.cc/40?img=19',
-        party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem',
-        likes: 23,
+        party: 'Republican',
+        profileType: 'participant', // Participant in Republican party
+        text: 'Interesting perspective, thanks for sharing!',
+        likes: 12,
         isCP: false,
         replies: [],
         createdAt: '2024-01-15T08:30:00Z',
       },
       {
         id: 'reg-3',
-        userId: 'user-1',
-        username: 'datguy.wippa',
+        userId: 'user-6',
+        username: 'Jordan.Civic',
         avatar: 'https://i.pravatar.cc/40?img=20',
-        party: 'The Pink Lady Party',
-        text: 'lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum',
-        likes: 23,
+        party: null, // Independent participant
+        profileType: 'participant',
+        text: 'This is what democracy looks like. People coming together!',
+        likes: 34,
         isCP: false,
         replies: [],
         createdAt: '2024-01-15T08:00:00Z',

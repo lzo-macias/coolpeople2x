@@ -119,3 +119,31 @@ borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
   z-index: 1000;
   overflow-y: auto;
 }
+
+/* Back button */
+.back-button {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  color: #FFFFFF;
+  transition: background 0.2s ease;
+}
+
+.back-button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.back-button svg {
+  width: 20px;
+  height: 20px;
+}

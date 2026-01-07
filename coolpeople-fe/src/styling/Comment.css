@@ -12,6 +12,12 @@
   object-fit: cover;
   flex-shrink: 0;
   border: 2px solid var(--accent-cyan);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.comment-avatar:hover {
+  opacity: 0.8;
 }
 
 .comment-content {
@@ -32,10 +38,47 @@
   color: var(--text-primary);
 }
 
+.comment-username-btn {
+  font-size: 14px;
+  font-weight: 500;
+  color: black;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  font-family: inherit;
+}
+
+.comment-username-btn:hover {
+  opacity: 0.7;
+}
+
 .comment-party {
   font-size: 13px;
   color: #e91e8c;
   font-weight: 500;
+}
+
+.comment-party-btn {
+  font-size: 13px;
+  font-weight: 500;
+  color: #777777;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  font-family: inherit;
+}
+
+.comment-party-btn:hover:not(:disabled) {
+  opacity: 0.7;
+}
+
+.comment-party-btn:disabled {
+  cursor: default;
+  color: #808080;
 }
 
 .comment-text {

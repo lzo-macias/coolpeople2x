@@ -7,7 +7,7 @@ import { mockComments } from '../data/mockData'
 // CP divider states: 'expanded' (show all CP), 'collapsed' (show 1 CP), 'hidden' (divider at bottom)
 const DIVIDER_STATES = ['expanded', 'collapsed', 'hidden']
 
-function CommentsSection({ reel, onClose }) {
+function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
   const [dividerState, setDividerState] = useState('expanded')
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
@@ -102,7 +102,12 @@ function CommentsSection({ reel, onClose }) {
           <div className="cp-comments-section">
             {visibleCPComments.map((comment, index) => (
               <div key={comment.id} className="cp-comment-wrapper">
-                <Comment comment={comment} isCP={true} />
+                <Comment
+                  comment={comment}
+                  isCP={true}
+                  onUsernameClick={onUsernameClick}
+                  onPartyClick={onPartyClick}
+                />
                 {index === visibleCPComments.length - 1 && (
                   <span className="leave-verified-comment">leave a verified comment</span>
                 )}
@@ -123,7 +128,13 @@ function CommentsSection({ reel, onClose }) {
         {/* Regular comments */}
         <div className="regular-comments-section">
           {comments.regularComments.map((comment) => (
-            <Comment key={comment.id} comment={comment} isCP={false} />
+            <Comment
+              key={comment.id}
+              comment={comment}
+              isCP={false}
+              onUsernameClick={onUsernameClick}
+              onPartyClick={onPartyClick}
+            />
           ))}
         </div>
       </div>

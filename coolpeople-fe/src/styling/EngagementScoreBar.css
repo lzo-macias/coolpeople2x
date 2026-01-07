@@ -19,6 +19,15 @@
   gap: 4px;
 }
 
+.engagement-item.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.engagement-item.clickable:hover {
+  opacity: 0.8;
+}
+
 .engagement-header {
   display: flex;
   align-items: center;

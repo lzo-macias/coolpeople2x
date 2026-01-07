@@ -1,0 +1,182 @@
+.explore-page {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  background: #1a1a1a;
+  font-family: 'Inter', sans-serif;
+  padding-bottom: 80px;
+}
+
+/* Header & Search */
+.explore-header {
+  padding: 12px;
+  position: sticky;
+  top: 0;
+  background: #1a1a1a;
+  z-index: 10;
+}
+
+.explore-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 0 12px;
+  transition: all 0.2s ease;
+}
+
+.explore-search:focus-within {
+  background: #222222;
+}
+
+.explore-search svg {
+  width: 18px;
+  height: 18px;
+  color: #666666;
+  flex-shrink: 0;
+}
+
+.explore-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 400;
+  color: #FFFFFF;
+  outline: none;
+}
+
+.explore-search-input::placeholder {
+  color: #666666;
+}
+
+.explore-search-clear {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.explore-search-clear svg {
+  width: 16px;
+  height: 16px;
+  color: #666666;
+}
+
+.explore-search-clear:hover svg {
+  color: #FFFFFF;
+}
+
+/* Filter Tags */
+.explore-filters {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.explore-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.explore-filter-tag {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #333333;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.explore-filter-tag:hover:not(.active) {
+  background: #1a1a1a;
+}
+
+.explore-filter-tag.active {
+  background: #FFFFFF;
+  color: #000000;
+  border-color: #FFFFFF;
+}
+
+/* Masonry Grid */
+.explore-masonry {
+  display: flex;
+  gap: 1px;
+  padding: 0 1px;
+}
+
+.masonry-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.masonry-item {
+  position: relative;
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.masonry-item img {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.masonry-item.large img {
+  aspect-ratio: 3 / 5;
+}
+
+.masonry-item:hover img {
+  transform: scale(1.02);
+}
+
+.masonry-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.masonry-item:hover .masonry-overlay {
+  opacity: 1;
+}
+
+.masonry-views {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #FFFFFF;
+}
+
+.masonry-views svg {
+  width: 14px;
+  height: 14px;
+}
+
+.masonry-views span {
+  font-size: 12px;
+  font-weight: 500;
+}

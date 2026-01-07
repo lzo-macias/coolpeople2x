@@ -16,7 +16,7 @@ const generateSparklineData = (trend = 'up', points = 20) => {
   return data
 }
 
-function ReelCard({ reel, isPreview = false, onOpenComments }) {
+function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick }) {
   const defaultReel = {
     id: 1,
     videoUrl: null,
@@ -71,8 +71,12 @@ function ReelCard({ reel, isPreview = false, onOpenComments }) {
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            <span className="party-tag">{data.user.party}</span>
-            <span className="username">@{data.user.username}</span>
+            <button className="party-tag clickable" onClick={() => onPartyClick?.(data.user.party)}>
+              {data.user.party}
+            </button>
+            <button className="username clickable" onClick={() => onUsernameClick?.(data.user)}>
+              @{data.user.username}
+            </button>
           </div>
         </div>
       </div>
@@ -88,7 +92,7 @@ function ReelCard({ reel, isPreview = false, onOpenComments }) {
 
       <div className="reel-overlay">
         {/* Top engagement sparkline charts */}
-        <EngagementScoreBar scores={data.engagementScores} />
+        <EngagementScoreBar scores={data.engagementScores} onItemClick={onEngagementClick} />
 
         {/* Right side actions */}
         <div className="reel-actions-container">
@@ -102,12 +106,17 @@ function ReelCard({ reel, isPreview = false, onOpenComments }) {
               <img
                 src={data.user.avatar}
                 alt={data.user.username}
-                className="reel-user-avatar"
+                className="reel-user-avatar clickable"
                 style={{ borderColor: getPartyColor(data.user.party) }}
+                onClick={() => onUsernameClick?.(data.user)}
               />
               <div className="reel-user-details">
-                <span className="party-tag">{data.user.party}</span>
-                <span className="username">{data.user.username}</span>
+                <button className="party-tag clickable" onClick={() => onPartyClick?.(data.user.party)}>
+                  {data.user.party}
+                </button>
+                <button className="username clickable" onClick={() => onUsernameClick?.(data.user)}>
+                  {data.user.username}
+                </button>
               </div>
             </div>
             <p className="reel-title">{data.title}</p>

@@ -1,20 +1,31 @@
+import { useMemo } from 'react'
 import '../styling/EngagementScoreBar.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
 
-function EngagementScoreBar({ scores }) {
+function EngagementScoreBar({ scores, onItemClick }) {
   if (!scores || scores.length === 0) return null
+
+  // Generate stable random positions once per score
+  const randomPositions = useMemo(() => {
+    return scores.map(() => ({
+      top: Math.random() * 60 + 10,
+      left: Math.random() * 40 + 30,
+    }))
+  }, [scores])
 
   return (
     <div className="engagement-bar">
       {scores.map((score, idx) => {
-        // Random position for the change indicator
-        const randomTop = Math.random() * 60 + 10 // 10-70%
-        const randomLeft = Math.random() * 40 + 30 // 30-70%
         const partyColor = getPartyColor(score.party)
+        const positions = randomPositions[idx]
 
         return (
-          <div key={score.id || idx} className="engagement-item">
+          <div
+            key={score.id || idx}
+            className="engagement-item clickable"
+            onClick={() => onItemClick?.(score)}
+          >
             <div className="engagement-header">
               <div className="engagement-avatar-wrapper" style={{ borderColor: partyColor }}>
                 <img
@@ -36,8 +47,8 @@ function EngagementScoreBar({ scores }) {
                 <span
                   className="engagement-change"
                   style={{
-                    top: `${randomTop}%`,
-                    left: `${randomLeft}%`,
+                    top: `${positions.top}%`,
+                    left: `${positions.left}%`,
                   }}
                 >
                   {score.recentChange}

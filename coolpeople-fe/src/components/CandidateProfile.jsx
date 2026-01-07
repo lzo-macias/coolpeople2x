@@ -147,7 +147,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
@@ -372,7 +372,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose }) {
             </div>
             <div className="profile-info">
               <h2 className="profile-username">{candidate.username}</h2>
-              <span className="profile-party" style={{ color: partyColor }}>{candidate.party}</span>
+              <button
+                className="profile-party-btn"
+                onClick={() => onPartyClick?.(candidate.party)}
+              >
+                {candidate.party}
+              </button>
             </div>
           </div>
 

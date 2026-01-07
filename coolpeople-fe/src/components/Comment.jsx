@@ -2,10 +2,11 @@ import { useState } from 'react'
 import '../styling/Comment.css'
 import { getPartyColor } from '../data/mockData'
 
-function Comment({ comment, isCP = false }) {
+function Comment({ comment, isCP = false, onUsernameClick, onPartyClick }) {
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(comment.likes)
   const partyColor = getPartyColor(comment.party)
+  const partyDisplay = comment.party || 'Independent'
 
   const handleLike = () => {
     if (isLiked) {
@@ -16,6 +17,16 @@ function Comment({ comment, isCP = false }) {
     setIsLiked(!isLiked)
   }
 
+  const handleUsernameClick = () => {
+    onUsernameClick?.(comment)
+  }
+
+  const handlePartyClick = () => {
+    if (comment.party) {
+      onPartyClick?.(comment.party)
+    }
+  }
+
   return (
     <div className={`comment ${isCP ? 'cp-comment' : ''}`}>
       <img
@@ -23,11 +34,20 @@ function Comment({ comment, isCP = false }) {
         alt={comment.username}
         className="comment-avatar"
         style={{ borderColor: partyColor }}
+        onClick={handleUsernameClick}
       />
       <div className="comment-content">
         <div className="comment-header">
-          <span className="comment-username">{comment.username}</span>
-          <span className="comment-party">{comment.party}</span>
+          <button className="comment-username-btn" onClick={handleUsernameClick}>
+            {comment.username}
+          </button>
+          <button
+            className="comment-party-btn"
+            onClick={handlePartyClick}
+            disabled={!comment.party}
+          >
+            {partyDisplay}
+          </button>
         </div>
         <p className="comment-text">{comment.text}</p>
         <div className="comment-actions">
