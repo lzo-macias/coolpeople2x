@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardChart from './ScoreboardChart'
@@ -20,12 +20,20 @@ const frontRunners = [
   { id: 'fr-3', rank: 3, label: 'Third Place', nominations: '15,000', avatar: 'https://i.pravatar.cc/100?img=44', party: 'Independent' },
 ]
 
-function Scoreboard({ onOpenProfile }) {
+function Scoreboard({ onOpenProfile, isActive }) {
   const [users, setUsers] = useState(mockScoreboard)
   const [timePeriod, setTimePeriod] = useState('this month')
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
   const [activeSection, setActiveSection] = useState(0)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
+
+  // Close search when navigating away
+  useEffect(() => {
+    if (!isActive) {
+      setIsSearchOpen(false)
+    }
+  }, [isActive])
 
   // Mock current user's party (null if not in a party)
   const currentUserParty = 'Democrat'
@@ -97,6 +105,72 @@ function Scoreboard({ onOpenProfile }) {
 
   return (
     <div className="scoreboard-page">
+      {/* Search row / Search dropdown */}
+      <div className="scoreboard-search-row">
+        <div className="search-bar-container">
+          <div className={`search-bar ${isSearchOpen ? 'expanded' : ''}`} onClick={() => !isSearchOpen && setIsSearchOpen(true)}>
+            <img src="/icons/bottomnavbar/darkmode/explore-icon-darkmode.svg" alt="Search" className="search-bar-icon" />
+            {isSearchOpen && (
+              <input type="text" placeholder="Search..." className="search-bar-input" autoFocus onClick={(e) => e.stopPropagation()} />
+            )}
+          </div>
+          {isSearchOpen && (
+            <button className="search-cancel" onClick={() => setIsSearchOpen(false)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {isSearchOpen && (
+          <>
+            <div className="search-backdrop" onClick={() => setIsSearchOpen(false)} />
+            <div className="search-dropdown">
+              <div className="search-tags-scroll">
+                <button className="search-tag trending">Trending</button>
+                {['People', 'Posts', 'CoolPeople', 'Restaurants', 'Events', 'Parties'].map(tag => (
+                  <button key={tag} className="search-tag">{tag}</button>
+                ))}
+              </div>
+
+              <div className="search-grid">
+                {[
+                  { id: 1, caption: 'need a new colombian man im bored', user: 'whyfelipe', avatar: 'https://i.pravatar.cc/40?img=11', likes: '485', party: 'Democrat' },
+                  { id: 2, caption: 'Clean eating for beginners', user: 'Qaim Hunt', avatar: 'https://i.pravatar.cc/40?img=12', likes: '47.8K', party: 'Republican' },
+                  { id: 3, caption: 'I love picking my baby boogers and she never le...', user: 'lrn', avatar: 'https://i.pravatar.cc/40?img=13', likes: '160.7K', party: 'Independent' },
+                  { id: 4, caption: "couldn't believe my eyes", user: 'natalia', avatar: 'https://i.pravatar.cc/40?img=14', likes: '413.5K', party: 'Green' },
+                  { id: 5, caption: 'POV: you finally found your people', user: 'Democratic Party', avatar: 'https://i.pravatar.cc/40?img=15', likes: '22.1K', isParty: true },
+                  { id: 6, caption: 'This is what democracy looks like', user: 'CoolPeople Official', avatar: 'https://i.pravatar.cc/40?img=16', likes: '89.2K', isParty: true },
+                ].map(post => (
+                  <div key={post.id} className="search-grid-item">
+                    <img src={`https://picsum.photos/200/350?random=${post.id}`} alt="" className="search-grid-thumb" />
+                    <div className="search-grid-info">
+                      <p className="search-grid-caption">{post.caption}</p>
+                      <div className="search-grid-meta">
+                        <div className="search-grid-user">
+                          <img src={post.avatar} alt={post.user} className="search-grid-avatar" />
+                          <div className="search-grid-user-info">
+                            <span className="search-grid-username">{post.user}</span>
+                            {!post.isParty && post.party && (
+                              <span className="search-grid-party">{post.party}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="search-grid-likes">
+                          <span className="heart-icon">♡</span>
+                          {post.likes}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Header */}
       <div className="scoreboard-header">
         <div className="scoreboard-header-left">

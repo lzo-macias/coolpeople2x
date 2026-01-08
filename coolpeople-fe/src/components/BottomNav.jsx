@@ -24,11 +24,9 @@ function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {}
   // Navigation items config
   const navItems = [
     { id: 'create', icon: 'plus', isThemed: true },
-    { id: 'search', icon: 'explore' },
     { id: 'scoreboard', icon: 'scoreboard' },
     { id: 'home', icon: 'home' },
     { id: 'messages', icon: 'messages' },
-    { id: 'profile', icon: 'userprofile' },
     { id: 'campaign', icon: 'bouncingballs', isThemed: true, hasNotification: true },
   ]
 

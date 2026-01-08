@@ -12,10 +12,11 @@ import PartyProfile from './components/PartyProfile'
 import ParticipantProfile from './components/ParticipantProfile'
 import ExplorePage from './components/ExplorePage'
 import MyProfile from './components/MyProfile'
+import MyBallot from './components/MyBallot'
 import { mockReels, mockPartyProfiles, mockParticipants } from './data/mockData'
 
-// Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Profile
-const PAGES = ['scoreboard', 'home', 'search', 'profile']
+// Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
+const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
 
 function App() {
   const [currentPage, setCurrentPage] = useState(1) // Start on home
@@ -240,7 +241,7 @@ function App() {
       >
         {/* Scoreboard Page */}
         <div className="page">
-          <Scoreboard onOpenProfile={handleOpenProfile} />
+          <Scoreboard onOpenProfile={handleOpenProfile} isActive={currentPage === 0} />
         </div>
 
         {/* Home Page - Now Reels */}
@@ -262,6 +263,16 @@ function App() {
         {/* Explore/Search Page */}
         <div className="page">
           <ExplorePage />
+        </div>
+
+        {/* Messages Page */}
+        <div className="page">
+          <div style={{ padding: 20, color: '#fff' }}>Messages</div>
+        </div>
+
+        {/* Campaign/Ballot Page */}
+        <div className="page">
+          <MyBallot onProfileClick={() => setCurrentPage(5)} isActive={currentPage === 4} />
         </div>
 
         {/* My Profile Page */}
