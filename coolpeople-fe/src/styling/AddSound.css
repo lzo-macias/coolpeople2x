@@ -1,0 +1,199 @@
+.add-sound-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+/* Header */
+.add-sound-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+
+.add-sound-close {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+.add-sound-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.add-sound-title-icon {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.add-sound-title-icon svg {
+  fill: url(#gradient);
+}
+
+/* Search Bar */
+.add-sound-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px 16px;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border-radius: 12px;
+}
+
+.add-sound-search svg {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.add-sound-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 15px;
+}
+
+.add-sound-search input::placeholder {
+  color: #666;
+}
+
+/* Categories */
+.add-sound-categories {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.add-sound-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.add-sound-category {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 20px;
+  color: #888;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-sound-category.active {
+  background: #fff;
+  border-color: #fff;
+  color: #222;
+}
+
+/* Sound List */
+.add-sound-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.add-sound-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-sound-item:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.add-sound-play {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: #333;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  overflow: hidden;
+  padding: 0;
+}
+
+.add-sound-play img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.add-sound-play:active {
+  transform: scale(0.95);
+}
+
+.add-sound-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-sound-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-sound-artist {
+  font-size: 13px;
+  color: #666;
+}
+
+.add-sound-plays {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #777;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.add-sound-plays svg {
+  opacity: 0.7;
+}

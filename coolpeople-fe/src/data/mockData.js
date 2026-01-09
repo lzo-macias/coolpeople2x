@@ -647,6 +647,110 @@ export const mockComments = {
   },
 }
 
+// Conversation data (individual chat messages)
+export const mockConversations = {
+  'msg-1': [
+    { id: 'c1', text: 'Lorem Ipsum lorem ipsum', isOwn: false, timestamp: '2:30 PM' },
+    { id: 'c2', text: 'Lorem Ipsum lorem ipsum', isOwn: true, timestamp: '2:31 PM' },
+    { id: 'c3', text: 'Lorem Ipsum lorem ipsum', isOwn: false, timestamp: '2:32 PM' },
+    { id: 'c4', text: 'Lorem Ipsum lorem ipsum', isOwn: true, timestamp: '2:33 PM' },
+    { id: 'c5', text: 'Lorem Ipsum lorem ipsum', isOwn: false, timestamp: '2:34 PM' },
+    { id: 'c6', text: 'Lorem Ipsum lorem ipsum', isOwn: true, timestamp: '2:35 PM' },
+    { id: 'c7', text: 'Lorem Ipsum lorem ipsum', isOwn: false, timestamp: '2:36 PM' },
+    { id: 'c8', text: 'All fat pum pum lady', isOwn: false, timestamp: '2:37 PM' },
+  ],
+  'msg-2': [
+    { id: 'c1', text: 'Hey there!', isOwn: false, timestamp: '1:00 PM' },
+    { id: 'c2', text: 'All fat pum pum lady', isOwn: false, timestamp: '1:05 PM' },
+  ],
+  'msg-3': [
+    { id: 'c1', text: 'What do you think about the campaign?', isOwn: true, timestamp: '12:00 PM' },
+    { id: 'c2', text: 'All fat pum pum lady', isOwn: false, timestamp: '12:30 PM' },
+  ],
+}
+
+// Messages data
+export const mockMessages = [
+  {
+    id: 'msg-1',
+    user: {
+      username: 'The Pink Lady',
+      avatar: 'https://i.pravatar.cc/60?img=23',
+      party: 'The Pink Lady Party',
+    },
+    lastMessage: 'All fat pum pum lady',
+    timestamp: '2m',
+    unreadCount: 63,
+    isOnline: true,
+    hasUnread: true,
+  },
+  {
+    id: 'msg-2',
+    user: {
+      username: 'Lorem.ipsum',
+      avatar: 'https://i.pravatar.cc/60?img=24',
+      party: 'Independent',
+    },
+    lastMessage: 'All fat pum pum lady',
+    timestamp: '15m',
+    unreadCount: 0,
+    isOnline: false,
+    hasUnread: false,
+  },
+  {
+    id: 'msg-3',
+    user: {
+      username: 'Lorem.ipsum',
+      avatar: 'https://i.pravatar.cc/60?img=25',
+      party: 'The Pink Lady Party',
+    },
+    lastMessage: 'All fat pum pum lady',
+    timestamp: '1h',
+    unreadCount: 0,
+    isOnline: false,
+    hasUnread: true,
+  },
+  {
+    id: 'msg-4',
+    user: {
+      username: 'Lorem.ipsum',
+      avatar: 'https://i.pravatar.cc/60?img=26',
+      party: 'Independent',
+    },
+    lastMessage: 'All fat pum pum lady',
+    timestamp: '2h',
+    unreadCount: 0,
+    isOnline: false,
+    hasUnread: false,
+  },
+  {
+    id: 'msg-5',
+    user: {
+      username: 'Boy.that.runs.for.office',
+      avatar: 'https://i.pravatar.cc/60?img=27',
+      party: 'Independent',
+    },
+    lastMessage: 'BOY YOU ARE CRAZY',
+    timestamp: '3h',
+    unreadCount: 0,
+    isOnline: false,
+    hasUnread: false,
+  },
+  {
+    id: 'msg-6',
+    user: {
+      username: 'The Pink Lady',
+      avatar: 'https://i.pravatar.cc/60?img=23',
+      party: 'The Pink Lady Party',
+    },
+    lastMessage: 'Hey girl hey!',
+    timestamp: '5h',
+    unreadCount: 0,
+    isOnline: true,
+    hasUnread: true,
+  },
+]
+
 // Current user (logged in user simulation)
 export const mockCurrentUser = {
   id: 'current-user',

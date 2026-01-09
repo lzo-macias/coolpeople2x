@@ -13,6 +13,8 @@ import ParticipantProfile from './components/ParticipantProfile'
 import ExplorePage from './components/ExplorePage'
 import MyProfile from './components/MyProfile'
 import MyBallot from './components/MyBallot'
+import Messages from './components/Messages'
+import CreateScreen from './components/CreateScreen'
 import { mockReels, mockPartyProfiles, mockParticipants } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
@@ -29,6 +31,8 @@ function App() {
   const [showParticipantProfile, setShowParticipantProfile] = useState(false)
   const [activeParticipant, setActiveParticipant] = useState(null)
   const [isOwnParticipantProfile, setIsOwnParticipantProfile] = useState(false)
+  const [isInConversation, setIsInConversation] = useState(false)
+  const [showCreateScreen, setShowCreateScreen] = useState(false)
 
   // Navigation history stack
   const [navHistory, setNavHistory] = useState([])
@@ -267,7 +271,7 @@ function App() {
 
         {/* Messages Page */}
         <div className="page">
-          <div style={{ padding: 20, color: '#fff' }}>Messages</div>
+          <Messages onConversationChange={setIsInConversation} />
         </div>
 
         {/* Campaign/Ballot Page */}
@@ -284,11 +288,21 @@ function App() {
         </div>
       </div>
 
-      <BottomNav
-        currentPage={PAGES[currentPage]}
-        onNavigate={handleNavClick}
-        theme={PAGES[currentPage] === 'scoreboard' ? 'light' : 'dark'}
-      />
+      {!isInConversation && !showCreateScreen && (
+        <BottomNav
+          currentPage={PAGES[currentPage]}
+          onNavigate={handleNavClick}
+          onCreateClick={() => setShowCreateScreen(true)}
+          theme={PAGES[currentPage] === 'scoreboard' ? 'light' : 'dark'}
+        />
+      )}
+
+      {/* Create Screen */}
+      {showCreateScreen && (
+        <div className="create-screen-container">
+          <CreateScreen onClose={() => setShowCreateScreen(false)} />
+        </div>
+      )}
 
       {/* Comments overlay */}
       {showComments && (

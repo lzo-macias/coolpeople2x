@@ -1,0 +1,142 @@
+.edit-clip-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  z-index: 65;
+}
+
+.edit-clip-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.edit-clip-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Top Controls */
+.edit-clip-top {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+
+.edit-clip-close {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-clip-sound-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(50, 50, 50, 0.8);
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.edit-clip-side-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.edit-clip-side-btn {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
+}
+
+.edit-clip-side-btn:active {
+  opacity: 0.7;
+}
+
+/* Bottom */
+.edit-clip-bottom {
+  position: relative;
+  z-index: 10;
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.edit-clip-story-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px 8px 8px;
+  background: #fff;
+  border: none;
+  border-radius: 28px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #222;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.edit-clip-story-btn:active {
+  transform: scale(0.95);
+}
+
+.edit-clip-story-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.edit-clip-next-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border: none;
+  border-radius: 28px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.edit-clip-next-btn:active {
+  transform: scale(0.95);
+}

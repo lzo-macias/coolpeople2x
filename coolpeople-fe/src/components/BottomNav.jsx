@@ -1,6 +1,6 @@
 import '../styling/BottomNav.css'
 
-function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {} }) {
+function BottomNav({ currentPage, onNavigate, onCreateClick, theme = 'dark', notifications = {} }) {
   const iconBasePath = '/icons/bottomnavbar'
   const isLight = theme === 'light'
 
@@ -56,7 +56,7 @@ function BottomNav({ currentPage, onNavigate, theme = 'dark', notifications = {}
           <button
             key={item.id}
             className={`nav-item ${isActive ? 'active' : ''} ${isCreateBtn ? 'create-btn' : ''}`}
-            onClick={() => !isCreateBtn && onNavigate?.(item.id)}
+            onClick={() => isCreateBtn ? onCreateClick?.() : onNavigate?.(item.id)}
           >
             <div className="nav-icon-wrapper">
               <img

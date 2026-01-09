@@ -147,3 +147,13 @@ borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
   width: 20px;
   height: 20px;
 }
+
+/* Create Screen Container */
+.create-screen-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}

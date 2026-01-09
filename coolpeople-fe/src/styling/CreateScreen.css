@@ -1,0 +1,361 @@
+.create-screen {
+  position: relative;
+  height: 100%;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Camera Preview */
+.create-camera-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.create-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Top Controls */
+.create-top-controls {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+
+.create-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+.create-sound-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(50, 50, 50, 0.8);
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.create-side-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-side-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+/* Bottom Controls */
+.create-bottom-controls {
+  position: relative;
+  z-index: 10;
+  margin-top: auto;
+  padding: 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+/* Duration Selector */
+.create-duration-selector {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.create-duration-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 12px;
+}
+
+.create-duration-btn.active {
+  background: #FFFFFF;
+  color: #222222;
+}
+
+.create-duration-btn:not(.active):active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Record Button Row */
+.create-record-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  position: relative;
+}
+
+/* Bottom Bar */
+.create-bottom-bar {
+  position: relative;
+  z-index: 10;
+  background: #000;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Gallery Button */
+.create-gallery-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.create-gallery-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Record Button */
+.create-record-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  position: absolute;
+  left: 90px;
+}
+
+.create-record-btn.active {
+  width: 85px;
+  height: 85px;
+  border: 2px solid #FFFFFF;
+  position: static;
+}
+
+.create-record-btn:active {
+  transform: scale(0.95);
+}
+
+.create-record-inner {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.create-record-btn.active .create-record-inner {
+  width: 75px;
+  height: 75px;
+}
+
+.create-record-c,
+.create-record-p {
+  font-family: 'Inter', sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 400;
+  transition: font-size 0.2s;
+}
+
+.create-record-btn.active .create-record-c,
+.create-record-btn.active .create-record-p {
+  font-size: 42px;
+  line-height: 51px;
+}
+
+.create-record-c {
+  color: #00F2EA;
+}
+
+.create-record-p {
+  color: #FF2A55;
+}
+
+/* Nominate Button */
+.create-nominate-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: absolute;
+  right: 90px;
+  padding: 0;
+}
+
+.create-nominate-btn.active {
+  width: 85px;
+  height: 85px;
+  border: 2px solid #FFFFFF;
+  position: static;
+}
+
+.create-nominate-btn:active {
+  transform: scale(0.95);
+}
+
+.create-nominate-inner {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.create-nominate-btn.active .create-nominate-inner {
+  width: 75px;
+  height: 75px;
+}
+
+.nominate-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 500;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-transform: capitalize;
+  transition: font-size 0.2s;
+}
+
+.create-nominate-btn.active .nominate-text {
+  font-size: 12px;
+}
+
+/* Recording State */
+@keyframes recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 42, 85, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(255, 42, 85, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 42, 85, 0);
+  }
+}
+
+.create-record-btn.recording,
+.create-nominate-btn.recording {
+  animation: recording-pulse 1s ease-out infinite;
+}
+
+.create-record-btn.recording .create-record-inner,
+.create-nominate-btn.recording .create-nominate-inner {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+}
+
+.create-record-btn.recording .create-record-c,
+.create-record-btn.recording .create-record-p {
+  color: #fff;
+}
+
+.create-nominate-btn.recording .nominate-text {
+  -webkit-text-fill-color: #fff;
+  background: none;
+}
+
+/* Confirm Mode - keeps active button centered */
+.create-record-row.confirm-mode {
+  justify-content: flex-start;
+  padding-left: calc(50% - 42.5px);
+}
+
+/* Clip Inline Actions */
+.clip-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* margin-left: 24px; */
+}
+
+.clip-action-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.clip-action-btn:active {
+  transform: scale(0.95);
+}
+
+.clip-action-btn.delete {
+  width: 32px;
+  height: 32px;
+  background: gray;
+  color: #FFFFFF;
+}
+
+.clip-action-btn.confirm {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  color: #fff;
+}

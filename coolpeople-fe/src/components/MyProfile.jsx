@@ -9,7 +9,7 @@ const myProfileData = {
   hasOptedIn: false,
   following: '9,999',
   followers: '1M',
-  posts: '8000',
+  races: '8',
   ranking: '.3%',
   postImages: [
     'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
@@ -73,8 +73,8 @@ function MyProfile({ onPartyClick, onOptIn }) {
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{myProfileData.posts}</span>
-                <span className="stat-label">posts</span>
+                <span className="stat-number">{myProfileData.races}</span>
+                <span className="stat-label">races</span>
               </div>
               <div className="stat-item">
                 <span className="stat-number">
