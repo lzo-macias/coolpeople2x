@@ -254,6 +254,32 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
 
   const filteredSparklineData = getFilteredSparklineData()
 
+  // Calculate badge positions based on sparkline data
+  const getBadgePositions = (data) => {
+    if (!data || data.length < 2) return { ratingTop: 10, changeTop: 45 }
+
+    const chartHeight = 84
+    const min = Math.min(...data)
+    const max = Math.max(...data)
+    const range = max - min || 1
+
+    // Get the last value (where the line ends)
+    const lastValue = data[data.length - 1]
+
+    // Calculate Y position of the end point (inverted because SVG y=0 is top)
+    const endY = chartHeight - ((lastValue - min) / range) * chartHeight
+
+    // Position rating badge slightly below the end point, but not too low
+    const ratingTop = Math.max(5, Math.min(endY + 5, 40))
+
+    // Position change indicator below rating, but above baseline (baseline is ~50% = 42px)
+    const changeTop = Math.min(ratingTop + 30, 55)
+
+    return { ratingTop, changeTop }
+  }
+
+  const badgePositions = getBadgePositions(filteredSparklineData)
+
   // Calculate change value from sparkline data
   const getChangeValue = (data) => {
     if (!data || data.length < 2) return '+0.00'
@@ -317,7 +343,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
     { name: 'Details', icon: '/icons/profile/userprofile/details-icon.svg' },
-    { name: 'Reviews', icon: '/icons/profile/userprofile/reviews-icon.svg' },
   ]
 
   const renderStars = (count) => {
@@ -344,13 +369,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
     <div className="candidate-profile">
       {/* Header */}
       <div className="profile-header">
-        {/* Message icon */}
-        <button className="message-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </button>
-
         {/* Favorite star */}
         <button
           className={`favorite-star ${isFavorited ? 'active' : ''}`}
@@ -382,41 +400,43 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
           </div>
 
           <div className="profile-right">
-            <div className="profile-stats">
+            <div className="profile-stats-grid">
               <div className="stat-item">
                 <span className="stat-number">{candidate.nominations}</span>
                 <span className="stat-label">Nominations</span>
-                <button className="stat-action">Nominate</button>
               </div>
               <div className="stat-item">
                 <span className="stat-number">{candidate.followers}</span>
                 <span className="stat-label">Followers</span>
-                <button
-                  className={`stat-action ${isFollowing ? 'following' : ''}`}
-                  onClick={() => setIsFollowing(!isFollowing)}
-                >
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">{candidate.races || '8'}</span>
+                <span className="stat-label">Races</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">
+                  {candidate.ranking || '.3%'}
+                  <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
+                  </svg>
+                </span>
+                <span className="stat-label">ranking</span>
               </div>
             </div>
-            {/* Overall Chart in header */}
-            <div className="chart-container header-chart">
-              <div className="chart-header">
-                <span className="chart-label">Overall</span>
-                <span className="chart-change" style={{ background: '#0EFB49' }}>{formatChange(candidate.change)}</span>
-              </div>
-              <div className="chart-wrapper">
-                <Sparkline
-                  data={candidate.sparklineData}
-                  color="#0EFB49"
-                  width={190}
-                  height={45}
-                  strokeWidth={1.5}
-                  showBaseline={true}
-                />
-              </div>
-            </div>
+            <p className="profile-bio">{candidate.bio || 'Running for Mayor. Building a better tomorrow for our community. '}</p>
           </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="profile-actions">
+          <button className="profile-action-btn messages">messages</button>
+          <button className="profile-action-btn nominate">nominate</button>
+          <button
+            className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
+            onClick={() => setIsFollowing(!isFollowing)}
+          >
+            {isFollowing ? 'following' : 'follow'}
+          </button>
         </div>
 
         {/* Tabs */}
@@ -453,30 +473,31 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
 
         {/* Filtered Chart - Full Width */}
         <div className="chart-container full-width">
-          <div className="chart-header">
-            <span className="chart-label">
-              {selectedTags.length === 1 && selectedTags[0] === 'all' && !searchQuery
-                ? 'All Tags'
-                : searchQuery
-                  ? `"${searchQuery}"`
-                  : selectedTags.map(t => `#${t}`).join(' ')}
-            </span>
-            <span
-              className="chart-change"
-              style={{ background: chartColor }}
-            >
-              {filteredChange}
-            </span>
-          </div>
           <div className="chart-wrapper">
             <Sparkline
               data={filteredSparklineData}
               color={chartColor}
               width={340}
-              height={70}
-              strokeWidth={1.5}
+              height={84}
+              strokeWidth={2}
               showBaseline={true}
             />
+            <div className="chart-rating-badge" style={{ top: `${badgePositions.ratingTop}px` }}>
+              <span className="rating-value">3.2</span>
+              <div className="rating-star-circle">
+                <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </div>
+            </div>
+            <div className="chart-change-indicator" style={{ top: `${badgePositions.changeTop}px` }}>
+              <span
+                className="chart-change"
+                style={{ background: '#42FF87' }}
+              >
+                {filteredChange}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -606,11 +627,10 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
             </div>
           ))}
 
-          {/* Leave a Review link - below community nominations, if not local */}
-          {!isLocalToCandidate && (
-            <button className="leave-review-link community">Leave a Review</button>
-          )}
         </div>
+
+        {/* Leave a Review */}
+        <p className="leave-review-text">Leave a Review</p>
 
         {/* Load More Button */}
         <div className="load-more-buttons">

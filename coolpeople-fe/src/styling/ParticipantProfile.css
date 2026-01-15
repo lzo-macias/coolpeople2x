@@ -3,41 +3,60 @@
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
-  background: #FFFFFF;
+  background: linear-gradient(180deg, #1f1f1f 0%, #141414 50%, #0a0a0a 100%);
   font-family: 'Inter', sans-serif;
 }
 
 /* Header */
 .participant-profile .participant-header {
-  padding: 24px 16px 0;
+  padding: 36px 12px 0;
   position: relative;
+}
+
+.participant-profile .favorite-star {
+  position: absolute;
+  left: 395px;
+  bottom: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.participant-profile .favorite-star svg {
+  width: 18px;
+  height: 18px;
 }
 
 .participant-profile .participant-top {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .participant-profile .participant-left {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .participant-profile .participant-right {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding-top: 16px;
 }
 
 .participant-profile .participant-avatar-ring {
-  width: 80px;
-  height: 80px;
+  width: 125px;
+  height: 125px;
   border-radius: 50%;
-  border: 2px solid #FF2A55;
+  border: 1px solid #FF2A55;
   box-sizing: border-box;
   flex-shrink: 0;
   overflow: hidden;
@@ -53,15 +72,15 @@
 .participant-profile .participant-info {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: 0;
 }
 
 .participant-profile .participant-username {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 20px;
-  color: #111111;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #FFFFFF;
   margin: 0;
 }
 
@@ -112,10 +131,12 @@
   color: #111111;
 }
 
-/* Stats */
-.participant-profile .participant-stats {
-  display: flex;
-  gap: 40px;
+/* Stats Grid */
+.participant-profile .participant-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 50px;
+  text-align: center;
 }
 
 .participant-profile .stat-item {
@@ -127,117 +148,118 @@
 
 .participant-profile .stat-number {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 20px;
-  color: #111111;
+  color: #FFFFFF;
 }
 
 .participant-profile .stat-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 14px;
-  color: #666666;
+  color: #E6EAEF;
 }
 
-.participant-profile .stat-action {
-  font-size: 10px;
-  font-weight: 400;
-  line-height: 12px;
-  color: #666666;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 2px;
-  transition: color 0.2s ease;
+.participant-profile .ranking-crown {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  color: #FFD700;
+  vertical-align: middle;
 }
 
-.participant-profile .stat-action:hover {
-  color: #111111;
-}
-
-.participant-profile .stat-action.following {
-  color: #00B8B8;
+/* Bio */
+.participant-profile .participant-bio {
+  font-size: 12px;
+  color: #AAAAAA;
+  margin: 34px 20px 0px 40px;
+  line-height: 1.4;
+  text-align: left;
+  align-self: flex-start;
 }
 
 /* Action Buttons */
 .participant-profile .participant-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  padding: 20px 12px;
+  justify-content: center;
 }
 
-.participant-profile .action-btn {
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-size: 13px;
+.participant-profile .participant-action-btn {
+  flex: 1;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-}
-
-.participant-profile .action-btn.invite {
-  background: #111111;
-  color: #FFFFFF;
   border: none;
+  background: #4a4a4a;
+  color: #FFFFFF;
 }
 
-.participant-profile .action-btn.invite:hover {
-  background: #333333;
+.participant-profile .participant-action-btn:hover {
+  background: #5a5a5a;
 }
 
-.participant-profile .action-btn.message {
-  background: #FFFFFF;
-  color: #111111;
-  border: 1px solid #CCCCCC;
-}
-
-.participant-profile .action-btn.message:hover {
-  background: #F5F5F5;
+.participant-profile .participant-action-btn.following {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888888;
 }
 
 /* Tabs */
 .participant-profile .participant-tabs {
   display: flex;
   align-items: center;
-  gap: 32px;
-  padding: 0;
+  justify-content: space-between;
+  padding: 0 10px;
   margin-top: 20px;
-  border-bottom: 1px solid #E5E5E5;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #444444;
+  position: relative;
 }
 
 .participant-profile .participant-tab {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 12px 0;
-  font-size: 14px;
-  font-weight: 400;
-  color: #888888;
+  padding: 8px;
+  padding-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
-  transition: color 0.2s ease;
 }
 
 .participant-profile .participant-tab::after {
   content: '';
   position: absolute;
   bottom: -1px;
-  left: 0;
+  left: -10px;
   right: 0;
   height: 2px;
   background: transparent;
 }
 
-.participant-profile .participant-tab.active {
-  color: #111111;
-  font-weight: 500;
-}
-
 .participant-profile .participant-tab.active::after {
-  background: #111111;
+  background: #FFFFFF;
 }
 
-.participant-profile .participant-tab:hover:not(.active) {
-  color: #555555;
+.participant-profile .participant-tab .tab-icon {
+  width: 22px;
+  height: 22px;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+.participant-profile .participant-tab:hover .tab-icon {
+  opacity: 0.7;
+}
+
+.participant-profile .participant-tab.active .tab-icon {
+  opacity: 1;
+  filter: brightness(0) invert(1);
 }
 
 /* Content */

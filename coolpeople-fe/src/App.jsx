@@ -33,6 +33,7 @@ function App() {
   const [isOwnParticipantProfile, setIsOwnParticipantProfile] = useState(false)
   const [isInConversation, setIsInConversation] = useState(false)
   const [showCreateScreen, setShowCreateScreen] = useState(false)
+  const [hasBallotNotification, setHasBallotNotification] = useState(true)
 
   // Navigation history stack
   const [navHistory, setNavHistory] = useState([])
@@ -229,6 +230,10 @@ function App() {
     const pageIndex = PAGES.indexOf(page)
     if (pageIndex !== -1) {
       setCurrentPage(pageIndex)
+      // Clear ballot notification when visiting campaign page
+      if (page === 'campaign') {
+        setHasBallotNotification(false)
+      }
     }
   }
 
@@ -293,7 +298,8 @@ function App() {
           currentPage={PAGES[currentPage]}
           onNavigate={handleNavClick}
           onCreateClick={() => setShowCreateScreen(true)}
-          theme={PAGES[currentPage] === 'scoreboard' ? 'light' : 'dark'}
+          theme={PAGES[currentPage] === 'scoreboard' ? 'light' : PAGES[currentPage] === 'campaign' ? 'ballot' : 'dark'}
+          notifications={{ messages: 12, campaign: hasBallotNotification ? 1 : 0 }}
         />
       )}
 

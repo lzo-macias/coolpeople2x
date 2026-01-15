@@ -10,8 +10,12 @@ const mockParticipant = {
   party: null, // null = Independent, or party name like 'The Pink Lady'
   nominations: '9,999',
   followers: '1M',
+  races: '8',
+  ranking: '.3%',
   isFollowing: false,
+  isFavorited: false,
   hasOptedIn: false, // whether they've opted into social credit
+  bio: 'Building connections. Making a difference in our community.',
   posts: [
     'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
     'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
@@ -36,17 +40,32 @@ function ParticipantProfile({
 
   const [activeTab, setActiveTab] = useState('posts')
   const [isFollowing, setIsFollowing] = useState(participant.isFollowing)
+  const [isFavorited, setIsFavorited] = useState(participant.isFavorited)
 
   const hasParty = participant.party && participant.party !== 'Independent'
   const partyColor = hasParty ? getPartyColor(participant.party) : '#808080'
   const partyDisplay = hasParty ? participant.party : 'Independent'
 
-  const tabs = ['Posts', 'Tags', 'Bio']
+  const tabs = [
+    { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
+    { name: 'Tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
+    { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
+  ]
 
   return (
     <div className="participant-profile">
       {/* Header */}
       <div className="participant-header">
+        {/* Favorite star */}
+        <button
+          className={`favorite-star ${isFavorited ? 'active' : ''}`}
+          onClick={() => setIsFavorited(!isFavorited)}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? '#777777' : 'none'} stroke="#777777" strokeWidth="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </button>
+
         {/* Top row: Avatar + Stats */}
         <div className="participant-top">
           <div className="participant-left">
@@ -80,43 +99,57 @@ function ParticipantProfile({
           </div>
 
           <div className="participant-right">
-            <div className="participant-stats">
+            <div className="participant-stats-grid">
               <div className="stat-item">
                 <span className="stat-number">{participant.nominations}</span>
                 <span className="stat-label">Nominations</span>
-                <button className="stat-action">Nominate</button>
               </div>
               <div className="stat-item">
                 <span className="stat-number">{participant.followers}</span>
                 <span className="stat-label">Followers</span>
-                <button
-                  className={`stat-action ${isFollowing ? 'following' : ''}`}
-                  onClick={() => setIsFollowing(!isFollowing)}
-                >
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">{participant.races || '8'}</span>
+                <span className="stat-label">Races</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">
+                  {participant.ranking || '.3%'}
+                  <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
+                  </svg>
+                </span>
+                <span className="stat-label">ranking</span>
               </div>
             </div>
-
-            {/* Action buttons */}
-            {!isOwnProfile && (
-              <div className="participant-actions">
-                <button className="action-btn invite">invite</button>
-                <button className="action-btn message">message</button>
-              </div>
-            )}
+            <p className="participant-bio">{participant.bio || 'Building connections. Making a difference in our community.'}</p>
           </div>
         </div>
+
+        {/* Action Buttons */}
+        {!isOwnProfile && (
+          <div className="participant-actions">
+            <button className="participant-action-btn messages">messages</button>
+            <button className="participant-action-btn nominate">nominate</button>
+            <button
+              className={`participant-action-btn follow ${isFollowing ? 'following' : ''}`}
+              onClick={() => setIsFollowing(!isFollowing)}
+            >
+              {isFollowing ? 'following' : 'follow'}
+            </button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="participant-tabs">
           {tabs.map((tab) => (
             <button
-              key={tab}
-              className={`participant-tab ${activeTab === tab.toLowerCase() ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.toLowerCase())}
+              key={tab.name}
+              className={`participant-tab ${activeTab === tab.name.toLowerCase() ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.name.toLowerCase())}
+              title={tab.name}
             >
-              {tab}
+              <img src={tab.icon} alt={tab.name} className="tab-icon" />
             </button>
           ))}
         </div>

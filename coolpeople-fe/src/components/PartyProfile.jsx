@@ -16,7 +16,7 @@ const mockParty = {
   isFavorited: false,
   sparklineData: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
   filteredSparklineData: [50, 52, 48, 55, 58, 54, 60, 63, 59, 67, 70, 68, 74, 76, 80, 78, 84, 86, 89, 92],
-  bio: 'A progressive party focused on equality, justice, and community empowerment.',
+  // bio: 'A progressive party focused on equality, justice, and community empowerment.',
 }
 
 const mockTags = ['all', 'trans', 'police', 'honesty', 'generosity', 'humour']
@@ -180,6 +180,32 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
 
   const filteredSparklineData = getFilteredSparklineData()
 
+  // Calculate badge positions based on sparkline data
+  const getBadgePositions = (data) => {
+    if (!data || data.length < 2) return { ratingTop: 10, changeTop: 45 }
+
+    const chartHeight = 84
+    const min = Math.min(...data)
+    const max = Math.max(...data)
+    const range = max - min || 1
+
+    // Get the last value (where the line ends)
+    const lastValue = data[data.length - 1]
+
+    // Calculate Y position of the end point (inverted because SVG y=0 is top)
+    const endY = chartHeight - ((lastValue - min) / range) * chartHeight
+
+    // Position rating badge slightly below the end point, but not too low
+    const ratingTop = Math.max(5, Math.min(endY + 5, 40))
+
+    // Position change indicator below rating, but above baseline (baseline is ~50% = 42px)
+    const changeTop = Math.min(ratingTop + 30, 55)
+
+    return { ratingTop, changeTop }
+  }
+
+  const badgePositions = getBadgePositions(filteredSparklineData)
+
   // Calculate change value from sparkline data
   const getChangeValue = (data) => {
     if (!data || data.length < 2) return '+0.00'
@@ -254,46 +280,32 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
           </div>
 
           <div className="profile-right">
-            <div className="profile-stats">
+            <div className="profile-stats-grid">
               <div className="stat-item">
                 <span className="stat-number">{party.members}</span>
                 <span className="stat-label">Members</span>
-                <button
-                  className={`stat-action ${hasJoined ? 'joined' : ''}`}
-                  onClick={() => setHasJoined(!hasJoined)}
-                >
-                  {hasJoined ? 'Joined' : 'Join'}
-                </button>
               </div>
               <div className="stat-item">
                 <span className="stat-number">{party.followers}</span>
                 <span className="stat-label">Followers</span>
-                <button
-                  className={`stat-action ${isFollowing ? 'following' : ''}`}
-                  onClick={() => setIsFollowing(!isFollowing)}
-                >
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
               </div>
             </div>
-            {/* Overall Chart in header */}
-            <div className="chart-container header-chart">
-              <div className="chart-header">
-                <span className="chart-label">Overall</span>
-                <span className="chart-change" style={{ background: '#0EFB49' }}>{formatChange(party.change)}</span>
-              </div>
-              <div className="chart-wrapper">
-                <Sparkline
-                  data={party.sparklineData}
-                  color="#0EFB49"
-                  width={190}
-                  height={45}
-                  strokeWidth={1.5}
-                  showBaseline={true}
-                />
-              </div>
-            </div>
+            <p className="profile-bio">{party.bio || ''}</p>
           </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="profile-actions">
+          <button className="profile-action-btn join" onClick={() => setHasJoined(!hasJoined)}>
+            {hasJoined ? 'joined' : 'join'}
+          </button>
+          <button className="profile-action-btn message">message</button>
+          <button
+            className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
+            onClick={() => setIsFollowing(!isFollowing)}
+          >
+            {isFollowing ? 'following' : 'follow'}
+          </button>
         </div>
 
         {/* Tabs */}
@@ -330,30 +342,31 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
 
         {/* Filtered Chart - Full Width */}
         <div className="chart-container full-width">
-          <div className="chart-header">
-            <span className="chart-label">
-              {selectedTags.length === 1 && selectedTags[0] === 'all' && !searchQuery
-                ? 'All Tags'
-                : searchQuery
-                  ? `"${searchQuery}"`
-                  : selectedTags.map(t => `#${t}`).join(' ')}
-            </span>
-            <span
-              className="chart-change"
-              style={{ background: chartColor }}
-            >
-              {filteredChange}
-            </span>
-          </div>
           <div className="chart-wrapper">
             <Sparkline
               data={filteredSparklineData}
               color={chartColor}
               width={340}
-              height={70}
-              strokeWidth={1.5}
+              height={84}
+              strokeWidth={2}
               showBaseline={true}
             />
+            <div className="chart-rating-badge" style={{ top: `${badgePositions.ratingTop}px` }}>
+              <span className="rating-value">3.2</span>
+              <div className="rating-star-circle">
+                <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </div>
+            </div>
+            <div className="chart-change-indicator" style={{ top: `${badgePositions.changeTop}px` }}>
+              <span
+                className="chart-change"
+                style={{ background: '#42FF87' }}
+              >
+                {filteredChange}
+              </span>
+            </div>
           </div>
         </div>
 

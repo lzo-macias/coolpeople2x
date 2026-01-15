@@ -30,10 +30,9 @@ const generateCandidates = (page) => {
 }
 
 function MyBallot({ onProfileClick, isActive }) {
-  const [splashStarted, setSplashStarted] = useState(false)
   const [showSplash, setShowSplash] = useState(false)
   const [splashFading, setSplashFading] = useState(false)
-  const hasShownSplash = useRef(false)
+  const wasActive = useRef(false)
   const [currentRace, setCurrentRace] = useState(0)
   const [rankings, setRankings] = useState({}) // { raceId: [candidateId1, candidateId2, ...] }
   const [showCandidateSelect, setShowCandidateSelect] = useState(false)
@@ -47,18 +46,19 @@ function MyBallot({ onProfileClick, isActive }) {
     seconds: 32
   })
 
-  // Start splash only when tab becomes active for the first time
+  // Start splash every time tab becomes active
   useEffect(() => {
-    if (isActive && !hasShownSplash.current) {
-      hasShownSplash.current = true
-      setSplashStarted(true)
+    if (isActive && !wasActive.current) {
+      // Just became active - show splash
+      setSplashFading(false)
       setShowSplash(true)
     }
+    wasActive.current = isActive
   }, [isActive])
 
   // Splash screen animation sequence - let BallotIntro handle its own phases
   useEffect(() => {
-    if (splashStarted && showSplash && !splashFading) {
+    if (showSplash && !splashFading) {
       // Start fade after BallotIntro finishes (balls: 0-2s, text: 2-4s)
       const fadeTimer = setTimeout(() => {
         setSplashFading(true)
@@ -66,7 +66,7 @@ function MyBallot({ onProfileClick, isActive }) {
 
       return () => clearTimeout(fadeTimer)
     }
-  }, [splashStarted, showSplash, splashFading])
+  }, [showSplash, splashFading])
 
   // Hide splash after fade completes
   useEffect(() => {
@@ -189,17 +189,18 @@ function MyBallot({ onProfileClick, isActive }) {
     setDraggedIndex(null)
   }
 
-  // Show blank screen until tab is activated, then show splash
-  if (!splashStarted) {
-    return (
-      <div className="ballot-splash" />
-    )
+  // Skip splash on click - immediate skip
+  const handleSkipSplash = () => {
+    setShowSplash(false)
   }
 
   // Splash screen - BallotIntro handles its own phase transitions
   if (showSplash) {
     return (
-      <div className={`ballot-splash ${splashFading ? 'fading' : ''}`}>
+      <div
+        className={`ballot-splash ${splashFading ? 'fading' : ''}`}
+        onClick={handleSkipSplash}
+      >
         <BallotIntro />
       </div>
     )

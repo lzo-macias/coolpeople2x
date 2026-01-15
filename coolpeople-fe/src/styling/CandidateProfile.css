@@ -2,6 +2,7 @@
   min-height: 100vh;
   width: 100%;
   max-width: 440px;
+  bottom: 4px;
   margin: 0 auto;
   background:
     radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px),
@@ -18,8 +19,8 @@
 
 .favorite-star {
   position: absolute;
-  top: 7px;
-  right: 9px;
+  left: 395px;
+  bottom: 5px;
   background: none;
   border: none;
   cursor: pointer;
@@ -34,25 +35,25 @@
 
 .profile-top {
   display: flex;
-  align-items: stretch;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .profile-left {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  justify-content: space-between;
   align-items: center;
 }
 
 .profile-right {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   flex: 1;
-  padding-right: 2vw;
+  padding-top: 16px;
 }
 
 .profile-avatar-ring {
@@ -78,6 +79,22 @@
   padding-top: 0;
   padding-right: 25px;
   padding-bottom: 8px;
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 50px;
+  text-align: center;
+}
+
+.profile-bio {
+  font-size: 12px;
+  color: #AAAAAA;
+  margin: 34px 20px 0px 40px;
+  line-height: 1.4;
+  text-align: left;
+  align-self: flex-start;
 }
 
 .stat-item {
@@ -117,6 +134,44 @@
 
 .stat-action:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.ranking-crown {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  color: #FFD700;
+  vertical-align: middle;
+}
+
+/* Profile Actions */
+.profile-actions {
+  display: flex;
+  gap: 10px;
+  padding: 20px 12px;
+  justify-content: center;
+}
+
+.profile-action-btn {
+  flex: 1;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: #4a4a4a;
+  color: #FFFFFF;
+}
+
+.profile-action-btn:hover {
+  background: #5a5a5a;
+}
+
+.profile-action-btn.following {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888888;
 }
 
 .profile-info {
@@ -305,6 +360,58 @@
   margin-bottom: 16px;
 }
 
+.chart-wrapper {
+  width: 100%;
+  position: relative;
+}
+
+/* Chart Rating Badge - Gold gradient from Figma */
+.chart-rating-badge {
+  position: absolute;
+  top: 10px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: conic-gradient(from 180deg at 50% 50%, #C9A227 0deg, #D4AF37 360deg);
+  padding: 4px 6px;
+  border-radius: 10px;
+  z-index: 2;
+}
+
+.chart-rating-badge .rating-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: #FFFFFF;
+}
+
+.chart-rating-badge .rating-star-circle {
+  width: 16px;
+  height: 16px;
+  background: #D4B84D;
+  opacity: 0.8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-rating-badge .rating-star {
+  width: 12px;
+  height: 12px;
+  color: #FFFFFF;
+  filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Chart Change Indicator */
+.chart-change-indicator {
+  position: absolute;
+  right: 30px;
+  top: 45px;
+  z-index: 2;
+}
+
 .chart-header {
   display: flex;
   justify-content: space-between;
@@ -326,17 +433,19 @@
 }
 
 .chart-change {
-  min-width: 44px;
-  height: 20px;
-  background: #0EFB49;
-  border-radius: 6px;
+  min-width: 55px;
+  height: 24px;
+  background: #42FF87;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15px;
   color: #000000;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 /* Tag Pills */
@@ -423,6 +532,13 @@
 
 .leave-review-link.community:hover {
   color: #777777;
+}
+
+.leave-review-text {
+  color: #777777;
+  font-size: 11px;
+  text-align: right;
+  margin: 0px 5px 5px 0;
 }
 
 /* CP Section Headers */
@@ -646,7 +762,7 @@
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 24px 0;
+  padding: 0px 0;
   cursor: pointer;
 }
 
