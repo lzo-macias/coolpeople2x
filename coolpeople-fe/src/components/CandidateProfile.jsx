@@ -937,13 +937,19 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
               const video = activity.video
               const videoPartyColor = getPartyColor(video.user.party)
               return (
-                <div key={activity.id} className="activity-video-card">
-                  {/* Action indicator at top */}
+                <div key={activity.id} className="activity-item">
+                  {/* Action indicator at top - full width */}
                   <div className="activity-action-badge">
                     <span className="activity-action-icon" style={{ color: config.color }}>{config.icon}</span>
-                    <span className="activity-action-text">{activity.action}</span>
+                    <span className="activity-action-text">
+                      {activity.type === 'repost' || activity.type === 'post' ? 'post by' : activity.action}
+                    </span>
+                    <span className="activity-action-user">{video.user.username}</span>
                     <span className="activity-timestamp">{activity.timestamp}</span>
                   </div>
+
+                  {/* Video card */}
+                  <div className="activity-video-card">
 
                   {/* Video container */}
                   <div className="activity-video-container">
@@ -951,43 +957,29 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
 
                     {/* Overlay content */}
                     <div className="activity-video-overlay">
-                      {/* User info - bottom left */}
-                      <div className="activity-video-user">
-                        <div className="activity-user-avatar" style={{ borderColor: videoPartyColor }}>
-                          <img src={video.user.avatar} alt={video.user.username} />
+                      <div className="activity-info">
+                        {video.race && (
+                          <div className="activity-race-pill">
+                            <span className="activity-race-dot"></span>
+                            {video.race}
+                          </div>
+                        )}
+                        <div className="activity-user-row">
+                          <img
+                            src={video.user.avatar}
+                            alt={video.user.username}
+                            className="activity-user-avatar"
+                            style={{ borderColor: videoPartyColor }}
+                          />
+                          <div className="activity-user-details">
+                            <span className="activity-party-tag" style={{ color: videoPartyColor }}>{video.user.party}</span>
+                            <span className="activity-username">@{video.user.username}</span>
+                          </div>
                         </div>
-                        <div className="activity-user-info">
-                          <span className="activity-username">@{video.user.username}</span>
-                          <span className="activity-party" style={{ color: videoPartyColor }}>{video.user.party}</span>
-                          <span className="activity-race">{video.race}</span>
-                        </div>
-                      </div>
-
-                      {/* Caption */}
-                      <p className="activity-caption">{video.caption}</p>
-
-                      {/* Engagement sidebar - right side */}
-                      <div className="activity-engagement">
-                        <div className="engagement-item">
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                          </svg>
-                          <span>{video.likes}</span>
-                        </div>
-                        <div className="engagement-item">
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M21 6h-2V4.33C19 3.04 17.96 2 16.67 2H3.33C2.04 2 1 3.04 1 4.33v11.34C1 16.96 2.04 18 3.33 18H5v2.67C5 21.4 5.6 22 6.33 22h14.34c.73 0 1.33-.6 1.33-1.33V7.33C22 6.6 21.4 6 21 6zM3.33 16C3.15 16 3 15.85 3 15.67V4.33C3 4.15 3.15 4 3.33 4h13.34c.18 0 .33.15.33.33V6H6.33C5.6 6 5 6.6 5 7.33V16H3.33zM20 20H7V8h13v12z"/>
-                          </svg>
-                          <span>{video.comments}</span>
-                        </div>
-                        <div className="engagement-item">
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-                          </svg>
-                          <span>{video.shares}</span>
-                        </div>
+                        <p className="activity-caption">{video.caption}</p>
                       </div>
                     </div>
+                  </div>
                   </div>
                 </div>
               )
