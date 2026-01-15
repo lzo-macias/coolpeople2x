@@ -4,11 +4,13 @@ import '../styling/PostScreen.css'
 function PostScreen({ onClose, onPost }) {
   const [title, setTitle] = useState('')
   const [caption, setCaption] = useState('')
+  const [selectedTarget, setSelectedTarget] = useState(null)
   const [selectedPostTo, setSelectedPostTo] = useState(null)
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
 
+  const targetRaces = ['Mayor Race', 'City Council', 'Governor', 'Senate']
   const postToOptions = ['Your Feed', 'The Pink Lady']
   const sendToOptions = ['The Pink Lady', 'Mamas gaga', 'Sunday Canvassing']
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
@@ -85,8 +87,24 @@ function PostScreen({ onClose, onPost }) {
           <button className="post-hashtag-btn">#</button>
         </div>
 
+        {/* Target Race */}
+        <div className="post-option-row stacked">
+          <span className="post-option-label">Target</span>
+          <div className="post-option-tags">
+            {targetRaces.map(race => (
+              <button
+                key={race}
+                className={`post-tag ${selectedTarget === race ? 'active' : ''}`}
+                onClick={() => setSelectedTarget(selectedTarget === race ? null : race)}
+              >
+                {race}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Post To */}
-        <div className="post-option-row">
+        <div className="post-option-row stacked">
           <span className="post-option-label">Post To</span>
           <div className="post-option-tags">
             {postToOptions.map(option => (

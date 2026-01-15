@@ -162,6 +162,7 @@ export const mockReels = [
       shazam: '9,999',
       shares: '9,999',
     },
+    targetRace: 'Mayor Race',
     createdAt: '2024-01-15T10:30:00Z',
   },
   {
@@ -213,6 +214,7 @@ export const mockReels = [
       shazam: '567',
       shares: '2,345',
     },
+    targetRace: 'City Council',
     createdAt: '2024-01-14T15:45:00Z',
   },
   {

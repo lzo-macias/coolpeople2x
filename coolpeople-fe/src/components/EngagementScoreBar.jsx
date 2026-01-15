@@ -3,6 +3,22 @@ import '../styling/EngagementScoreBar.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
 
+// Helper to determine trend from sparkline data
+const getTrend = (data) => {
+  if (!data || data.length < 2) return 'stable'
+  const first = data[0]
+  const last = data[data.length - 1]
+  if (last > first) return 'up'
+  if (last < first) return 'down'
+  return 'stable'
+}
+
+// Helper to determine if change is positive
+const isPositiveChange = (change) => {
+  if (!change) return true
+  return change.startsWith('+') || (!change.startsWith('-') && parseFloat(change) >= 0)
+}
+
 function EngagementScoreBar({ scores, onItemClick }) {
   if (!scores || scores.length === 0) return null
 
@@ -19,6 +35,9 @@ function EngagementScoreBar({ scores, onItemClick }) {
       {scores.map((score, idx) => {
         const partyColor = getPartyColor(score.party)
         const positions = randomPositions[idx]
+        const trend = getTrend(score.sparklineData)
+        const sparklineColor = trend === 'up' ? '#00ff00' : trend === 'down' ? '#ff3b3b' : '#00ff00'
+        const isPositive = isPositiveChange(score.recentChange)
 
         return (
           <div
@@ -39,13 +58,13 @@ function EngagementScoreBar({ scores, onItemClick }) {
             <div className="engagement-chart">
               <Sparkline
                 data={score.sparklineData}
-                color="#00ff00"
-                width={100}
-                height={24}
+                color={sparklineColor}
+                width={70}
+                height={50}
               />
               {score.recentChange && (
                 <span
-                  className="engagement-change"
+                  className={`engagement-change ${isPositive ? 'positive' : 'negative'}`}
                   style={{
                     top: `${positions.top}%`,
                     left: `${positions.left}%`,

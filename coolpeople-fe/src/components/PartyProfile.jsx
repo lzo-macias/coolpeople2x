@@ -299,12 +299,20 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
           <button className="profile-action-btn join" onClick={() => setHasJoined(!hasJoined)}>
             {hasJoined ? 'joined' : 'join'}
           </button>
-          <button className="profile-action-btn message">message</button>
+          {/* <button className="profile-action-btn message">message</button> */}
           <button
             className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
             onClick={() => setIsFollowing(!isFollowing)}
           >
             {isFollowing ? 'following' : 'follow'}
+          </button>
+          <button className="profile-action-icon invite">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="9" cy="7" r="4" />
+              <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="16" y1="11" x2="22" y2="11" />
+            </svg>
           </button>
         </div>
 

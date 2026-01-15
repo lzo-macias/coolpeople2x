@@ -17,6 +17,17 @@ const mockCandidate = {
   sparklineData: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
   filteredSparklineData: [50, 52, 48, 55, 58, 54, 60, 63, 59, 67, 70, 68, 74, 76, 80, 78, 84, 86, 89, 92],
   bio: 'Running for Mayor. Building a better tomorrow for our community.',
+  postImages: [
+    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
+    'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=400&h=600&fit=crop',
+  ],
 }
 
 const mockTags = ['all', 'trans', 'police', 'honesty', 'generosity', 'humour']
@@ -113,6 +124,142 @@ const profileSections = {
     timestamp: '2 weeks ago',
     media: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop',
   },
+}
+
+// Activity feed for Details tab - shows videos with action indicators
+const activityFeed = [
+  {
+    id: 'act-1',
+    type: 'like',
+    action: 'liked',
+    timestamp: '2h ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
+      user: { username: 'maya.2024', avatar: 'https://i.pravatar.cc/40?img=44', party: 'Democrat' },
+      race: 'NYC Mayor 2024',
+      likes: '12.4K',
+      comments: '892',
+      shares: '2.1K',
+      caption: 'Making moves for our community 🗳️',
+    },
+  },
+  {
+    id: 'act-2',
+    type: 'nominate',
+    action: 'nominated',
+    timestamp: '5h ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=400&h=700&fit=crop',
+      user: { username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: 'The Pink Lady' },
+      race: 'City Council District 5',
+      likes: '8.2K',
+      comments: '456',
+      shares: '1.3K',
+      caption: 'Together we rise ✊',
+    },
+  },
+  {
+    id: 'act-3',
+    type: 'comment',
+    action: 'commented',
+    comment: 'This is exactly what we need!',
+    timestamp: '1d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=700&fit=crop',
+      user: { username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Independent' },
+      race: 'School Board Election',
+      likes: '24.1K',
+      comments: '1.2K',
+      shares: '4.5K',
+      caption: 'Democracy in action',
+    },
+  },
+  {
+    id: 'act-4',
+    type: 'repost',
+    action: 'reposted',
+    timestamp: '1d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=400&h=700&fit=crop',
+      user: { username: 'community.voice', avatar: 'https://i.pravatar.cc/40?img=55', party: 'Democrat' },
+      race: 'State Assembly',
+      likes: '5.7K',
+      comments: '234',
+      shares: '890',
+      caption: 'Spreading the word 📢',
+    },
+  },
+  {
+    id: 'act-5',
+    type: 'endorsement',
+    action: 'endorsed',
+    timestamp: '2d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=400&h=700&fit=crop',
+      user: { username: 'Maya.2024', avatar: 'https://i.pravatar.cc/40?img=44', party: 'The Pink Lady' },
+      race: 'Borough President',
+      likes: '15.3K',
+      comments: '678',
+      shares: '2.8K',
+      caption: 'Endorsed and proud 🌟',
+    },
+  },
+  {
+    id: 'act-6',
+    type: 'ballot',
+    action: 'added to ballot',
+    timestamp: '3d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=400&h=700&fit=crop',
+      user: { username: 'alex.votes', avatar: 'https://i.pravatar.cc/40?img=60', party: 'Republican' },
+      race: 'Public Advocate',
+      likes: '9.8K',
+      comments: '543',
+      shares: '1.6K',
+      caption: 'Your vote matters',
+    },
+  },
+  {
+    id: 'act-7',
+    type: 'favorite',
+    action: 'favorited',
+    timestamp: '4d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400&h=700&fit=crop',
+      user: { username: 'pinklady.official', avatar: 'https://i.pravatar.cc/40?img=47', party: 'The Pink Lady' },
+      race: 'NYC Mayor 2024',
+      likes: '31.2K',
+      comments: '2.1K',
+      shares: '5.4K',
+      caption: 'Official party content 💖',
+    },
+  },
+  {
+    id: 'act-8',
+    type: 'like',
+    action: 'liked',
+    timestamp: '5d ago',
+    video: {
+      thumbnail: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=700&fit=crop',
+      user: { username: 'foodie.voter', avatar: 'https://i.pravatar.cc/40?img=36', party: 'Independent' },
+      race: 'City Comptroller',
+      likes: '4.5K',
+      comments: '189',
+      shares: '567',
+      caption: 'Politics & good food 🍽️',
+    },
+  },
+]
+
+// Activity type colors and icons
+const activityConfig = {
+  like: { color: '#FF4D6A', icon: '♥' },
+  nominate: { color: '#00F2EA', icon: '★' },
+  repost: { color: '#4CAF50', icon: '↻' },
+  comment: { color: '#FFB800', icon: '💬' },
+  endorsement: { color: '#9B59B6', icon: '✓' },
+  ballot: { color: '#FF9500', icon: '☐' },
+  favorite: { color: '#FFD700', icon: '★' },
 }
 
 // Regular nominations (free community reviews)
@@ -341,7 +488,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
   const tabs = [
     { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
-    { name: 'Tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
     { name: 'Details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
@@ -440,7 +586,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
         </div>
 
         {/* Tabs */}
-        <div className="profile-tabs">
+        <div className={`profile-tabs ${activeTab === 'posts' || activeTab === 'details' ? 'posts-active' : ''}`}>
           {tabs.map((tab) => (
             <button
               key={tab.name}
@@ -455,7 +601,21 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
       </div>
 
       {/* Content - dark background */}
-      <div className="profile-content">
+      <div className={`profile-content ${activeTab === 'posts' || activeTab === 'details' ? 'posts-active' : ''}`}>
+        {/* Posts Tab */}
+        {activeTab === 'posts' && (
+          <div className="posts-grid">
+            {candidate.postImages?.map((post, index) => (
+              <div key={index} className="post-item">
+                <img src={post} alt={`Post ${index + 1}`} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Bio Tab */}
+        {activeTab === 'bio' && (
+          <>
         {/* Search Bar */}
         <div className="profile-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -766,6 +926,74 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
             </div>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Details Tab */}
+        {activeTab === 'details' && (
+          <div className="activity-feed">
+            {activityFeed.map((activity) => {
+              const config = activityConfig[activity.type]
+              const video = activity.video
+              const videoPartyColor = getPartyColor(video.user.party)
+              return (
+                <div key={activity.id} className="activity-video-card">
+                  {/* Action indicator at top */}
+                  <div className="activity-action-badge">
+                    <span className="activity-action-icon" style={{ color: config.color }}>{config.icon}</span>
+                    <span className="activity-action-text">{activity.action}</span>
+                    <span className="activity-timestamp">{activity.timestamp}</span>
+                  </div>
+
+                  {/* Video container */}
+                  <div className="activity-video-container">
+                    <img src={video.thumbnail} alt="" className="activity-video-thumbnail" />
+
+                    {/* Overlay content */}
+                    <div className="activity-video-overlay">
+                      {/* User info - bottom left */}
+                      <div className="activity-video-user">
+                        <div className="activity-user-avatar" style={{ borderColor: videoPartyColor }}>
+                          <img src={video.user.avatar} alt={video.user.username} />
+                        </div>
+                        <div className="activity-user-info">
+                          <span className="activity-username">@{video.user.username}</span>
+                          <span className="activity-party" style={{ color: videoPartyColor }}>{video.user.party}</span>
+                          <span className="activity-race">{video.race}</span>
+                        </div>
+                      </div>
+
+                      {/* Caption */}
+                      <p className="activity-caption">{video.caption}</p>
+
+                      {/* Engagement sidebar - right side */}
+                      <div className="activity-engagement">
+                        <div className="engagement-item">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                          </svg>
+                          <span>{video.likes}</span>
+                        </div>
+                        <div className="engagement-item">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21 6h-2V4.33C19 3.04 17.96 2 16.67 2H3.33C2.04 2 1 3.04 1 4.33v11.34C1 16.96 2.04 18 3.33 18H5v2.67C5 21.4 5.6 22 6.33 22h14.34c.73 0 1.33-.6 1.33-1.33V7.33C22 6.6 21.4 6 21 6zM3.33 16C3.15 16 3 15.85 3 15.67V4.33C3 4.15 3.15 4 3.33 4h13.34c.18 0 .33.15.33.33V6H6.33C5.6 6 5 6.6 5 7.33V16H3.33zM20 20H7V8h13v12z"/>
+                          </svg>
+                          <span>{video.comments}</span>
+                        </div>
+                        <div className="engagement-item">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+                          </svg>
+                          <span>{video.shares}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

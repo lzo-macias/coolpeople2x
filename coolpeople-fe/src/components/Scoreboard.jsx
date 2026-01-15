@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
-import ScoreboardChart from './ScoreboardChart'
+import InviteFriends from './InviteFriends'
 import { mockScoreboard, getPartyColor } from '../data/mockData'
 
 // Mock recommended users
@@ -11,6 +11,11 @@ const recommendedUsers = [
   { id: 'rec-3', username: 'whatstea', avatar: 'https://i.pravatar.cc/100?img=32', party: 'Independent' },
   { id: 'rec-4', username: 'periodp', avatar: 'https://i.pravatar.cc/100?img=25', party: 'Green' },
   { id: 'rec-5', username: 'coolcat', avatar: 'https://i.pravatar.cc/100?img=36', party: 'Democrat' },
+  { id: 'rec-6', username: 'maya.votes', avatar: 'https://i.pravatar.cc/100?img=41', party: 'Republican' },
+  { id: 'rec-7', username: 'joshforchange', avatar: 'https://i.pravatar.cc/100?img=53', party: 'Independent' },
+  { id: 'rec-8', username: 'lucia.2024', avatar: 'https://i.pravatar.cc/100?img=44', party: 'Democrat' },
+  { id: 'rec-9', username: 'thereal.mike', avatar: 'https://i.pravatar.cc/100?img=59', party: 'Green' },
+  { id: 'rec-10', username: 'votesara', avatar: 'https://i.pravatar.cc/100?img=38', party: 'Republican' },
 ]
 
 // Mock front runners
@@ -22,10 +27,10 @@ const frontRunners = [
 
 function Scoreboard({ onOpenProfile, isActive }) {
   const [users, setUsers] = useState(mockScoreboard)
-  const [timePeriod, setTimePeriod] = useState('this month')
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
   const [activeSection, setActiveSection] = useState(0)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchFilter, setSearchFilter] = useState(null)
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
 
   // Close search when navigating away
@@ -61,17 +66,13 @@ function Scoreboard({ onOpenProfile, isActive }) {
     ? users.filter(u => u.party === currentUserParty)
     : []
 
-  // Define sections
+  // Define sections - races I'm following
   const sections = [
-    { id: 'favorited', label: 'Favorited Users', users: favoritedUsers },
-    { id: 'frontrunners', label: 'Frontrunners', users: frontrunnerUsers },
-    { id: 'nominated', label: 'Nominated', users: nominatedUsers },
+    { id: 'coolpeople', label: 'CoolPeople', users: favoritedUsers },
+    { id: 'mayor', label: 'Mayor', users: frontrunnerUsers },
+    { id: 'pinklady', label: 'The Pink Lady', users: nominatedUsers },
+    { id: 'baddest', label: 'Baddest Bitch', users: partyUsers },
   ]
-
-  // Add party section if user is in a party
-  if (currentUserParty) {
-    sections.push({ id: 'party', label: `${currentUserParty} Party`, users: partyUsers })
-  }
 
   const handleSwipe = (e) => {
     // Accumulate horizontal scroll delta
@@ -128,44 +129,103 @@ function Scoreboard({ onOpenProfile, isActive }) {
             <div className="search-backdrop" onClick={() => setIsSearchOpen(false)} />
             <div className="search-dropdown">
               <div className="search-tags-scroll">
-                <button className="search-tag trending">Trending</button>
-                {['People', 'Posts', 'CoolPeople', 'Restaurants', 'Events', 'Parties'].map(tag => (
-                  <button key={tag} className="search-tag">{tag}</button>
+                {['Trending', 'People', 'Races', 'Posts', 'CoolPeople', 'Restaurants', 'Events', 'Parties'].map(tag => (
+                  <button
+                    key={tag}
+                    className={`search-tag ${searchFilter === tag || (searchFilter === null && tag === 'Trending') ? 'active' : ''}`}
+                    onClick={() => setSearchFilter(tag)}
+                  >
+                    {tag}
+                  </button>
                 ))}
               </div>
 
-              <div className="search-grid">
-                {[
-                  { id: 1, caption: 'need a new colombian man im bored', user: 'whyfelipe', avatar: 'https://i.pravatar.cc/40?img=11', likes: '485', party: 'Democrat' },
-                  { id: 2, caption: 'Clean eating for beginners', user: 'Qaim Hunt', avatar: 'https://i.pravatar.cc/40?img=12', likes: '47.8K', party: 'Republican' },
-                  { id: 3, caption: 'I love picking my baby boogers and she never le...', user: 'lrn', avatar: 'https://i.pravatar.cc/40?img=13', likes: '160.7K', party: 'Independent' },
-                  { id: 4, caption: "couldn't believe my eyes", user: 'natalia', avatar: 'https://i.pravatar.cc/40?img=14', likes: '413.5K', party: 'Green' },
-                  { id: 5, caption: 'POV: you finally found your people', user: 'Democratic Party', avatar: 'https://i.pravatar.cc/40?img=15', likes: '22.1K', isParty: true },
-                  { id: 6, caption: 'This is what democracy looks like', user: 'CoolPeople Official', avatar: 'https://i.pravatar.cc/40?img=16', likes: '89.2K', isParty: true },
-                ].map(post => (
-                  <div key={post.id} className="search-grid-item">
-                    <img src={`https://picsum.photos/200/350?random=${post.id}`} alt="" className="search-grid-thumb" />
-                    <div className="search-grid-info">
-                      <p className="search-grid-caption">{post.caption}</p>
-                      <div className="search-grid-meta">
-                        <div className="search-grid-user">
-                          <img src={post.avatar} alt={post.user} className="search-grid-avatar" />
-                          <div className="search-grid-user-info">
-                            <span className="search-grid-username">{post.user}</span>
-                            {!post.isParty && post.party && (
-                              <span className="search-grid-party">{post.party}</span>
-                            )}
+              {/* People Search Results */}
+              {searchFilter === 'People' && (
+                <div className="search-people-list">
+                  {[
+                    { id: 1, username: 'william.hiya', name: 'William Harrison', avatar: 'https://i.pravatar.cc/60?img=12', party: 'Democrat', followers: '25.3K' },
+                    { id: 2, username: 'sarah.politics', name: 'Sarah Johnson', avatar: 'https://i.pravatar.cc/60?img=5', party: 'Republican', followers: '18.7K' },
+                    { id: 3, username: 'alex.progressive', name: 'Alex Martinez', avatar: 'https://i.pravatar.cc/60?img=3', party: 'Independent', followers: '42.1K' },
+                    { id: 4, username: 'lzo.macias', name: 'Lzo Macias', avatar: 'https://i.pravatar.cc/60?img=1', party: 'The Pink Lady Party', followers: '89.5K' },
+                    { id: 5, username: 'mike.district4', name: 'Mike Thompson', avatar: 'https://i.pravatar.cc/60?img=8', party: 'Green', followers: '12.4K' },
+                  ].map(person => (
+                    <div key={person.id} className="search-person-row">
+                      <div
+                        className="search-person-avatar-ring"
+                        style={{ borderColor: getPartyColor(person.party) }}
+                      >
+                        <img src={person.avatar} alt={person.username} className="search-person-avatar" />
+                      </div>
+                      <div className="search-person-info">
+                        <span className="search-person-username">{person.username}</span>
+                        <span className="search-person-name">{person.name}</span>
+                        <span className="search-person-party">{person.party}</span>
+                      </div>
+                      <div className="search-person-followers">{person.followers}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Races Search Results */}
+              {searchFilter === 'Races' && (
+                <div className="search-races-list">
+                  {[
+                    { id: 1, name: 'CoolPeople', candidates: 156, followers: '1.2M', avatar: 'https://i.pravatar.cc/80?img=68' },
+                    { id: 2, name: 'Mayor Race', candidates: 12, followers: '845K', avatar: 'https://i.pravatar.cc/80?img=60' },
+                    { id: 3, name: 'The Pink Lady', candidates: 89, followers: '2.1M', avatar: 'https://i.pravatar.cc/80?img=47' },
+                    { id: 4, name: 'Baddest Bitch', candidates: 234, followers: '3.5M', avatar: 'https://i.pravatar.cc/80?img=45' },
+                    { id: 5, name: 'City Council', candidates: 45, followers: '320K', avatar: 'https://i.pravatar.cc/80?img=52' },
+                    { id: 6, name: 'Governor', candidates: 8, followers: '1.8M', avatar: 'https://i.pravatar.cc/80?img=57' },
+                  ].map(race => (
+                    <div key={race.id} className="search-race-row">
+                      <img src={race.avatar} alt={race.name} className="search-race-icon" />
+                      <div className="search-race-info">
+                        <span className="search-race-name">{race.name}</span>
+                        <span className="search-race-meta">{race.candidates} candidates • {race.followers} followers</span>
+                      </div>
+                      <button className="search-race-follow">Follow</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Default Grid (Trending or other filters) */}
+              {(searchFilter === null || searchFilter === 'Trending' || (searchFilter !== 'People' && searchFilter !== 'Races')) && (
+                <div className="search-grid">
+                  {[
+                    { id: 1, caption: 'need a new colombian man im bored', user: 'whyfelipe', avatar: 'https://i.pravatar.cc/40?img=11', likes: '485', party: 'Democrat' },
+                    { id: 2, caption: 'Clean eating for beginners', user: 'Qaim Hunt', avatar: 'https://i.pravatar.cc/40?img=12', likes: '47.8K', party: 'Republican' },
+                    { id: 3, caption: 'I love picking my baby boogers and she never le...', user: 'lrn', avatar: 'https://i.pravatar.cc/40?img=13', likes: '160.7K', party: 'Independent' },
+                    { id: 4, caption: "couldn't believe my eyes", user: 'natalia', avatar: 'https://i.pravatar.cc/40?img=14', likes: '413.5K', party: 'Green' },
+                    { id: 5, caption: 'POV: you finally found your people', user: 'Democratic Party', avatar: 'https://i.pravatar.cc/40?img=15', likes: '22.1K', isParty: true },
+                    { id: 6, caption: 'This is what democracy looks like', user: 'CoolPeople Official', avatar: 'https://i.pravatar.cc/40?img=16', likes: '89.2K', isParty: true },
+                  ].map(post => (
+                    <div key={post.id} className="search-grid-item">
+                      <img src={`https://picsum.photos/200/350?random=${post.id}`} alt="" className="search-grid-thumb" />
+                      <div className="search-grid-info">
+                        <p className="search-grid-caption">{post.caption}</p>
+                        <div className="search-grid-meta">
+                          <div className="search-grid-user">
+                            <img src={post.avatar} alt={post.user} className="search-grid-avatar" />
+                            <div className="search-grid-user-info">
+                              <span className="search-grid-username">{post.user}</span>
+                              {!post.isParty && post.party && (
+                                <span className="search-grid-party">{post.party}</span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="search-grid-likes">
-                          <span className="heart-icon">♡</span>
-                          {post.likes}
+                          <div className="search-grid-likes">
+                            <span className="heart-icon">♡</span>
+                            {post.likes}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -215,40 +275,24 @@ function Scoreboard({ onOpenProfile, isActive }) {
         </div>
       </div>
 
-      {/* Time period dropdown */}
-      <div className="time-period-selector">
-        <select
-          value={timePeriod}
-          onChange={(e) => setTimePeriod(e.target.value)}
-          className="time-period-dropdown"
-        >
-          <option value="this week">this week</option>
-          <option value="this month">this month</option>
-          <option value="this year">this year</option>
-          <option value="all time">all time</option>
-        </select>
-      </div>
+      {/* Invite Friends */}
+      <InviteFriends />
 
-      {/* Chart */}
-      <ScoreboardChart users={users} />
-
-      {/* Recommended for you */}
-      <div className="recommended-section">
+      {/* Recommended for you - hidden for now
+      <div className="recommended-container">
         <h3 className="recommended-title">Recommended for you</h3>
         <div className="recommended-scroll">
           {recommendedUsers.map(user => (
-            <div key={user.id} className="recommended-user">
-              <div
-                className="recommended-avatar-ring"
-                style={{ borderColor: getPartyColor(user.party) }}
-              >
-                <img src={user.avatar} alt={user.username} className="recommended-avatar" />
+            <div key={user.id} className="recommended-item">
+              <div className="recommended-avatar">
+                <img src={user.avatar} alt={user.username} />
               </div>
               <span className="recommended-username">{user.username}</span>
             </div>
           ))}
         </div>
       </div>
+      */}
 
       {/* CoolPeople Title */}
       {/* <h1 className="coolpeople-title">CoolPeople</h1> */}
