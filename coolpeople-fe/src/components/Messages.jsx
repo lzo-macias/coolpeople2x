@@ -3,15 +3,36 @@ import { mockMessages, getPartyColor } from '../data/mockData'
 import Conversation from './Conversation'
 import '../styling/Messages.css'
 
+// Mock stories data
+const mockStories = [
+  { id: 'add', isAdd: true },
+  { id: 1, username: 'Pink Lady', avatar: 'https://i.pravatar.cc/150?img=1', hasUnread: true },
+  { id: 2, username: 'Lorem', avatar: 'https://i.pravatar.cc/150?img=2', hasUnread: true },
+  { id: 3, username: 'Jake.M', avatar: 'https://i.pravatar.cc/150?img=3', hasUnread: false },
+  { id: 4, username: 'Sarah', avatar: 'https://i.pravatar.cc/150?img=4', hasUnread: false },
+  { id: 5, username: 'Marcus', avatar: 'https://i.pravatar.cc/150?img=5', hasUnread: false },
+]
+
+// Mock activity data
+const mockActivity = {
+  likes: 24,
+  comments: 8,
+  reviews: 3,
+}
+
 function Messages({ onConversationChange }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const currentUsername = 'William.h.for.mayor'
 
+  const unreadCount = mockMessages.filter(m => m.hasUnread).length
+  const totalCount = mockMessages.length
+
   const filters = [
-    { id: 'all', label: 'All' },
-    { id: 'unread', label: 'Unread' },
-    { id: 'hidden', label: 'Hidden' },
+    { id: 'all', label: 'All', count: totalCount },
+    { id: 'unread', label: 'Unread', count: unreadCount },
+    { id: 'hidden', label: 'Hidden', count: null },
+    { id: 'requests', label: 'Requests', count: null },
   ]
 
   const filteredMessages = mockMessages.filter((msg) => {
@@ -52,21 +73,73 @@ function Messages({ onConversationChange }) {
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="messages-search-row">
-        <div className="messages-search-bar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <span>Search messages</span>
+      {/* Stories Section */}
+      <div className="messages-stories-section">
+        <div className="messages-section-header">
+          <span className="messages-section-title">STORIES</span>
+          <button className="messages-see-all">See all</button>
         </div>
-        <button className="messages-compose-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
+        <div className="messages-stories-row">
+          {mockStories.map((story) => (
+            <div key={story.id} className="messages-story-item">
+              {story.isAdd ? (
+                <div className="messages-story-add">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+              ) : (
+                <div className={`messages-story-avatar ${story.hasUnread ? 'has-unread' : ''}`}>
+                  <img src={story.avatar} alt={story.username} />
+                </div>
+              )}
+              <span className="messages-story-name">{story.isAdd ? 'Add Story' : story.username}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Activity Section */}
+      <div className="messages-activity-section">
+        <div className="messages-section-header">
+          <span className="messages-section-title">ACTIVITY</span>
+          <button className="messages-see-all">View all</button>
+        </div>
+        <div className="messages-activity-row">
+          <div className="messages-activity-card">
+            <div className="activity-icon likes">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </div>
+            <div className="activity-info">
+              <span className="activity-count">{mockActivity.likes}</span>
+              <span className="activity-label">New likes</span>
+            </div>
+          </div>
+          <div className="messages-activity-card">
+            <div className="activity-icon comments">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div className="activity-info">
+              <span className="activity-count">{mockActivity.comments}</span>
+              <span className="activity-label">Comments</span>
+            </div>
+          </div>
+          <div className="messages-activity-card">
+            <div className="activity-icon reviews">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+              </svg>
+            </div>
+            <div className="activity-info">
+              <span className="activity-count">{mockActivity.reviews}</span>
+              <span className="activity-label">Reviews</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filter Tabs */}
@@ -78,6 +151,7 @@ function Messages({ onConversationChange }) {
             onClick={() => setActiveFilter(filter.id)}
           >
             {filter.label}
+            {filter.count !== null && <span className="filter-count">{filter.count}</span>}
           </button>
         ))}
       </div>
