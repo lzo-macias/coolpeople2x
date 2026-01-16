@@ -91,25 +91,9 @@ const paidNominations = [
 
 // Initial profile content sections data
 const initialProfileSections = {
-  hillToDieOn: {
-    title: 'The Hill I Will Die on',
-    content: 'Free healthcare for all New Yorkers',
-  },
-  viewsOnIce: {
-    title: 'My views on ICE',
-    score: 7,
-  },
-  viewsOnTransRights: {
-    title: 'My views on trans rights',
-    score: 7,
-  },
   topicsThatEnergize: {
     title: 'Topics that energize me',
     tags: ['Healthcare', 'Trans Rights', 'Immigration', 'Affordability', 'Education'],
-  },
-  accomplishment: {
-    title: "One accomplishment I'm proud of",
-    content: 'Lorem Ipsum  Lorem Ipsum  Lorem Ipsum Lorem Ipsum  Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum Lorem Ipsum',
   },
   guessWhichTrue: {
     title: 'Guess Which One is True',
@@ -120,6 +104,14 @@ const initialProfileSections = {
     ],
     correctIndex: 2, // The third option is true
   },
+  customWritten: [
+    { prompt: 'The hill I will die on', response: 'Free healthcare for all New Yorkers' },
+    { prompt: 'One accomplishment I\'m proud of', response: 'Led a successful campaign to increase voter registration by 40% in my district through grassroots organizing.' },
+  ],
+  customSliders: [
+    { prompt: 'My views on ICE', value: 7 },
+    { prompt: 'My views on trans rights', value: 7 },
+  ],
   recentPost: {
     username: 'William.Hiya',
     timestamp: '2 weeks ago',
@@ -324,6 +316,94 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [respondingTo, setRespondingTo] = useState(null) // nomination being responded to
   const [responseText, setResponseText] = useState('')
   const [reviewResponses, setReviewResponses] = useState({}) // { nominationId: responseText }
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [dragOverItem, setDragOverItem] = useState(null)
+
+  // Build unified icebreakers array for drag-and-drop ordering
+  const buildIcebreakersArray = (sections) => {
+    const items = []
+    sections.customWritten?.forEach((item, index) => {
+      items.push({ type: 'written', index, data: item, id: `written-${index}` })
+    })
+    sections.customSliders?.forEach((item, index) => {
+      items.push({ type: 'slider', index, data: item, id: `slider-${index}` })
+    })
+    if (sections.topicsThatEnergize?.tags?.length > 0) {
+      items.push({ type: 'tags', index: 0, data: sections.topicsThatEnergize, id: 'tags-0' })
+    }
+    if (sections.guessWhichTrue?.options?.some(o => o?.trim())) {
+      items.push({ type: 'game', index: 0, data: sections.guessWhichTrue, id: 'game-0' })
+    }
+    return items
+  }
+
+  const [icebreakersOrder, setIcebreakersOrder] = useState(() =>
+    buildIcebreakersArray(initialProfileSections).map(item => item.id)
+  )
+
+  // Get ordered icebreakers based on current order
+  const getOrderedIcebreakers = () => {
+    const items = buildIcebreakersArray(profileSections)
+    const itemMap = {}
+    items.forEach(item => { itemMap[item.id] = item })
+
+    // Return items in order, filtering out any that no longer exist
+    const ordered = icebreakersOrder
+      .filter(id => itemMap[id])
+      .map(id => itemMap[id])
+
+    // Add any new items not in the order
+    items.forEach(item => {
+      if (!icebreakersOrder.includes(item.id)) {
+        ordered.push(item)
+      }
+    })
+
+    return ordered
+  }
+
+  // Drag handlers
+  const handleDragStart = (e, itemId) => {
+    setDraggedItem(itemId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.target.classList.add('dragging')
+  }
+
+  const handleDragEnd = (e) => {
+    e.target.classList.remove('dragging')
+    setDraggedItem(null)
+    setDragOverItem(null)
+  }
+
+  const handleDragOver = (e, itemId) => {
+    e.preventDefault()
+    if (draggedItem && draggedItem !== itemId) {
+      setDragOverItem(itemId)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverItem(null)
+  }
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault()
+    if (!draggedItem || draggedItem === targetId) return
+
+    const newOrder = [...icebreakersOrder]
+    const draggedIndex = newOrder.indexOf(draggedItem)
+    const targetIndex = newOrder.indexOf(targetId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    // Remove dragged item and insert at target position
+    newOrder.splice(draggedIndex, 1)
+    newOrder.splice(targetIndex, 0, draggedItem)
+
+    setIcebreakersOrder(newOrder)
+    setDraggedItem(null)
+    setDragOverItem(null)
+  }
 
   // Chart colors cycle (for filtered chart based on tag count)
   const chartColors = [
@@ -337,22 +417,22 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const partyColor = getPartyColor(candidate.party)
 
   // Get color from gradient based on position (0-10 score)
+  // Matches slider gradient: #FF2A55 (red) -> #8C2AFF (purple) -> #00F2EA (cyan)
   const getScoreColor = (score) => {
     const position = score / 10 // 0 to 1
-    // Vibrant gradient: #FF1744 (0%) -> #D500F9 (50%) -> #00E5FF (100%)
     if (position <= 0.5) {
-      // Interpolate between hot pink and vibrant purple
+      // Interpolate between #FF2A55 (red) and #8C2AFF (purple)
       const t = position * 2
-      const r = Math.round(255 + (213 - 255) * t)
-      const g = Math.round(23 + (0 - 23) * t)
-      const b = Math.round(68 + (249 - 68) * t)
+      const r = Math.round(255 + (140 - 255) * t)
+      const g = Math.round(42 + (42 - 42) * t)
+      const b = Math.round(85 + (255 - 85) * t)
       return `rgb(${r}, ${g}, ${b})`
     } else {
-      // Interpolate between vibrant purple and cyan
+      // Interpolate between #8C2AFF (purple) and #00F2EA (cyan)
       const t = (position - 0.5) * 2
-      const r = Math.round(213 + (0 - 213) * t)
-      const g = Math.round(0 + (229 - 0) * t)
-      const b = Math.round(249 + (255 - 249) * t)
+      const r = Math.round(140 + (0 - 140) * t)
+      const g = Math.round(42 + (242 - 42) * t)
+      const b = Math.round(255 + (234 - 255) * t)
       return `rgb(${r}, ${g}, ${b})`
     }
   }
@@ -858,109 +938,172 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
         {/* Profile Sections */}
         <div className="profile-sections">
-          {/* The Hill I Will Die On */}
-          <div className="profile-section">
-            <span className="section-title">{profileSections.hillToDieOn.title}</span>
-            <h3 className="section-content-large">{profileSections.hillToDieOn.content}</h3>
-            <div className="section-footer">
-              <div className="reaction-icons">
-                <button className="reaction-btn"><span className="reaction-dot"></span></button>
-                <button className="reaction-btn"><span className="reaction-dot dark"></span></button>
-              </div>
-              <button className="see-more-btn">See more ›</button>
-            </div>
+          <div className="profile-sections-header">
+            <span className="profile-sections-title">Icebreakers</span>
           </div>
 
-          {/* My views on ICE */}
-          <div className="profile-section">
-            <span className="section-title">{profileSections.viewsOnIce.title}</span>
-            <div className="score-bar-container">
-              <div className="score-bar">
-                <div className="score-fill" style={{ width: `${profileSections.viewsOnIce.score * 10}%` }}></div>
-                <div className="score-indicator" style={{
-                  left: `${profileSections.viewsOnIce.score * 10}%`,
-                  background: getScoreColor(profileSections.viewsOnIce.score)
-                }}>
-                  <span className="score-value">{profileSections.viewsOnIce.score}</span>
-                </div>
-              </div>
-            </div>
-            <div className="section-footer">
-              <div className="reaction-icons">
-                <button className="reaction-btn"><span className="reaction-dot"></span></button>
-                <button className="reaction-btn"><span className="reaction-dot dark"></span></button>
-              </div>
-              <button className="see-more-btn">See more ›</button>
-            </div>
-          </div>
+          {/* Render icebreakers in drag-and-drop order */}
+          {getOrderedIcebreakers().map((icebreaker) => {
+            const isDragOver = dragOverItem === icebreaker.id
 
-          {/* Topics that energize me */}
-          <div className="profile-section">
-            <span className="section-title">{profileSections.topicsThatEnergize.title}</span>
-            <div className="energize-tags">
-              {profileSections.topicsThatEnergize.tags.map((tag) => (
-                <span key={tag} className="energize-tag">{tag}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* One accomplishment I'm proud of */}
-          <div className="profile-section">
-            <span className="section-title">{profileSections.accomplishment.title}</span>
-            <p className="section-content-text">{profileSections.accomplishment.content}</p>
-            <div className="section-footer">
-              <div className="reaction-icons">
-                <button className="reaction-btn"><span className="reaction-dot"></span></button>
-                <button className="reaction-btn"><span className="reaction-dot dark"></span></button>
-              </div>
-              <button className="see-more-btn">See more ›</button>
-            </div>
-          </div>
-
-          {/* Guess Which One is True */}
-          <div className="profile-section">
-            <span className="section-title guess">{profileSections.guessWhichTrue.title}</span>
-            <div className="guess-options">
-              {profileSections.guessWhichTrue.options.map((option, index) => (
-                <button
-                  key={index}
-                  className={`guess-bubble ${getGuessClass(index)}`}
-                  onClick={() => handleGuess(index)}
-                  disabled={guessState.transitioning || guessState.revealed}
+            if (icebreaker.type === 'written') {
+              return (
+                <div
+                  key={icebreaker.id}
+                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, icebreaker.id)}
                 >
-                  <span className="guess-text">{option}</span>
-                  {guessState.selected === index && guessState.transitioning && (
-                    <span className="guess-icon">
-                      {index === profileSections.guessWhichTrue.correctIndex ? '✓' : '✕'}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* My views on trans rights */}
-          <div className="profile-section">
-            <span className="section-title">{profileSections.viewsOnTransRights.title}</span>
-            <div className="score-bar-container">
-              <div className="score-bar">
-                <div className="score-fill" style={{ width: `${profileSections.viewsOnTransRights.score * 10}%` }}></div>
-                <div className="score-indicator" style={{
-                  left: `${profileSections.viewsOnTransRights.score * 10}%`,
-                  background: getScoreColor(profileSections.viewsOnTransRights.score)
-                }}>
-                  <span className="score-value">{profileSections.viewsOnTransRights.score}</span>
+                  <div className="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
+                  <span className="section-title">{icebreaker.data.prompt.toLowerCase()}</span>
+                  <p className="section-content-text">{icebreaker.data.response}</p>
+                  <div className="section-footer">
+                    <button className="section-like-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span className="section-like-count">{24 + icebreaker.index * 7}</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="section-footer">
-              <div className="reaction-icons">
-                <button className="reaction-btn"><span className="reaction-dot"></span></button>
-                <button className="reaction-btn"><span className="reaction-dot dark"></span></button>
-              </div>
-              <button className="see-more-btn">See more ›</button>
-            </div>
-          </div>
+              )
+            }
+
+            if (icebreaker.type === 'slider') {
+              return (
+                <div
+                  key={icebreaker.id}
+                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, icebreaker.id)}
+                >
+                  <div className="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
+                  <span className="section-title">{icebreaker.data.prompt.toLowerCase()}</span>
+                  <div className="score-bar-container">
+                    <div className="score-bar">
+                      <div
+                        className="score-indicator"
+                        style={{
+                          left: `${icebreaker.data.value * 10}%`,
+                          background: getScoreColor(icebreaker.data.value)
+                        }}
+                      >
+                        <span className="score-value">{icebreaker.data.value}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="section-footer">
+                    <button className="section-like-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span className="section-like-count">{18 + icebreaker.index * 5}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            if (icebreaker.type === 'tags') {
+              return (
+                <div
+                  key={icebreaker.id}
+                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, icebreaker.id)}
+                >
+                  <div className="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
+                  <span className="section-title">{icebreaker.data.title}</span>
+                  <div className="energize-tags">
+                    {icebreaker.data.tags.map((tag) => (
+                      <span key={tag} className="energize-tag">{tag}</span>
+                    ))}
+                  </div>
+                  <div className="section-footer">
+                    <button className="section-like-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span className="section-like-count">42</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            if (icebreaker.type === 'game') {
+              return (
+                <div
+                  key={icebreaker.id}
+                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, icebreaker.id)}
+                >
+                  <div className="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
+                  <span className="section-title guess">{icebreaker.data.title}</span>
+                  <div className="guess-options">
+                    {icebreaker.data.options.map((option, index) => (
+                      <button
+                        key={index}
+                        className={`guess-bubble ${getGuessClass(index)}`}
+                        onClick={() => handleGuess(index)}
+                        disabled={guessState.transitioning || guessState.revealed}
+                      >
+                        <span className="guess-text">{option}</span>
+                        {guessState.selected === index && guessState.transitioning && (
+                          <span className="guess-icon">
+                            {index === profileSections.guessWhichTrue.correctIndex ? '✓' : '✕'}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="section-footer">
+                    <button className="section-like-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span className="section-like-count">56</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            return null
+          })}
 
           {/* Recent Post */}
           <div className="profile-section post">
@@ -1045,17 +1188,36 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </svg>
           </button>
           <EditBio
+            key={`edit-${profileSections.customWritten?.length}-${profileSections.customSliders?.length}`}
             profileData={profileSections}
             onSave={(updatedData) => {
-              setProfileSections(prev => ({
-                ...prev,
-                hillToDieOn: { ...prev.hillToDieOn, content: updatedData.hillToDieOn },
-                viewsOnIce: { ...prev.viewsOnIce, score: updatedData.viewsOnIce },
-                viewsOnTransRights: { ...prev.viewsOnTransRights, score: updatedData.viewsOnTransRights },
-                topicsThatEnergize: { ...prev.topicsThatEnergize, tags: updatedData.topicsThatEnergize },
-                accomplishment: { ...prev.accomplishment, content: updatedData.accomplishment },
-                guessWhichTrue: { ...prev.guessWhichTrue, options: updatedData.guessWhichTrue.options, correctIndex: updatedData.guessWhichTrue.correctIndex },
-              }))
+              setProfileSections(prev => {
+                const newSections = { ...prev }
+
+                // Handle custom icebreakers
+                if (updatedData.customWritten) {
+                  newSections.customWritten = updatedData.customWritten
+                }
+                if (updatedData.customSliders) {
+                  newSections.customSliders = updatedData.customSliders
+                }
+
+                // Handle tags
+                if (updatedData.topicsThatEnergize?.length > 0) {
+                  newSections.topicsThatEnergize = { ...prev.topicsThatEnergize, tags: updatedData.topicsThatEnergize }
+                }
+
+                // Handle guess game
+                if (updatedData.guessWhichTrue?.options?.some(o => o?.trim())) {
+                  newSections.guessWhichTrue = {
+                    ...prev.guessWhichTrue,
+                    options: updatedData.guessWhichTrue.options,
+                    correctIndex: updatedData.guessWhichTrue.correctIndex
+                  }
+                }
+
+                return newSections
+              })
               setShowEditBio(false)
             }}
           />

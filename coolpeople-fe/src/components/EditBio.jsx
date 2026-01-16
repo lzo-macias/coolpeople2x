@@ -23,6 +23,34 @@ const gameTypes = [
   },
 ]
 
+// Slider types for political views
+const sliderTypes = [
+  {
+    id: 'viewsOnTransRights',
+    name: 'My views on trans rights',
+    description: 'Share where you stand on trans rights',
+    icon: '🏳️‍⚧️',
+  },
+  {
+    id: 'viewsOnIce',
+    name: 'My views on ICE',
+    description: 'Share your stance on immigration enforcement',
+    icon: '🛂',
+  },
+  {
+    id: 'viewsOnHealthcare',
+    name: 'My views on healthcare',
+    description: 'Share where you stand on healthcare policy',
+    icon: '🏥',
+  },
+  {
+    id: 'viewsOnGunControl',
+    name: 'My views on gun control',
+    description: 'Share your stance on gun regulations',
+    icon: '🔫',
+  },
+]
+
 // Available tags for "Topics that energize me"
 const availableTags = [
   // Politics
@@ -37,15 +65,17 @@ const availableTags = [
 
 function EditBio({ profileData: passedProfileData, onSave }) {
   // Convert passed profileData (from CandidateProfile format) to EditBio format
-  const getInitialData = () => ({
-    viewsOnIce: passedProfileData?.viewsOnIce?.score ?? 7,
-    viewsOnTransRights: passedProfileData?.viewsOnTransRights?.score ?? 7,
-    hillToDieOn: passedProfileData?.hillToDieOn?.content ?? '',
-    topicsThatEnergize: passedProfileData?.topicsThatEnergize?.tags ?? [],
-    accomplishment: passedProfileData?.accomplishment?.content ?? '',
+  const getInitialData = (data) => ({
+    viewsOnIce: data?.viewsOnIce?.score ?? null,
+    viewsOnTransRights: data?.viewsOnTransRights?.score ?? null,
+    viewsOnHealthcare: data?.viewsOnHealthcare?.score ?? null,
+    viewsOnGunControl: data?.viewsOnGunControl?.score ?? null,
+    hillToDieOn: data?.hillToDieOn?.content ?? '',
+    topicsThatEnergize: data?.topicsThatEnergize?.tags ?? [],
+    accomplishment: data?.accomplishment?.content ?? '',
     guessWhichTrue: {
-      options: passedProfileData?.guessWhichTrue?.options ?? ['', '', ''],
-      correctIndex: passedProfileData?.guessWhichTrue?.correctIndex ?? null,
+      options: data?.guessWhichTrue?.options ?? ['', '', ''],
+      correctIndex: data?.guessWhichTrue?.correctIndex ?? null,
     },
     wouldYouRather: {
       optionA: '',
@@ -54,13 +84,34 @@ function EditBio({ profileData: passedProfileData, onSave }) {
     unpopularOpinion: {
       opinion: '',
     },
+    // Custom icebreakers
+    customWritten: data?.customWritten ?? [],
+    customSliders: data?.customSliders ?? [],
   })
 
+  // Track which slider is being edited
+  const [editingSlider, setEditingSlider] = useState(null)
+
+  // Track which custom item is being edited (index) or null for new
+  const [editingCustomWrittenIndex, setEditingCustomWrittenIndex] = useState(null)
+  const [editingCustomSliderIndex, setEditingCustomSliderIndex] = useState(null)
+
+  // Temp state for new custom icebreakers
+  const [newWrittenPrompt, setNewWrittenPrompt] = useState('')
+  const [newWrittenResponse, setNewWrittenResponse] = useState('')
+  const [newSliderPrompt, setNewSliderPrompt] = useState('')
+  const [newSliderValue, setNewSliderValue] = useState(5)
+
   // Profile sections state - matches CandidateProfile profileSections
-  const [profileData, setProfileData] = useState(getInitialData)
+  const [profileData, setProfileData] = useState(() => getInitialData(passedProfileData))
+
+  // Sync state when passedProfileData changes (e.g., when modal reopens)
+  useEffect(() => {
+    setProfileData(getInitialData(passedProfileData))
+  }, [passedProfileData])
 
   // Modal state
-  const [activeModal, setActiveModal] = useState(null) // 'hillToDieOn', 'accomplishment', 'guessWhichTrue', 'topicsThatEnergize', 'gameSelect', 'wouldYouRather', 'unpopularOpinion'
+  const [activeModal, setActiveModal] = useState(null)
 
   const handleSliderChange = (field, value) => {
     setProfileData(prev => ({ ...prev, [field]: parseInt(value) }))
@@ -105,6 +156,88 @@ function EditBio({ profileData: passedProfileData, onSave }) {
 
   const closeModal = () => {
     setActiveModal(null)
+    // Reset temp state
+    setNewWrittenPrompt('')
+    setNewWrittenResponse('')
+    setNewSliderPrompt('')
+    setNewSliderValue(5)
+    setEditingCustomWrittenIndex(null)
+    setEditingCustomSliderIndex(null)
+  }
+
+  // Handle saving custom written icebreaker
+  const handleSaveCustomWritten = () => {
+    if (!newWrittenPrompt.trim() || !newWrittenResponse.trim()) return
+
+    setProfileData(prev => {
+      const newCustomWritten = [...prev.customWritten]
+      if (editingCustomWrittenIndex !== null) {
+        newCustomWritten[editingCustomWrittenIndex] = { prompt: newWrittenPrompt, response: newWrittenResponse }
+      } else {
+        newCustomWritten.push({ prompt: newWrittenPrompt, response: newWrittenResponse })
+      }
+      return { ...prev, customWritten: newCustomWritten }
+    })
+    closeModal()
+  }
+
+  // Handle saving custom slider icebreaker
+  const handleSaveCustomSlider = () => {
+    if (!newSliderPrompt.trim()) return
+
+    setProfileData(prev => {
+      const newCustomSliders = [...prev.customSliders]
+      if (editingCustomSliderIndex !== null) {
+        newCustomSliders[editingCustomSliderIndex] = { prompt: newSliderPrompt, value: newSliderValue }
+      } else {
+        newCustomSliders.push({ prompt: newSliderPrompt, value: newSliderValue })
+      }
+      return { ...prev, customSliders: newCustomSliders }
+    })
+    closeModal()
+  }
+
+  // Handle removing an icebreaker
+  const handleRemove = (field, e) => {
+    e.stopPropagation()
+    if (field === 'topicsThatEnergize') {
+      setProfileData(prev => ({ ...prev, [field]: [] }))
+    } else if (field === 'guessWhichTrue') {
+      setProfileData(prev => ({
+        ...prev,
+        guessWhichTrue: { options: ['', '', ''], correctIndex: null }
+      }))
+    } else if (field === 'wouldYouRather') {
+      setProfileData(prev => ({
+        ...prev,
+        wouldYouRather: { optionA: '', optionB: '' }
+      }))
+    } else if (field === 'unpopularOpinion') {
+      setProfileData(prev => ({
+        ...prev,
+        unpopularOpinion: { opinion: '' }
+      }))
+    } else {
+      setProfileData(prev => ({ ...prev, [field]: field.startsWith('viewsOn') ? null : '' }))
+    }
+  }
+
+  // Handle removing custom written icebreaker
+  const handleRemoveCustomWritten = (index, e) => {
+    e.stopPropagation()
+    setProfileData(prev => ({
+      ...prev,
+      customWritten: prev.customWritten.filter((_, i) => i !== index)
+    }))
+  }
+
+  // Handle removing custom slider icebreaker
+  const handleRemoveCustomSlider = (index, e) => {
+    e.stopPropagation()
+    setProfileData(prev => ({
+      ...prev,
+      customSliders: prev.customSliders.filter((_, i) => i !== index)
+    }))
   }
 
   // Calculate completion
@@ -138,72 +271,13 @@ function EditBio({ profileData: passedProfileData, onSave }) {
     }
   }
 
+  // Get filled sliders
+  const getFilledSliders = () => {
+    return sliderTypes.filter(slider => profileData[slider.id] !== null)
+  }
+
   return (
     <div className="edit-bio">
-      {/* Sliders Section */}
-      <h3 className="section-title">SLIDERS</h3>
-      <div className="political-sliders">
-        <div className="slider-item">
-          <p className="slider-label">My views on trans rights</p>
-          <div className="slider-container">
-            <div className="slider-gradient" />
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={profileData.viewsOnTransRights ?? 5}
-              onChange={(e) => handleSliderChange('viewsOnTransRights', e.target.value)}
-              className="spectrum-slider"
-            />
-            {profileData.viewsOnTransRights !== null && (
-              <div
-                className="score-indicator"
-                style={{
-                  left: `${profileData.viewsOnTransRights * 10}%`,
-                  background: getScoreColor(profileData.viewsOnTransRights)
-                }}
-              >
-                <span className="score-value">{profileData.viewsOnTransRights}</span>
-              </div>
-            )}
-          </div>
-          <div className="slider-labels">
-            <span>Conservative</span>
-            <span>Progressive</span>
-          </div>
-        </div>
-
-        <div className="slider-item">
-          <p className="slider-label">My views on ICE</p>
-          <div className="slider-container">
-            <div className="slider-gradient" />
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={profileData.viewsOnIce ?? 5}
-              onChange={(e) => handleSliderChange('viewsOnIce', e.target.value)}
-              className="spectrum-slider"
-            />
-            {profileData.viewsOnIce !== null && (
-              <div
-                className="score-indicator"
-                style={{
-                  left: `${profileData.viewsOnIce * 10}%`,
-                  background: getScoreColor(profileData.viewsOnIce)
-                }}
-              >
-                <span className="score-value">{profileData.viewsOnIce}</span>
-              </div>
-            )}
-          </div>
-          <div className="slider-labels">
-            <span>Conservative</span>
-            <span>Progressive</span>
-          </div>
-        </div>
-      </div>
-
       {/* Icebreakers Section */}
       <div className="icebreakers-section">
         <h3 className="icebreakers-title">ICEBREAKERS</h3>
@@ -212,54 +286,50 @@ function EditBio({ profileData: passedProfileData, onSave }) {
         <div className="icebreaker-category">
           <span className="category-label">written</span>
 
-          {/* The Hill I Will Die On */}
-          {profileData.hillToDieOn && (
+          {/* Custom Written Icebreakers */}
+          {profileData.customWritten.map((item, index) => (
             <div
+              key={`custom-written-${index}`}
               className="icebreaker-card filled"
-              onClick={() => openModal('hillToDieOn')}
+              onClick={() => {
+                setEditingCustomWrittenIndex(index)
+                setNewWrittenPrompt(item.prompt)
+                setNewWrittenResponse(item.response)
+                openModal('customWritten')
+              }}
             >
               <div className="icebreaker-content">
-                <p className="icebreaker-prompt">The Hill I Will Die on</p>
-                <p className="icebreaker-response">{profileData.hillToDieOn}</p>
+                <p className="icebreaker-prompt">{item.prompt}</p>
+                <p className="icebreaker-response">{item.response}</p>
               </div>
-              <button className="edit-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* One Accomplishment I'm Proud Of */}
-          {profileData.accomplishment && (
-            <div
-              className="icebreaker-card filled"
-              onClick={() => openModal('accomplishment')}
-            >
-              <div className="icebreaker-content">
-                <p className="icebreaker-prompt">One accomplishment I'm proud of</p>
-                <p className="icebreaker-response">{profileData.accomplishment}</p>
+              <div className="icebreaker-actions">
+                <button className="remove-btn" onClick={(e) => handleRemoveCustomWritten(index, e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z"/>
+                  </svg>
+                </button>
+                <button className="edit-btn" onClick={(e) => {
+                  e.stopPropagation()
+                  setEditingCustomWrittenIndex(index)
+                  setNewWrittenPrompt(item.prompt)
+                  setNewWrittenResponse(item.response)
+                  openModal('customWritten')
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
               </div>
-              <button className="edit-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
             </div>
-          )}
+          ))}
 
           {/* Empty card to add new written icebreaker */}
           <div
-            className="icebreaker-card"
-            onClick={() => openModal(!profileData.hillToDieOn ? 'hillToDieOn' : !profileData.accomplishment ? 'accomplishment' : 'hillToDieOn')}
+            className="icebreaker-card empty"
+            onClick={() => openModal('customWritten')}
           >
-            <div className="icebreaker-content">
-              <p className="icebreaker-prompt">Select an icebreaker</p>
-              <p className="icebreaker-subtitle">Add your response</p>
-            </div>
-            <button className="add-btn">
+            <button className="add-btn centered">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
               </svg>
@@ -281,32 +351,33 @@ function EditBio({ profileData: passedProfileData, onSave }) {
                 <p className="icebreaker-prompt">Topics that energize me</p>
                 <p className="icebreaker-response">{profileData.topicsThatEnergize.join(', ')}</p>
               </div>
-              <button className="edit-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
+              <div className="icebreaker-actions">
+                <button className="remove-btn" onClick={(e) => handleRemove('topicsThatEnergize', e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z"/>
+                  </svg>
+                </button>
+                <button className="edit-btn" onClick={(e) => { e.stopPropagation(); openModal('topicsThatEnergize'); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
 
           {/* Empty card to add tags */}
-          {profileData.topicsThatEnergize.length === 0 && (
-            <div
-              className="icebreaker-card"
-              onClick={() => openModal('topicsThatEnergize')}
-            >
-              <div className="icebreaker-content">
-                <p className="icebreaker-prompt">Topics that energize me</p>
-                <p className="icebreaker-subtitle">Select your topics</p>
-              </div>
-              <button className="add-btn">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
-              </button>
-            </div>
-          )}
+          <div
+            className="icebreaker-card empty"
+            onClick={() => openModal('topicsThatEnergize')}
+          >
+            <button className="add-btn centered">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Game Category */}
@@ -314,7 +385,7 @@ function EditBio({ profileData: passedProfileData, onSave }) {
           <span className="category-label">game</span>
 
           {/* Guess Which One is True */}
-          {profileData.guessWhichTrue.options.some(o => o) ? (
+          {profileData.guessWhichTrue.options.some(o => o) && (
             <div
               className="icebreaker-card filled"
               onClick={() => openModal('guessWhichTrue')}
@@ -323,37 +394,28 @@ function EditBio({ profileData: passedProfileData, onSave }) {
                 <p className="icebreaker-prompt">Guess Which One is True</p>
                 <p className="icebreaker-response">{profileData.guessWhichTrue.options.filter(o => o).length} options added</p>
               </div>
-              <button className="edit-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-            </div>
-          ) : (
-            <div
-              className="icebreaker-card"
-              onClick={() => openModal('guessWhichTrue')}
-            >
-              <div className="icebreaker-content">
-                <p className="icebreaker-prompt">Guess Which One is True</p>
-                <p className="icebreaker-subtitle">Add 3 options (1 true)</p>
+              <div className="icebreaker-actions">
+                <button className="remove-btn" onClick={(e) => handleRemove('guessWhichTrue', e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z"/>
+                  </svg>
+                </button>
+                <button className="edit-btn" onClick={(e) => { e.stopPropagation(); openModal('guessWhichTrue'); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
               </div>
-              <button className="add-btn">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
-              </button>
             </div>
           )}
 
-          {/* Empty card to add new game icebreaker */}
-          <div className="icebreaker-card" onClick={() => openModal('gameSelect')}>
-            <div className="icebreaker-content">
-              <p className="icebreaker-prompt">Select a game</p>
-              <p className="icebreaker-subtitle">Choose a game type</p>
-            </div>
-            <button className="add-btn">
+          {/* Empty card to add new game */}
+          <div
+            className="icebreaker-card empty"
+            onClick={() => openModal('gameSelect')}
+          >
+            <button className="add-btn centered">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
               </svg>
@@ -361,21 +423,57 @@ function EditBio({ profileData: passedProfileData, onSave }) {
           </div>
         </div>
 
-        {/* Video Category - hidden for now */}
-        {/* <div className="icebreaker-category">
-          <span className="category-label">video</span>
-          <div className="icebreaker-card">
-            <div className="icebreaker-content">
-              <p className="icebreaker-prompt">Add a video icebreaker</p>
-              <p className="icebreaker-subtitle">Record your response</p>
+        {/* Slider Category */}
+        <div className="icebreaker-category">
+          <span className="category-label">slider</span>
+
+          {/* Custom Sliders */}
+          {profileData.customSliders.map((item, index) => (
+            <div
+              key={`custom-slider-${index}`}
+              className="icebreaker-card filled"
+              onClick={() => {
+                setEditingCustomSliderIndex(index)
+                setNewSliderPrompt(item.prompt)
+                setNewSliderValue(item.value)
+                openModal('customSlider')
+              }}
+            >
+              <div className="icebreaker-content">
+                <p className="icebreaker-prompt">{item.prompt}</p>
+                <p className="icebreaker-response">{item.value}/10</p>
+              </div>
+              <div className="icebreaker-actions">
+                <button className="remove-btn" onClick={(e) => handleRemoveCustomSlider(index, e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z"/>
+                  </svg>
+                </button>
+                <button className="edit-btn" onClick={(e) => {
+                  e.stopPropagation()
+                  setEditingCustomSliderIndex(index)
+                  setNewSliderPrompt(item.prompt)
+                  setNewSliderValue(item.value)
+                  openModal('customSlider')
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <button className="add-btn">
+          ))}
+
+          {/* Empty card to add new slider */}
+          <div className="icebreaker-card empty" onClick={() => openModal('customSlider')}>
+            <button className="add-btn centered">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
               </svg>
             </button>
           </div>
-        </div> */}
+        </div>
       </div>
 
       {/* Bottom Action Button */}
@@ -582,6 +680,174 @@ function EditBio({ profileData: passedProfileData, onSave }) {
                   unpopularOpinion: { ...prev.unpopularOpinion, opinion: e.target.value }
                 }))}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slider Selection Modal */}
+      {activeModal === 'sliderSelect' && (
+        <div className="write-modal">
+          <div className="write-modal-header">
+            <button className="back-btn" onClick={closeModal}>Back</button>
+            <h3>Choose a Slider</h3>
+            <span className="save-btn" style={{ opacity: 0 }}>Save</span>
+          </div>
+          <div className="write-modal-content">
+            <p className="modal-instruction">Select a topic to share your stance:</p>
+            <div className="game-type-list">
+              {sliderTypes.filter(slider => profileData[slider.id] === null).map(slider => (
+                <button
+                  key={slider.id}
+                  className="game-type-card"
+                  onClick={() => {
+                    setEditingSlider(slider.id)
+                    setActiveModal('sliderEdit')
+                  }}
+                >
+                  <span className="game-type-icon">{slider.icon}</span>
+                  <div className="game-type-info">
+                    <span className="game-type-name">{slider.name}</span>
+                    <span className="game-type-desc">{slider.description}</span>
+                  </div>
+                  <svg className="game-type-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slider Edit Modal */}
+      {activeModal === 'sliderEdit' && editingSlider && (
+        <div className="write-modal">
+          <div className="write-modal-header">
+            <button className="back-btn" onClick={() => {
+              setEditingSlider(null)
+              setActiveModal('sliderSelect')
+            }}>Back</button>
+            <h3>{sliderTypes.find(s => s.id === editingSlider)?.name || 'Set Value'}</h3>
+            <button
+              className="save-btn"
+              onClick={() => {
+                setEditingSlider(null)
+                closeModal()
+              }}
+            >
+              Save
+            </button>
+          </div>
+          <div className="write-modal-content">
+            <p className="modal-instruction">Drag the slider to set your position:</p>
+            <div className="slider-edit-container">
+              <div className="slider-edit-bar">
+                <div
+                  className="slider-edit-indicator"
+                  style={{
+                    left: `${(profileData[editingSlider] ?? 5) * 10}%`,
+                    background: getScoreColor(profileData[editingSlider] ?? 5)
+                  }}
+                >
+                  <span className="slider-edit-value">{profileData[editingSlider] ?? 5}</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                value={profileData[editingSlider] ?? 5}
+                onChange={(e) => handleSliderChange(editingSlider, e.target.value)}
+                className="slider-edit-input"
+              />
+              <div className="slider-edit-labels">
+                <span>0</span>
+                <span>10</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Written Modal */}
+      {activeModal === 'customWritten' && (
+        <div className="write-modal">
+          <div className="write-modal-header">
+            <button className="back-btn" onClick={closeModal}>Back</button>
+            <h3>Written</h3>
+            <button
+              className="save-btn"
+              onClick={handleSaveCustomWritten}
+              style={{ opacity: newWrittenPrompt.trim() && newWrittenResponse.trim() ? 1 : 0.5 }}
+            >
+              Save
+            </button>
+          </div>
+          <div className="write-modal-content">
+            <input
+              type="text"
+              className="custom-prompt-input"
+              placeholder="Fill in icebreaker"
+              value={newWrittenPrompt}
+              onChange={(e) => setNewWrittenPrompt(e.target.value)}
+            />
+            <textarea
+              className="custom-response-textarea"
+              placeholder="Fill in response"
+              value={newWrittenResponse}
+              onChange={(e) => setNewWrittenResponse(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Custom Slider Modal */}
+      {activeModal === 'customSlider' && (
+        <div className="write-modal">
+          <div className="write-modal-header">
+            <button className="back-btn" onClick={closeModal}>Back</button>
+            <h3>Slider</h3>
+            <button
+              className="save-btn"
+              onClick={handleSaveCustomSlider}
+              style={{ opacity: newSliderPrompt.trim() ? 1 : 0.5 }}
+            >
+              Save
+            </button>
+          </div>
+          <div className="write-modal-content">
+            <input
+              type="text"
+              className="custom-prompt-input"
+              placeholder="Fill in prompt"
+              value={newSliderPrompt}
+              onChange={(e) => setNewSliderPrompt(e.target.value)}
+            />
+            <div className="slider-edit-container">
+              <div className="slider-edit-bar">
+                <div
+                  className="slider-edit-indicator"
+                  style={{
+                    left: `${newSliderValue * 10}%`,
+                    background: getScoreColor(newSliderValue)
+                  }}
+                >
+                  <span className="slider-edit-value">{newSliderValue}</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                value={newSliderValue}
+                onChange={(e) => setNewSliderValue(parseInt(e.target.value))}
+                className="slider-edit-input"
+              />
+              <div className="slider-edit-labels">
+                <span>0</span>
+                <span>10</span>
+              </div>
             </div>
           </div>
         </div>

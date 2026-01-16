@@ -4,7 +4,7 @@
   max-width: 440px;
   bottom: 4px;
   margin: 0 auto;
-  background: #222222;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
   font-family: 'Inter', sans-serif;
 }
 
@@ -808,36 +808,117 @@
 .profile-sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   padding-top: 24px;
+  border-top: 1px solid #333;
+  margin-top: 24px;
+}
+
+.profile-sections-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.profile-sections-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .profile-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.profile-section:active {
+  cursor: grabbing;
+}
+
+/* Drag handle */
+.drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  color: #555;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.profile-section:hover .drag-handle {
+  opacity: 0.8;
+}
+
+.drag-handle svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Dragging state */
+.profile-section.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(0, 242, 234, 0.3);
+  z-index: 100;
+}
+
+/* Drag over state - when another item is hovered */
+.profile-section.drag-over {
+  border-color: rgba(0, 242, 234, 0.6);
+  background: rgba(0, 242, 234, 0.05);
+  transform: translateY(2px);
+}
+
+/* Post section should not be draggable */
+.profile-section.post {
+  cursor: default;
+}
+
+.profile-section.post .drag-handle {
+  display: none;
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   color: #777777;
+  text-transform: lowercase;
+  margin: 0;
 }
 
 .section-title.guess {
   color: #777777;
+  text-transform: none;
 }
 
 .section-content-large {
-  font-size: 22px;
-  font-weight: 400;
+  font-size: 18px;
+  font-weight: 500;
   line-height: 1.3;
   color: #FFFFFF;
   margin: 0;
 }
 
 .section-content-text {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.5;
   color: #FFFFFF;
@@ -846,8 +927,39 @@
 
 .section-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  margin-top: 8px;
+}
+
+.section-like-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.section-like-btn:hover {
+  color: #FF2A55;
+}
+
+.section-like-btn.liked {
+  color: #FF2A55;
+}
+
+.section-like-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.section-like-count {
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .reaction-icons {
@@ -890,41 +1002,41 @@
 
 /* Score Bar */
 .score-bar-container {
-  padding: 15px 0;
+  position: relative;
+  padding: 20px 0;
 }
 
 .score-bar {
   position: relative;
+  width: 100%;
   height: 6px;
-  background: linear-gradient(90deg, #FF2A55 0%, #9B59B6 50%, #00F2EA 100%);
+  background: linear-gradient(90deg, #FF2A55 0%, #8C2AFF 50%, #00F2EA 100%);
   border-radius: 3px;
 }
 
 .score-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  border-radius: 3px;
+  display: none;
 }
 
 .score-indicator {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
-  background: #9B59B6;
+  width: 35px;
+  height: 35px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #1a1a1a;
+  border: 2px solid #222;
 }
 
 .score-value {
-  font-size: 11px;
-  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 22px;
   color: #FFFFFF;
 }
 

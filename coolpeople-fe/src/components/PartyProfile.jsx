@@ -122,6 +122,157 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [showEditBio, setShowEditBio] = useState(false)
 
+  // Profile sections state for icebreakers (with mock data)
+  const [profileSections, setProfileSections] = useState({
+    viewsOnIce: null,
+    viewsOnTransRights: null,
+    viewsOnHealthcare: null,
+    viewsOnGunControl: null,
+    hillToDieOn: null,
+    topicsThatEnergize: { tags: ['Healthcare', 'Trans Rights', 'Climate', 'Voting Rights', 'Housing'] },
+    accomplishment: null,
+    guessWhichTrue: {
+      options: ['I once met AOC at a coffee shop', 'I have a pet iguana named Bernie', 'I volunteered for 3 different campaigns in 2020'],
+      correctIndex: 2
+    },
+    customWritten: [
+      { prompt: 'The hill I will die on', response: 'Healthcare is a human right and should be accessible to everyone regardless of income.' },
+      { prompt: 'One accomplishment I\'m proud of', response: 'Successfully organized a community rally that brought together over 500 people to advocate for local housing reform.' },
+    ],
+    customSliders: [
+      { prompt: 'My views on trans rights', value: 8 },
+      { prompt: 'My views on ICE', value: 3 },
+      { prompt: 'My views on healthcare', value: 9 },
+      { prompt: 'My views on gun control', value: 2 },
+    ],
+  })
+
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [dragOverItem, setDragOverItem] = useState(null)
+
+  // Build unified icebreakers array for drag-and-drop ordering
+  const buildIcebreakersArray = (sections) => {
+    const items = []
+    sections.customWritten?.forEach((item, index) => {
+      items.push({ type: 'written', index, data: item, id: `written-${index}` })
+    })
+    sections.customSliders?.forEach((item, index) => {
+      items.push({ type: 'slider', index, data: item, id: `slider-${index}` })
+    })
+    if (sections.topicsThatEnergize?.tags?.length > 0) {
+      items.push({ type: 'tags', index: 0, data: sections.topicsThatEnergize, id: 'tags-0' })
+    }
+    if (sections.guessWhichTrue?.options?.some(o => o?.trim())) {
+      items.push({ type: 'game', index: 0, data: sections.guessWhichTrue, id: 'game-0' })
+    }
+    return items
+  }
+
+  const [icebreakersOrder, setIcebreakersOrder] = useState(() =>
+    buildIcebreakersArray(profileSections).map(item => item.id)
+  )
+
+  // Get ordered icebreakers based on current order
+  const getOrderedIcebreakers = () => {
+    const items = buildIcebreakersArray(profileSections)
+    const itemMap = {}
+    items.forEach(item => { itemMap[item.id] = item })
+
+    const ordered = icebreakersOrder
+      .filter(id => itemMap[id])
+      .map(id => itemMap[id])
+
+    items.forEach(item => {
+      if (!icebreakersOrder.includes(item.id)) {
+        ordered.push(item)
+      }
+    })
+
+    return ordered
+  }
+
+  // Drag handlers
+  const handleDragStart = (e, itemId) => {
+    setDraggedItem(itemId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.target.classList.add('dragging')
+  }
+
+  const handleDragEnd = (e) => {
+    e.target.classList.remove('dragging')
+    setDraggedItem(null)
+    setDragOverItem(null)
+  }
+
+  const handleDragOver = (e, itemId) => {
+    e.preventDefault()
+    if (draggedItem && draggedItem !== itemId) {
+      setDragOverItem(itemId)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverItem(null)
+  }
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault()
+    if (!draggedItem || draggedItem === targetId) return
+
+    const newOrder = [...icebreakersOrder]
+    const draggedIndex = newOrder.indexOf(draggedItem)
+    const targetIndex = newOrder.indexOf(targetId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    newOrder.splice(draggedIndex, 1)
+    newOrder.splice(targetIndex, 0, draggedItem)
+
+    setIcebreakersOrder(newOrder)
+    setDraggedItem(null)
+    setDragOverItem(null)
+  }
+
+  // Handle save from EditBio
+  const handleSaveProfile = (data) => {
+    const newSections = { ...profileSections }
+
+    if (data.viewsOnIce !== null) {
+      newSections.viewsOnIce = { score: data.viewsOnIce }
+    }
+    if (data.viewsOnTransRights !== null) {
+      newSections.viewsOnTransRights = { score: data.viewsOnTransRights }
+    }
+    if (data.viewsOnHealthcare !== null) {
+      newSections.viewsOnHealthcare = { score: data.viewsOnHealthcare }
+    }
+    if (data.viewsOnGunControl !== null) {
+      newSections.viewsOnGunControl = { score: data.viewsOnGunControl }
+    }
+    if (data.hillToDieOn?.trim()) {
+      newSections.hillToDieOn = { content: data.hillToDieOn }
+    }
+    if (data.topicsThatEnergize?.length > 0) {
+      newSections.topicsThatEnergize = { tags: data.topicsThatEnergize }
+    }
+    if (data.accomplishment?.trim()) {
+      newSections.accomplishment = { content: data.accomplishment }
+    }
+    if (data.guessWhichTrue?.options?.some(o => o?.trim()) && data.guessWhichTrue?.correctIndex !== null) {
+      newSections.guessWhichTrue = data.guessWhichTrue
+    }
+    // Handle custom icebreakers
+    if (data.customWritten) {
+      newSections.customWritten = data.customWritten
+    }
+    if (data.customSliders) {
+      newSections.customSliders = data.customSliders
+    }
+
+    setProfileSections(newSections)
+    setShowEditBio(false)
+  }
+
   // Chart colors cycle (for filtered chart based on tag count)
   const chartColors = [
     '#0EFB49', // green (default/all only)
@@ -132,6 +283,27 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
   ]
 
   const partyColor = party.color || getPartyColor(party.name)
+
+  // Get color from gradient based on position (0-10 score)
+  // Matches slider gradient: #FF2A55 (red) -> #8C2AFF (purple) -> #00F2EA (cyan)
+  const getScoreColor = (score) => {
+    const position = score / 10 // 0 to 1
+    if (position <= 0.5) {
+      // Interpolate between #FF2A55 (red) and #8C2AFF (purple)
+      const t = position * 2
+      const r = Math.round(255 + (140 - 255) * t)
+      const g = Math.round(42 + (42 - 42) * t)
+      const b = Math.round(85 + (255 - 85) * t)
+      return `rgb(${r}, ${g}, ${b})`
+    } else {
+      // Interpolate between #8C2AFF (purple) and #00F2EA (cyan)
+      const t = (position - 0.5) * 2
+      const r = Math.round(140 + (0 - 140) * t)
+      const g = Math.round(42 + (242 - 42) * t)
+      const b = Math.round(255 + (234 - 255) * t)
+      return `rgb(${r}, ${g}, ${b})`
+    }
+  }
 
   // Handle tag click - toggle on/off
   const handleTagClick = (tag) => {
@@ -536,6 +708,170 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
             </svg>
           </button>
         </div>
+
+        {/* Profile Sections / Icebreakers */}
+        {getOrderedIcebreakers().length > 0 && (
+          <div className="profile-sections">
+            <div className="profile-sections-header">
+              <span className="profile-sections-title">Icebreakers</span>
+            </div>
+
+            {/* Render icebreakers in drag-and-drop order */}
+            {getOrderedIcebreakers().map((icebreaker) => {
+              const isDragOver = dragOverItem === icebreaker.id
+
+              if (icebreaker.type === 'written') {
+                return (
+                  <div
+                    key={icebreaker.id}
+                    className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, icebreaker.id)}
+                  >
+                    <div className="drag-handle">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                      </svg>
+                    </div>
+                    <span className="section-title">{icebreaker.data.prompt.toLowerCase()}</span>
+                    <p className="section-content-text">{icebreaker.data.response}</p>
+                    <div className="section-footer">
+                      <button className="section-like-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        <span className="section-like-count">{24 + icebreaker.index * 7}</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (icebreaker.type === 'slider') {
+                return (
+                  <div
+                    key={icebreaker.id}
+                    className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, icebreaker.id)}
+                  >
+                    <div className="drag-handle">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                      </svg>
+                    </div>
+                    <span className="section-title">{icebreaker.data.prompt.toLowerCase()}</span>
+                    <div className="score-bar-container">
+                      <div className="score-bar">
+                        <div
+                          className="score-indicator"
+                          style={{
+                            left: `${icebreaker.data.value * 10}%`,
+                            background: getScoreColor(icebreaker.data.value)
+                          }}
+                        >
+                          <span className="score-value">{icebreaker.data.value}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="section-footer">
+                      <button className="section-like-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        <span className="section-like-count">{18 + icebreaker.index * 5}</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (icebreaker.type === 'tags') {
+                return (
+                  <div
+                    key={icebreaker.id}
+                    className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, icebreaker.id)}
+                  >
+                    <div className="drag-handle">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                      </svg>
+                    </div>
+                    <span className="section-title">topics that energize me</span>
+                    <div className="energize-tags">
+                      {icebreaker.data.tags.map((tag, i) => (
+                        <span key={i} className="energize-tag">{tag}</span>
+                      ))}
+                    </div>
+                    <div className="section-footer">
+                      <button className="section-like-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        <span className="section-like-count">42</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (icebreaker.type === 'game') {
+                return (
+                  <div
+                    key={icebreaker.id}
+                    className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, icebreaker.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, icebreaker.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, icebreaker.id)}
+                  >
+                    <div className="drag-handle">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+                      </svg>
+                    </div>
+                    <span className="section-title guess">Guess which one is true</span>
+                    <div className="guess-options">
+                      {icebreaker.data.options.map((option, i) => (
+                        option && (
+                          <button key={i} className="guess-bubble">
+                            <span className="guess-text">{option}</span>
+                          </button>
+                        )
+                      ))}
+                    </div>
+                    <div className="section-footer">
+                      <button className="section-like-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        <span className="section-like-count">56</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              return null
+            })}
+          </div>
+        )}
       </div>
 
       {/* Edit Bio Overlay - for development */}
@@ -546,7 +882,7 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
-          <EditBio />
+          <EditBio profileData={profileSections} onSave={handleSaveProfile} />
         </div>
       )}
     </div>

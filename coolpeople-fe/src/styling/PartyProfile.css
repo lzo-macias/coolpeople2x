@@ -789,3 +789,239 @@
 .party-profile .edit-bio-close:hover {
   background: #EEEEEE;
 }
+
+/* Profile Sections / Icebreakers */
+.party-profile .profile-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px 24px;
+  padding-top: 24px;
+  border-top: 1px solid #333;
+  margin-top: 24px;
+}
+
+.party-profile .profile-sections-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.party-profile .profile-sections-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.party-profile .profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.party-profile .profile-section:active {
+  cursor: grabbing;
+}
+
+/* Drag handle */
+.party-profile .drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  color: #555;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  cursor: grab;
+}
+
+.party-profile .drag-handle:active {
+  cursor: grabbing;
+}
+
+.party-profile .profile-section:hover .drag-handle {
+  opacity: 0.8;
+}
+
+.party-profile .drag-handle svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Dragging state */
+.party-profile .profile-section.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(0, 242, 234, 0.3);
+  z-index: 100;
+}
+
+/* Drag over state - when another item is hovered */
+.party-profile .profile-section.drag-over {
+  border-color: rgba(0, 242, 234, 0.6);
+  background: rgba(0, 242, 234, 0.05);
+  transform: translateY(2px);
+}
+
+.party-profile .section-title {
+  font-size: 12px;
+  font-weight: 400;
+  color: #777777;
+  text-transform: lowercase;
+  margin: 0;
+}
+
+.party-profile .section-title.guess {
+  color: #777777;
+  text-transform: none;
+}
+
+.party-profile .section-content-large {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.party-profile .section-content-text {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.party-profile .section-footer {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.party-profile .section-like-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.party-profile .section-like-btn:hover {
+  color: #FF2A55;
+}
+
+.party-profile .section-like-btn.liked {
+  color: #FF2A55;
+}
+
+.party-profile .section-like-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.party-profile .section-like-count {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* Score Bar (Sliders) */
+.party-profile .score-bar-container {
+  position: relative;
+  padding: 20px 0;
+}
+
+.party-profile .score-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(90deg, #FF2A55 0%, #8C2AFF 50%, #00F2EA 100%);
+  border-radius: 3px;
+}
+
+.party-profile .score-indicator {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #222;
+}
+
+.party-profile .score-value {
+  font-family: 'Inter', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 22px;
+  color: #FFFFFF;
+}
+
+/* Energize Tags */
+.party-profile .energize-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.party-profile .energize-tag {
+  padding: 8px 16px;
+  background: #00F2EA;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111111;
+}
+
+/* Guess Which One is True */
+.party-profile .guess-options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.party-profile .guess-bubble {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  padding: 14px 18px;
+  background: #F5F5F5;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #222222;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.party-profile .guess-bubble:hover {
+  background: #E8E8E8;
+  transform: scale(1.02);
+}
+
+.party-profile .guess-bubble .guess-text {
+  transition: opacity 0.3s ease;
+}
