@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import EditBio from './EditBio'
 import '../styling/MyProfile.css'
 
 // Current logged-in user data (independent, not opted into social credit)
@@ -26,6 +27,7 @@ const myProfileData = {
 
 function MyProfile({ onPartyClick, onOptIn }) {
   const [activeTab, setActiveTab] = useState('posts')
+  const [showEditBio, setShowEditBio] = useState(false)
 
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
@@ -89,7 +91,7 @@ function MyProfile({ onPartyClick, onOptIn }) {
 
             <div className="my-profile-actions">
               <button className="action-btn share">share</button>
-              <button className="action-btn edit">edit</button>
+              <button className="action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
             </div>
           </div>
         </div>
@@ -130,11 +132,21 @@ function MyProfile({ onPartyClick, onOptIn }) {
         )}
 
         {activeTab === 'bio' && (
-          <div className="bio-placeholder">
-            <p>No bio yet</p>
-          </div>
+          <EditBio />
         )}
       </div>
+
+      {/* Edit Bio Overlay - for development */}
+      {showEditBio && (
+        <div className="edit-bio-overlay">
+          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <EditBio />
+        </div>
+      )}
     </div>
   )
 }

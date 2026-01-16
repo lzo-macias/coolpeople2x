@@ -1,0 +1,663 @@
+.edit-bio {
+  background: #FFFFFF;
+  min-height: 100vh;
+  padding: 20px 16px;
+  padding-bottom: 100px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Section Title */
+.edit-bio .section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+  margin: 0 0 16px 0;
+  letter-spacing: 0.5px;
+}
+
+/* Political Sliders */
+.political-sliders {
+  margin-bottom: 30px;
+}
+
+.slider-item {
+  margin-bottom: 24px;
+}
+
+.edit-bio .slider-label {
+  font-size: 14px;
+  color: #333333;
+  margin: 0 0 8px 0;
+}
+
+.slider-container {
+  position: relative;
+  height: 8px;
+  margin-bottom: 6px;
+}
+
+.slider-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(90deg, #FF2A55 0%, #8B5CF6 50%, #00B4D8 100%);
+  border-radius: 4px;
+}
+
+.spectrum-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+
+.spectrum-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #FFFFFF;
+  border: 2px solid #DDDDDD;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.spectrum-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #FFFFFF;
+  border: 2px solid #DDDDDD;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #888888;
+}
+
+/* Score Indicator */
+.edit-bio .score-indicator {
+  position: absolute;
+  top: -28px;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.edit-bio .score-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+/* Icebreakers Section */
+.icebreakers-section {
+  margin-bottom: 20px;
+}
+
+.edit-bio .icebreakers-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+  margin: 0 0 16px 0;
+  letter-spacing: 0.5px;
+}
+
+.icebreaker-category {
+  margin-bottom: 20px;
+}
+
+.edit-bio .category-label {
+  display: block;
+  font-size: 12px;
+  color: #888888;
+  margin-bottom: 8px;
+}
+
+.icebreaker-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F5F5F5;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.icebreaker-card:hover {
+  background: #EEEEEE;
+}
+
+.icebreaker-card.filled {
+  background: #F5F5F5;
+}
+
+.icebreaker-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-bio .icebreaker-prompt {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+  margin: 0 0 2px 0;
+}
+
+.edit-bio .icebreaker-subtitle {
+  font-size: 12px;
+  color: #888888;
+  margin: 0;
+}
+
+.edit-bio .icebreaker-response {
+  font-size: 12px;
+  color: #666666;
+  margin: 0;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6B8A 0%, #FF8A9B 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.add-btn svg {
+  width: 16px;
+  height: 16px;
+  color: #FFFFFF;
+}
+
+.edit-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #F0F0F0;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 12px;
+  transition: background 0.2s ease;
+}
+
+.edit-btn:hover {
+  background: #E0E0E0;
+}
+
+.edit-btn svg {
+  width: 14px;
+  height: 14px;
+  color: #666666;
+}
+
+/* Bottom Action Buttons */
+.bio-bottom-action {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: #FFFFFF;
+  border-top: 1px solid #EEEEEE;
+  max-width: 396px;
+  margin: 0 auto;
+}
+
+.send-btn,
+.skip-btn,
+.prompt-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.send-btn {
+  background: #333333;
+  color: #FFFFFF;
+}
+
+.send-btn:hover {
+  background: #444444;
+}
+
+.skip-btn {
+  background: #888888;
+  color: #FFFFFF;
+}
+
+.skip-btn:hover {
+  background: #777777;
+}
+
+.prompt-btn {
+  background: #E0E0E0;
+  color: #888888;
+  cursor: default;
+}
+
+/* Write Modal */
+.write-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #FFFFFF;
+  z-index: 100;
+  max-width: 396px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.write-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #EEEEEE;
+}
+
+.write-modal-header h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+  margin: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.back-btn,
+.save-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px;
+  min-width: 50px;
+}
+
+.back-btn {
+  color: #00B4D8;
+  text-align: left;
+}
+
+.save-btn {
+  color: #00B4D8;
+  font-weight: 500;
+  text-align: right;
+}
+
+.write-modal-content {
+  flex: 1;
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+
+.modal-instruction {
+  font-size: 14px;
+  color: #666666;
+  margin: 0 0 16px 0;
+}
+
+.response-input {
+  width: 100%;
+  min-height: 100px;
+  background: #F5F5F5;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  color: #333333;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.response-input.large {
+  min-height: 200px;
+}
+
+.response-input::placeholder {
+  color: #AAAAAA;
+}
+
+/* Tags Grid */
+.tags-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-select-btn {
+  padding: 10px 16px;
+  background: #F5F5F5;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #333333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-select-btn:hover {
+  background: #EEEEEE;
+}
+
+.tag-select-btn.selected {
+  background: #E0F7FA;
+  border-color: #00B4D8;
+  color: #00838F;
+}
+
+/* Guess Option Input */
+.guess-option-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.correct-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #F5F5F5;
+  border: 2px solid #DDDDDD;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #4CAF50;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.correct-toggle:hover {
+  border-color: #BBBBBB;
+}
+
+.correct-toggle.selected {
+  background: #4CAF50;
+  border-color: #4CAF50;
+  color: #FFFFFF;
+}
+
+.guess-input {
+  flex: 1;
+  padding: 12px 14px;
+  background: #F5F5F5;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #333333;
+  outline: none;
+  font-family: inherit;
+}
+
+.guess-input::placeholder {
+  color: #AAAAAA;
+}
+
+/* Legacy styles for compatibility */
+.prompt-input-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  background: #F5F5F5;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.prompt-input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #333333;
+  outline: none;
+  font-family: inherit;
+}
+
+.prompt-input::placeholder {
+  color: #AAAAAA;
+}
+
+/* Prompt Card */
+.prompt-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: #F5F5F5;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.prompt-text {
+  font-size: 14px;
+  color: #333333;
+  margin: 0;
+  flex: 1;
+  padding-right: 12px;
+}
+
+.template-btn {
+  background: #5D4E6D;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 10px;
+  line-height: 1.3;
+  cursor: pointer;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.prompt-card + .response-input {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: 1px solid #E0E0E0;
+}
+
+
+/* Game Type Selection */
+.game-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-type-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #F5F5F5;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.game-type-card:hover {
+  background: #EEEEEE;
+}
+
+.game-type-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.game-type-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.game-type-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.game-type-desc {
+  font-size: 13px;
+  color: #888888;
+  line-height: 1.3;
+}
+
+.game-type-arrow {
+  width: 20px;
+  height: 20px;
+  color: #CCCCCC;
+  flex-shrink: 0;
+}
+
+/* Would You Rather */
+.would-you-rather-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wyr-card {
+  background: #F5F5F5;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.wyr-card-header {
+  margin-bottom: 10px;
+}
+
+.wyr-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666666;
+}
+
+.wyr-textarea {
+  width: 100%;
+  min-height: 80px;
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  color: #333333;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.wyr-textarea::placeholder {
+  color: #AAAAAA;
+}
+
+.wyr-vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.wyr-vs span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #888888;
+}
+
+/* Hot Take / Unpopular Opinion */
+.hot-take-card {
+  background: #F5F5F5;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.hot-take-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666666;
+  margin: 0 0 10px 0;
+}
+
+.hot-take-textarea {
+  width: 100%;
+  min-height: 100px;
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  color: #333333;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.hot-take-textarea::placeholder {
+  color: #AAAAAA;
+}
+
+/* Modal hint text */
+.modal-hint {
+  font-size: 13px;
+  color: #888888;
+  margin: 16px 0 0 0;
+  text-align: center;
+}

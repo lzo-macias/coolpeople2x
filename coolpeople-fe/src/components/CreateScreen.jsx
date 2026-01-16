@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
@@ -13,21 +13,138 @@ function CreateScreen({ onClose }) {
   const [showClipConfirm, setShowClipConfirm] = useState(false)
   const [showEditClipScreen, setShowEditClipScreen] = useState(false)
   const [showPostScreen, setShowPostScreen] = useState(false)
+  const [raceName, setRaceName] = useState('')
+  const [facingMode, setFacingMode] = useState('user') // 'user' = front, 'environment' = back
+  const [cameraError, setCameraError] = useState(null)
   const durations = ['10m', '60s', '15s', 'PHOTO']
+
+  // Refs
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const recordedChunksRef = useRef([])
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState(null)
+  const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
 
   // Swipe handling for duration selector
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
+  // Camera initialization
+  const startCamera = async (facing = facingMode) => {
+    try {
+      // Stop any existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+
+      const constraints = {
+        video: {
+          facingMode: facing,
+          width: { ideal: 1080 },
+          height: { ideal: 1920 }
+        },
+        audio: true
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      streamRef.current = stream
+
+      // Attach to video element - might need to wait for ref to be ready
+      const attachStream = () => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        } else {
+          // Retry if ref isn't ready yet
+          setTimeout(attachStream, 50)
+        }
+      }
+      attachStream()
+
+      setCameraError(null)
+    } catch (err) {
+      console.error('Camera error:', err)
+      setCameraError('Unable to access camera')
+    }
+  }
+
+  // Flip camera
+  const flipCamera = () => {
+    const newFacing = facingMode === 'user' ? 'environment' : 'user'
+    setFacingMode(newFacing)
+    startCamera(newFacing)
+  }
+
+  // Start camera on mount
+  useEffect(() => {
+    startCamera()
+
+    // Cleanup on unmount
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
+
+  // Re-attach stream to video element when switching back to live mode
+  useEffect(() => {
+    const isShowingLive = !showClipConfirm || !recordedVideoUrl
+    if (isShowingLive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [showClipConfirm, recordedVideoUrl])
+
   // Recording handlers
   const handleRecordStart = () => {
+    if (!streamRef.current) return
+
     setIsRecording(true)
+    recordedChunksRef.current = []
+    setRecordedWithFrontCamera(facingMode === 'user')
+
+    // Determine supported mime type
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : 'video/mp4'
+
+    try {
+      const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType })
+      mediaRecorderRef.current = mediaRecorder
+
+      mediaRecorder.ondataavailable = (event) => {
+        console.log('Data available:', event.data.size, 'bytes')
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        if (recordedChunksRef.current.length === 0) {
+          console.warn('No recorded data captured')
+          setShowClipConfirm(true)
+          return
+        }
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+        console.log('Recorded blob size:', blob.size)
+        const url = URL.createObjectURL(blob)
+        setRecordedVideoUrl(url)
+        setShowClipConfirm(true)
+      }
+
+      mediaRecorder.start(100) // Collect data every 100ms
+    } catch (err) {
+      console.error('MediaRecorder error:', err)
+      setIsRecording(false)
+    }
   }
 
   const handleRecordEnd = () => {
-    if (isRecording) {
+    if (isRecording && mediaRecorderRef.current) {
       setIsRecording(false)
-      setShowClipConfirm(true)
+      mediaRecorderRef.current.stop()
     }
   }
 
@@ -56,7 +173,18 @@ function CreateScreen({ onClose }) {
   }
 
   const handleDeleteClip = () => {
+    if (recordedVideoUrl) {
+      URL.revokeObjectURL(recordedVideoUrl)
+      setRecordedVideoUrl(null)
+    }
     setShowClipConfirm(false)
+
+    // Re-attach camera stream after a brief delay to ensure video element is ready
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+    }, 50)
   }
 
   const handleTouchStart = (e) => {
@@ -85,18 +213,41 @@ function CreateScreen({ onClose }) {
 
   return (
     <div className="create-screen">
-      {/* Camera Preview (placeholder) */}
+      {/* Camera Preview */}
       <div className="create-camera-preview">
-        <img
-          src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop"
-          alt="Camera preview"
-          className="create-preview-image"
-        />
+        {showClipConfirm && recordedVideoUrl ? (
+          <video
+            key="recorded"
+            src={recordedVideoUrl}
+            className={`create-preview-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onLoadedData={() => console.log('Recorded video loaded successfully')}
+            onError={(e) => console.error('Recorded video error:', e)}
+          />
+        ) : (
+          <video
+            key="live"
+            ref={videoRef}
+            className={`create-preview-video ${facingMode === 'user' ? 'mirrored' : ''}`}
+            autoPlay
+            muted
+            playsInline
+          />
+        )}
+        {cameraError && (
+          <div className="create-camera-error">
+            <span>{cameraError}</span>
+            <button onClick={() => startCamera()}>Retry</button>
+          </div>
+        )}
       </div>
 
       {/* Top Controls */}
       <div className="create-top-controls">
-        <button className="create-close-btn" onClick={onClose}>
+        <button className="create-close-btn" onClick={showClipConfirm ? handleDeleteClip : onClose}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
@@ -112,10 +263,12 @@ function CreateScreen({ onClose }) {
         </button>
 
         <div className="create-side-controls">
-          <button className="create-side-btn">
+          <button className="create-side-btn flip-camera" onClick={flipCamera}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 18v-6a9 9 0 0118 0v6" />
-              <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z" />
+              <path d="M20 7h-3a2 2 0 00-2 2v6a2 2 0 002 2h3a2 2 0 002-2V9a2 2 0 00-2-2z" />
+              <path d="M14 7H4a2 2 0 00-2 2v6a2 2 0 002 2h10" />
+              <path d="M7 7V4l3 3-3 3V7z" />
+              <path d="M17 17v3l-3-3 3-3v3z" />
             </svg>
           </button>
           <button className="create-side-btn">
@@ -276,6 +429,11 @@ function CreateScreen({ onClose }) {
           onNext={handleNextFromEditClip}
           selectedSound={selectedSound}
           onSelectSound={setSelectedSound}
+          isRaceMode={selectedMode === 'race'}
+          raceName={raceName}
+          onRaceNameChange={setRaceName}
+          recordedVideoUrl={recordedVideoUrl}
+          isMirrored={recordedWithFrontCamera}
         />
       )}
 
@@ -284,8 +442,13 @@ function CreateScreen({ onClose }) {
         <PostScreen
           onClose={handleClosePostScreen}
           onPost={handlePost}
+          isRaceMode={selectedMode === 'race'}
+          raceName={raceName}
+          recordedVideoUrl={recordedVideoUrl}
+          isMirrored={recordedWithFrontCamera}
         />
       )}
+
     </div>
   )
 }

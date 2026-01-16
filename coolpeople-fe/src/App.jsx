@@ -120,6 +120,8 @@ function App() {
     setActiveReel(null)
   }
 
+  const profileOverlayRef = useRef(null)
+
   const handleOpenProfile = (candidate) => {
     saveToHistory()
     setShowComments(false)
@@ -127,6 +129,12 @@ function App() {
     setShowParticipantProfile(false)
     setActiveCandidate(candidate)
     setShowProfile(true)
+    // Scroll to top after state update
+    setTimeout(() => {
+      if (profileOverlayRef.current) {
+        profileOverlayRef.current.scrollTo(0, 0)
+      }
+    }, 0)
   }
 
   const handleCloseProfile = () => {
@@ -322,7 +330,7 @@ function App() {
 
       {/* Candidate Profile overlay */}
       {showProfile && (
-        <div className="profile-overlay">
+        <div className="profile-overlay" ref={profileOverlayRef}>
           <button className="back-button" onClick={handleBack}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -332,6 +340,7 @@ function App() {
             candidate={activeCandidate}
             onClose={handleCloseProfile}
             onPartyClick={handleOpenPartyProfile}
+            onUserClick={handleOpenProfile}
           />
         </div>
       )}

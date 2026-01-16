@@ -1,18 +1,111 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, raceName, onRaceNameChange, recordedVideoUrl, isMirrored }) {
   const [showAddSound, setShowAddSound] = useState(false)
+  const [isEditingRace, setIsEditingRace] = useState(false)
+  const [pillPosition, setPillPosition] = useState({ x: 20, y: null }) // y: null means use default bottom position
+  const [isDragging, setIsDragging] = useState(false)
+  const raceInputRef = useRef(null)
+  const pillRef = useRef(null)
+  const dragStartRef = useRef({ x: 0, y: 0, pillX: 0, pillY: 0 })
+
+  // Auto-focus input when editing
+  useEffect(() => {
+    if (isEditingRace && raceInputRef.current) {
+      raceInputRef.current.focus()
+    }
+  }, [isEditingRace])
+
+  // Drag handlers
+  const handleDragStart = (clientX, clientY) => {
+    if (isEditingRace) return
+    const pill = pillRef.current
+    if (!pill) return
+
+    const rect = pill.getBoundingClientRect()
+    const parentRect = pill.parentElement.getBoundingClientRect()
+
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: clientX,
+      y: clientY,
+      pillX: rect.left - parentRect.left,
+      pillY: rect.top - parentRect.top
+    }
+  }
+
+  const handleDragMove = (clientX, clientY) => {
+    if (!isDragging) return
+
+    const deltaX = clientX - dragStartRef.current.x
+    const deltaY = clientY - dragStartRef.current.y
+
+    setPillPosition({
+      x: dragStartRef.current.pillX + deltaX,
+      y: dragStartRef.current.pillY + deltaY
+    })
+  }
+
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
+
+  // Mouse events
+  const handleMouseDown = (e) => {
+    e.preventDefault()
+    handleDragStart(e.clientX, e.clientY)
+  }
+
+  // Touch events
+  const handleTouchStart = (e) => {
+    const touch = e.touches[0]
+    handleDragStart(touch.clientX, touch.clientY)
+  }
+
+  const handleTouchMove = (e) => {
+    const touch = e.touches[0]
+    handleDragMove(touch.clientX, touch.clientY)
+  }
+
+  // Global mouse move/up listeners
+  useEffect(() => {
+    const handleMouseMove = (e) => handleDragMove(e.clientX, e.clientY)
+    const handleMouseUp = () => handleDragEnd()
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
+
+  const canProceed = !isRaceMode || raceName.trim().length > 0
 
   return (
     <div className="edit-clip-screen">
       {/* Video Preview */}
       <div className="edit-clip-preview">
-        <img
-          src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop"
-          alt="Clip preview"
-        />
+        {recordedVideoUrl ? (
+          <video
+            src={recordedVideoUrl}
+            className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <img
+            src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop"
+            alt="Clip preview"
+          />
+        )}
       </div>
 
       {/* Top Controls */}
@@ -63,9 +156,59 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound }) {
         </div>
       </div>
 
+      {/* Race Name Pill - only shown in race mode */}
+      {isRaceMode && (
+        <div
+          ref={pillRef}
+          className={`edit-clip-race-pill-wrapper ${isDragging ? 'dragging' : ''}`}
+          style={pillPosition.y !== null ? {
+            left: pillPosition.x,
+            top: pillPosition.y,
+            bottom: 'auto'
+          } : {
+            left: pillPosition.x
+          }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleDragEnd}
+        >
+          {isEditingRace ? (
+            <div className="race-pill-edit-container" onClick={(e) => e.stopPropagation()}>
+              <span className="race-pill-dot"></span>
+              <input
+                ref={raceInputRef}
+                type="text"
+                className="race-pill-input"
+                placeholder="Name your race..."
+                value={raceName}
+                onChange={(e) => onRaceNameChange(e.target.value)}
+                onBlur={() => setIsEditingRace(false)}
+                onKeyDown={(e) => e.key === 'Enter' && setIsEditingRace(false)}
+                maxLength={40}
+              />
+            </div>
+          ) : (
+            <button
+              className={`race-pill-display ${!raceName ? 'empty' : ''}`}
+              onClick={() => !isDragging && setIsEditingRace(true)}
+            >
+              <span className="race-pill-dot"></span>
+              <span className="race-pill-text">
+                {raceName || 'Tap to name race'}
+              </span>
+              <svg className="race-pill-edit-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bottom */}
       <div className="edit-clip-bottom">
-        <button className="edit-clip-story-btn">
+        <button className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`} disabled={!canProceed}>
           <img
             src="https://i.pravatar.cc/40?img=3"
             alt="Profile"
@@ -73,7 +216,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound }) {
           />
           <span>your story</span>
         </button>
-        <button className="edit-clip-next-btn" onClick={onNext}>
+        <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={onNext} disabled={!canProceed}>
           next
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M5 12h14M12 5l7 7-7 7" />

@@ -45,10 +45,15 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
-.post-video-preview img {
+.post-video-preview img,
+.post-video-preview video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.post-video-preview video.mirrored {
+  transform: scaleX(-1);
 }
 
 .post-edit-cover-btn,
@@ -175,6 +180,31 @@
 .post-tag.active {
   background: #222;
   color: #fff;
+}
+
+/* Race Mode Target Pill */
+.post-tag.race-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
+  color: #E8A855;
+  border: 1px solid rgba(232, 168, 85, 0.4);
+  cursor: default;
+}
+
+.post-tag.race-mode.active {
+  background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
+  color: #E8A855;
+  box-shadow: 0 2px 12px rgba(232, 168, 85, 0.3);
+}
+
+.post-tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #F5D98A 0%, #E8A855 100%);
+  box-shadow: 0 0 6px rgba(232, 168, 85, 0.5);
 }
 
 /* Location */

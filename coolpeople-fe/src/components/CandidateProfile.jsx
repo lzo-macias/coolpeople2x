@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import '../styling/CandidateProfile.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
+import EditBio from './EditBio'
 
 // Mock data for the candidate profile
 const mockCandidate = {
@@ -88,8 +89,8 @@ const paidNominations = [
   },
 ]
 
-// Profile content sections data
-const profileSections = {
+// Initial profile content sections data
+const initialProfileSections = {
   hillToDieOn: {
     title: 'The Hill I Will Die on',
     content: 'Free healthcare for all New Yorkers',
@@ -294,21 +295,35 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
+
+  const profileRef = useRef(null)
+
+  // Scroll to top when candidate changes
+  useEffect(() => {
+    if (profileRef.current) {
+      profileRef.current.scrollTo(0, 0)
+    }
+  }, [passedCandidate?.username])
 
   const [activeTab, setActiveTab] = useState('bio')
   const [selectedTags, setSelectedTags] = useState(['all']) // array of active tag names
   const [isFollowing, setIsFollowing] = useState(candidate.isFollowing)
   const [isFavorited, setIsFavorited] = useState(candidate.isFavorited)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showEditBio, setShowEditBio] = useState(false)
+  const [profileSections, setProfileSections] = useState(initialProfileSections)
   const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
   const [guessState, setGuessState] = useState({
     selected: null,
     transitioning: false,
     revealed: false // Once true, correct answer stays green forever
   })
+  const [respondingTo, setRespondingTo] = useState(null) // nomination being responded to
+  const [responseText, setResponseText] = useState('')
+  const [reviewResponses, setReviewResponses] = useState({}) // { nominationId: responseText }
 
   // Chart colors cycle (for filtered chart based on tag count)
   const chartColors = [
@@ -512,9 +527,20 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
   }
 
   return (
-    <div className="candidate-profile">
+    <div className="candidate-profile" ref={profileRef}>
       {/* Header */}
       <div className="profile-header">
+        {/* Dev edit button */}
+        <button
+          className="dev-edit-btn"
+          onClick={() => setShowEditBio(true)}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+
         {/* Favorite star */}
         <button
           className={`favorite-star ${isFavorited ? 'active' : ''}`}
@@ -701,8 +727,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
               <div className="nomination-header">
                 <div className="nomination-user">
                   <div
-                    className="nomination-avatar-ring"
+                    className="nomination-avatar-ring clickable"
                     style={{ borderColor: getPartyColor(nomination.user.party) }}
+                    onClick={(e) => { e.stopPropagation(); onUserClick?.(nomination.user); }}
                   >
                     <img
                       src={nomination.user.avatar}
@@ -710,7 +737,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
                       className="nomination-avatar"
                     />
                   </div>
-                  <span className="nomination-username">{nomination.user.username}</span>
+                  <span className="nomination-username clickable" onClick={(e) => { e.stopPropagation(); onUserClick?.(nomination.user); }}>{nomination.user.username}</span>
                   <span className="cp-verified-badge">✓</span>
                 </div>
                 <span className="nomination-time">{nomination.timestamp}</span>
@@ -750,12 +777,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
 
           {/* Regular Nominations */}
           {regularNominations.map((nomination, index) => (
-            <div key={nomination.id} className="nomination-item">
+            <div
+              key={nomination.id}
+              className="nomination-item clickable"
+              onClick={() => setRespondingTo(nomination)}
+            >
               <div className="nomination-header">
                 <div className="nomination-user">
                   <div
-                    className="nomination-avatar-ring"
+                    className="nomination-avatar-ring clickable"
                     style={{ borderColor: getPartyColor(nomination.user.party) }}
+                    onClick={(e) => { e.stopPropagation(); onUserClick?.(nomination.user); }}
                   >
                     <img
                       src={nomination.user.avatar}
@@ -763,7 +795,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
                       className="nomination-avatar"
                     />
                   </div>
-                  <span className="nomination-username">{nomination.user.username}</span>
+                  <span className="nomination-username clickable" onClick={(e) => { e.stopPropagation(); onUserClick?.(nomination.user); }}>{nomination.user.username}</span>
                 </div>
                 <span className="nomination-time">{nomination.timestamp}</span>
               </div>
@@ -783,6 +815,22 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
                 <div className="nomination-rating">
                   {renderStars(nomination.rating)}
                 </div>
+              )}
+
+              {/* Display response if exists */}
+              {reviewResponses[nomination.id] && (
+                <>
+                  <div className="nomination-response">
+                    <div className="response-header">
+                      <img src={candidate.avatar} alt={candidate.username} className="response-avatar" />
+                      <span className="response-author">{candidate.username}</span>
+                    </div>
+                    <p className="response-text">{reviewResponses[nomination.id]}</p>
+                  </div>
+                  <button className="more-comments-btn" onClick={(e) => e.stopPropagation()}>
+                    load more
+                  </button>
+                </>
               )}
             </div>
           ))}
@@ -987,6 +1035,92 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick })
           </div>
         )}
       </div>
+
+      {/* Edit Bio Overlay - for development */}
+      {showEditBio && (
+        <div className="edit-bio-overlay">
+          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <EditBio
+            profileData={profileSections}
+            onSave={(updatedData) => {
+              setProfileSections(prev => ({
+                ...prev,
+                hillToDieOn: { ...prev.hillToDieOn, content: updatedData.hillToDieOn },
+                viewsOnIce: { ...prev.viewsOnIce, score: updatedData.viewsOnIce },
+                viewsOnTransRights: { ...prev.viewsOnTransRights, score: updatedData.viewsOnTransRights },
+                topicsThatEnergize: { ...prev.topicsThatEnergize, tags: updatedData.topicsThatEnergize },
+                accomplishment: { ...prev.accomplishment, content: updatedData.accomplishment },
+                guessWhichTrue: { ...prev.guessWhichTrue, options: updatedData.guessWhichTrue.options, correctIndex: updatedData.guessWhichTrue.correctIndex },
+              }))
+              setShowEditBio(false)
+            }}
+          />
+        </div>
+      )}
+
+      {/* Response Modal for Community Reviews */}
+      {respondingTo && (
+        <div className="response-modal-overlay" onClick={() => { setRespondingTo(null); setResponseText(''); }}>
+          <div className="response-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="response-modal-header">
+              <button className="response-close-btn" onClick={() => { setRespondingTo(null); setResponseText(''); }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+              <h3>Respond to Review</h3>
+              <button
+                className="response-post-btn"
+                disabled={!responseText.trim()}
+                onClick={() => {
+                  setReviewResponses(prev => ({
+                    ...prev,
+                    [respondingTo.id]: responseText
+                  }))
+                  setRespondingTo(null)
+                  setResponseText('')
+                }}
+              >
+                Post
+              </button>
+            </div>
+
+            {/* Original Review */}
+            <div className="response-original-review">
+              <div className="response-review-header">
+                <img
+                  src={respondingTo.user.avatar}
+                  alt={respondingTo.user.username}
+                  className="response-reviewer-avatar"
+                />
+                <span className="response-reviewer-name">{respondingTo.user.username}</span>
+                <span className="response-review-time">{respondingTo.timestamp}</span>
+              </div>
+              {respondingTo.text && (
+                <p className="response-review-text">{respondingTo.text}</p>
+              )}
+              <div className="response-review-rating">
+                {renderStars(respondingTo.rating)}
+              </div>
+            </div>
+
+            {/* Response Input */}
+            <div className="response-input-container">
+              <textarea
+                className="response-textarea"
+                placeholder="Write your response..."
+                value={responseText}
+                onChange={(e) => setResponseText(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

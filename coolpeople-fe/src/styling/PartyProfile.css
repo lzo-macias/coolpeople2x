@@ -3,10 +3,7 @@
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
-  background:
-    radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #1e1e1e 100%);
-  background-size: 20px 20px, 100% 100%;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
   font-family: 'Inter', sans-serif;
 }
 
@@ -734,4 +731,61 @@
 
 .party-profile .load-more-buttons:hover .load-more-btn svg {
   color: #FFFFFF;
+}
+
+/* Dev Edit Button */
+.party-profile .dev-edit-btn {
+  position: absolute;
+  top: 7px;
+  left: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777777;
+  transition: all 0.2s ease;
+}
+
+.party-profile .dev-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+/* Edit Bio Overlay */
+.party-profile .edit-bio-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #FFFFFF;
+  z-index: 200;
+  max-width: 396px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.party-profile .edit-bio-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #F5F5F5;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 201;
+  color: #333333;
+}
+
+.party-profile .edit-bio-close:hover {
+  background: #EEEEEE;
 }

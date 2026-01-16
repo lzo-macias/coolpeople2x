@@ -2,6 +2,7 @@ import { useState } from 'react'
 import '../styling/PartyProfile.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
+import EditBio from './EditBio'
 
 // Mock data for the party profile
 const mockParty = {
@@ -119,6 +120,7 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
   const [isFavorited, setIsFavorited] = useState(party.isFavorited)
   const [hasJoined, setHasJoined] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showEditBio, setShowEditBio] = useState(false)
 
   // Chart colors cycle (for filtered chart based on tag count)
   const chartColors = [
@@ -255,6 +257,17 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
     <div className="party-profile">
       {/* Header */}
       <div className="profile-header">
+        {/* Dev edit button */}
+        <button
+          className="dev-edit-btn"
+          onClick={() => setShowEditBio(true)}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+
         {/* Favorite star */}
         <button
           className={`favorite-star ${isFavorited ? 'active' : ''}`}
@@ -524,6 +537,18 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
           </button>
         </div>
       </div>
+
+      {/* Edit Bio Overlay - for development */}
+      {showEditBio && (
+        <div className="edit-bio-overlay">
+          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <EditBio />
+        </div>
+      )}
     </div>
   )
 }

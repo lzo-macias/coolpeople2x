@@ -18,10 +18,15 @@
   bottom: 0;
 }
 
-.edit-clip-preview img {
+.edit-clip-preview img,
+.edit-clip-preview video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.edit-clip-video.mirrored {
+  transform: scaleX(-1);
 }
 
 /* Top Controls */
@@ -139,4 +144,129 @@
 
 .edit-clip-next-btn:active {
   transform: scale(0.95);
+}
+
+/* Disabled states for buttons */
+.edit-clip-story-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.edit-clip-next-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 242, 234, 0.5), rgba(255, 42, 85, 0.5));
+}
+
+/* Race Pill in Edit Screen */
+.edit-clip-race-pill-wrapper {
+  position: absolute;
+  left: 20px;
+  bottom: 120px;
+  z-index: 15;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.edit-clip-race-pill-wrapper.dragging {
+  cursor: grabbing;
+}
+
+.edit-clip-race-pill-wrapper.dragging .race-pill-display,
+.edit-clip-race-pill-wrapper.dragging .race-pill-edit-container {
+  transform: scale(1.05);
+  box-shadow: 0 8px 32px rgba(232, 168, 85, 0.4);
+}
+
+.race-pill-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
+  border: 1px solid rgba(232, 168, 85, 0.4);
+  box-shadow: 0 4px 16px rgba(232, 168, 85, 0.25);
+  cursor: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.race-pill-display:active {
+  transform: scale(0.97);
+}
+
+.race-pill-display.empty {
+  border-style: dashed;
+  animation: pill-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pill-pulse {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(232, 168, 85, 0.25);
+  }
+  50% {
+    box-shadow: 0 4px 24px rgba(232, 168, 85, 0.45);
+  }
+}
+
+.race-pill-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #F5D98A 0%, #E8A855 100%);
+  box-shadow: 0 0 8px rgba(232, 168, 85, 0.6);
+  flex-shrink: 0;
+}
+
+.race-pill-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #E8A855;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-pill-display.empty .race-pill-text {
+  color: rgba(232, 168, 85, 0.6);
+  font-style: italic;
+}
+
+.race-pill-edit-icon {
+  color: rgba(232, 168, 85, 0.5);
+  flex-shrink: 0;
+}
+
+/* Race Pill Edit Mode */
+.race-pill-edit-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
+  border: 2px solid #E8A855;
+  box-shadow: 0 4px 20px rgba(232, 168, 85, 0.4);
+  cursor: text;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.race-pill-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #F5D98A;
+  width: 160px;
+}
+
+.race-pill-input::placeholder {
+  color: rgba(232, 168, 85, 0.5);
 }

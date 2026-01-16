@@ -4,10 +4,7 @@
   max-width: 440px;
   bottom: 4px;
   margin: 0 auto;
-  background:
-    radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #1e1e1e 100%);
-  background-size: 20px 20px, 100% 100%;
+  background: #222222;
   font-family: 'Inter', sans-serif;
 }
 
@@ -713,6 +710,16 @@
   opacity: 0.8;
 }
 
+.nomination-username.clickable,
+.nomination-avatar-ring.clickable {
+  cursor: pointer;
+}
+
+.nomination-username.clickable:hover,
+.nomination-avatar-ring.clickable:hover {
+  opacity: 1;
+}
+
 .nomination-time {
   font-size: 10px;
   font-weight: 400;
@@ -814,7 +821,7 @@
 .section-title {
   font-size: 13px;
   font-weight: 400;
-  color: #888888;
+  color: #777777;
 }
 
 .section-title.guess {
@@ -1274,4 +1281,271 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Dev Edit Button */
+.candidate-profile .dev-edit-btn {
+  position: absolute;
+  top: 7px;
+  left: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777777;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.candidate-profile .dev-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+/* Edit Bio Overlay */
+.candidate-profile .edit-bio-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #FFFFFF;
+  z-index: 200;
+  max-width: 396px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.candidate-profile .edit-bio-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #F5F5F5;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 201;
+  color: #333333;
+}
+
+.candidate-profile .edit-bio-close:hover {
+  background: #EEEEEE;
+}
+
+/* Response Modal */
+.response-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.response-modal {
+  background: #1a1a1a;
+  width: 100%;
+  max-width: 440px;
+  max-height: 80vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.response-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #333333;
+}
+
+.response-modal-header h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.response-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888888;
+  padding: 4px;
+}
+
+.response-close-btn:hover {
+  color: #FFFFFF;
+}
+
+.response-post-btn {
+  background: #00B4D8;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.response-post-btn:disabled {
+  background: #333333;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+.response-original-review {
+  padding: 16px;
+  border-bottom: 1px solid #333333;
+}
+
+.response-review-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.response-reviewer-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.response-reviewer-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.response-review-time {
+  font-size: 12px;
+  color: #888888;
+  margin-left: auto;
+}
+
+.response-review-text {
+  font-size: 14px;
+  color: #CCCCCC;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.response-review-rating {
+  display: flex;
+  gap: 2px;
+}
+
+.response-input-container {
+  padding: 16px;
+  flex: 1;
+}
+
+.response-textarea {
+  width: 100%;
+  min-height: 120px;
+  background: #2a2a2a;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  color: #FFFFFF;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.response-textarea::placeholder {
+  color: #666666;
+}
+
+/* Clickable nomination item */
+.nomination-item.clickable {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.nomination-item.clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Response displayed under review */
+.nomination-response {
+  margin-top: 10px;
+  margin-left: 40px;
+}
+
+.nomination-response .response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nomination-response .response-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.nomination-response .response-author {
+  font-size: 13px;
+  font-weight: 400;
+  color: #FFFFFF;
+  opacity: 0.8;
+}
+
+.nomination-response .response-label {
+  display: none;
+}
+
+.nomination-response .response-text {
+  font-size: 14px;
+  color: #FFFFFF;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* More comments arrow */
+.more-comments-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  margin-left: 40px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666666;
+  font-size: 12px;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.more-comments-btn:hover {
+  color: #888888;
+}
+
+.more-comments-btn svg {
+  width: 16px;
+  height: 16px;
 }

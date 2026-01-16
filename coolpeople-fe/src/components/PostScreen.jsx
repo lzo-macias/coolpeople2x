@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost }) {
+function PostScreen({ onClose, onPost, isRaceMode, raceName, recordedVideoUrl, isMirrored }) {
   const [title, setTitle] = useState('')
   const [caption, setCaption] = useState('')
-  const [selectedTarget, setSelectedTarget] = useState(null)
+  const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
   const [selectedPostTo, setSelectedPostTo] = useState(null)
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
 
-  const targetRaces = ['Mayor Race', 'City Council', 'Governor', 'Senate']
+  const targetRaces = isRaceMode ? [raceName] : ['Mayor Race', 'City Council', 'Governor', 'Senate']
   const postToOptions = ['Your Feed', 'The Pink Lady']
   const sendToOptions = ['The Pink Lady', 'Mamas gaga', 'Sunday Canvassing']
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
@@ -56,10 +56,21 @@ function PostScreen({ onClose, onPost }) {
       <div className="post-content">
         {/* Video Preview */}
         <div className="post-video-preview">
-          <img
-            src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=300&h=400&fit=crop"
-            alt="Video preview"
-          />
+          {recordedVideoUrl ? (
+            <video
+              src={recordedVideoUrl}
+              className={isMirrored ? 'mirrored' : ''}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : (
+            <img
+              src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=300&h=400&fit=crop"
+              alt="Video preview"
+            />
+          )}
           <button className="post-edit-cover-btn">Edit Cover</button>
           <button className="post-edit-video-btn">Edit Video</button>
         </div>
@@ -94,9 +105,10 @@ function PostScreen({ onClose, onPost }) {
             {targetRaces.map(race => (
               <button
                 key={race}
-                className={`post-tag ${selectedTarget === race ? 'active' : ''}`}
-                onClick={() => setSelectedTarget(selectedTarget === race ? null : race)}
+                className={`post-tag ${selectedTarget === race ? 'active' : ''} ${isRaceMode ? 'race-mode' : ''}`}
+                onClick={() => !isRaceMode && setSelectedTarget(selectedTarget === race ? null : race)}
               >
+                {isRaceMode && <span className="post-tag-dot"></span>}
                 {race}
               </button>
             ))}
