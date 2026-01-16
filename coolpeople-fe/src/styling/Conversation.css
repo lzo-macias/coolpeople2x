@@ -116,15 +116,30 @@
 }
 
 .chat-message.other .chat-bubble {
-  background: #2a2a2a;
+  background: #3a3a3a;
   color: #fff;
   border-bottom-left-radius: 4px;
 }
 
 .chat-message.own .chat-bubble {
-  background: var(--accent-pink);
+  background: #FF2A55;
   color: #fff;
   border-bottom-right-radius: 4px;
+}
+
+/* Media Bubble */
+.chat-bubble.media-bubble {
+  padding: 4px;
+  background: #FF2A55;
+  overflow: hidden;
+}
+
+.chat-media {
+  width: 200px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 16px;
+  display: block;
 }
 
 /* Input Area */
@@ -174,4 +189,356 @@
 
 .conversation-action-btn:active {
   color: #fff;
+}
+
+/* Recording Overlay */
+.recording-overlay {
+  position: absolute;
+  bottom: 80px;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.95);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid #333;
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.recording-pulse {
+  width: 16px;
+  height: 16px;
+  background: #FF2A55;
+  border-radius: 50%;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+.recording-time {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-overlay p {
+  color: #888;
+  font-size: 14px;
+  margin: 0;
+}
+
+.recording-stop-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #FF2A55;
+  border: none;
+  border-radius: 24px;
+  padding: 12px 24px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Creator Studio */
+.msg-creator-studio {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #1f1f23 0%, #17171a 50%, #0f0f11 100%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+}
+
+.msg-creator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.msg-creator-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.msg-creator-back,
+.msg-creator-multi {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.msg-creator-content {
+  flex: 1;
+  padding: 16px;
+}
+
+.msg-creator-content textarea {
+  width: 100%;
+  height: 200px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 16px;
+  color: #fff;
+  font-size: 16px;
+  resize: none;
+  outline: none;
+}
+
+.msg-creator-content textarea::placeholder {
+  color: #666;
+}
+
+.msg-creator-drafts {
+  padding: 0 16px 16px;
+}
+
+.msg-creator-drafts h3 {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 12px 0;
+}
+
+.msg-draft-item {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.msg-draft-item p {
+  color: #fff;
+  font-size: 14px;
+  margin: 0 0 4px 0;
+}
+
+.msg-draft-item span {
+  color: #666;
+  font-size: 12px;
+}
+
+.msg-creator-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.msg-creator-draft-btn {
+  flex: 1;
+  padding: 14px;
+  background: #333;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msg-creator-send-btn {
+  flex: 1;
+  padding: 14px;
+  background: #FF2A55;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msg-creator-send-btn:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Multi-Send Screen */
+.msg-multi-send {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #1f1f23 0%, #17171a 50%, #0f0f11 100%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+}
+
+.msg-multi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.msg-multi-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.msg-multi-back {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.msg-multi-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.msg-multi-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 42, 85, 0.2);
+  border: 1px solid rgba(255, 42, 85, 0.4);
+  border-radius: 20px;
+  padding: 4px 8px 4px 4px;
+}
+
+.msg-multi-chip img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.msg-multi-chip span {
+  font-size: 13px;
+  color: #fff;
+}
+
+.msg-multi-chip button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+}
+
+.msg-multi-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 80px;
+}
+
+.msg-multi-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.msg-multi-item.selected {
+  background: rgba(255, 42, 85, 0.1);
+}
+
+.msg-multi-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid;
+  overflow: hidden;
+}
+
+.msg-multi-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.msg-multi-item span {
+  flex: 1;
+  font-size: 15px;
+  color: #fff;
+}
+
+.msg-multi-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msg-multi-check.checked {
+  background: #FF2A55;
+  border-color: #FF2A55;
+  color: #fff;
+}
+
+.msg-multi-send-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 16px;
+  background: #FF2A55;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msg-multi-send-btn:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Create Studio Overlay */
+.create-studio-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  z-index: 9999;
 }

@@ -270,3 +270,248 @@
 .race-pill-input::placeholder {
   color: rgba(232, 168, 85, 0.5);
 }
+
+/* Conversation Mode - Add Button */
+.edit-clip-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(
+    145deg,
+    #FFFFFF 0%,
+    #F8F8F8 30%,
+    #FFFFFF 50%,
+    #F5F5F5 70%,
+    #EEEEEE 100%
+  );
+  border: none;
+  border-radius: 50%;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    inset 0 1px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.edit-clip-add-btn svg {
+  stroke-width: 2.5;
+}
+
+.edit-clip-add-btn:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Conversation Mode - Send Button */
+.edit-clip-send-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border: none;
+  border-radius: 28px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.edit-clip-send-btn:active {
+  transform: scale(0.95);
+}
+
+/* User Selection Panel */
+.user-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.user-panel {
+  width: 100%;
+  max-width: 430px;
+  height: 70vh;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.user-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.user-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-panel-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #222;
+  margin: 0;
+}
+
+.user-panel-close {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Send Mode Mini Toggle */
+.send-mode-mini-btn {
+  padding: 6px 12px;
+  background: #e8e8e8;
+  border: none;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+}
+
+.send-mode-mini-btn:active {
+  opacity: 0.8;
+}
+
+.user-panel-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.user-panel-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  background: linear-gradient(90deg, rgba(0, 242, 234, 0.15), rgba(255, 42, 85, 0.15));
+  border: 1px solid rgba(255, 42, 85, 0.25);
+  border-radius: 20px;
+}
+
+.user-panel-chip img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-panel-chip span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.user-panel-chip button {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.user-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.user-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.user-panel-item:active,
+.user-panel-item.selected {
+  background: rgba(255, 42, 85, 0.08);
+}
+
+.user-panel-item img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-panel-item span {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  color: #222;
+}
+
+.user-panel-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-panel-check.checked {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border-color: transparent;
+  color: #fff;
+}
+
+.user-panel-done {
+  margin: 16px 20px;
+  padding: 16px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  margin-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.user-panel-done:active {
+  opacity: 0.9;
+}

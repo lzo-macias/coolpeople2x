@@ -2,9 +2,54 @@ import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, raceName, onRaceNameChange, recordedVideoUrl, isMirrored }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, raceName, onRaceNameChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend }) {
   const [showAddSound, setShowAddSound] = useState(false)
   const [isEditingRace, setIsEditingRace] = useState(false)
+  const [showUserPanel, setShowUserPanel] = useState(false)
+  const [selectedRecipients, setSelectedRecipients] = useState([])
+  const [sendMode, setSendMode] = useState('separate') // 'separate' or 'together'
+
+  // Initialize selected recipients with conversation user when panel opens
+  const initializePanel = () => {
+    if (conversationUser && !selectedRecipients.find(u => u.id === conversationUser.id)) {
+      setSelectedRecipients([conversationUser])
+    }
+    setShowUserPanel(true)
+  }
+
+  // Mock users for the selection panel - conversation user first if exists
+  const otherUsers = [
+    { id: 1, username: 'maya_creates', avatar: 'https://i.pravatar.cc/40?img=1' },
+    { id: 2, username: 'alex.design', avatar: 'https://i.pravatar.cc/40?img=2' },
+    { id: 3, username: 'jordan_photo', avatar: 'https://i.pravatar.cc/40?img=4' },
+    { id: 4, username: 'sam_music', avatar: 'https://i.pravatar.cc/40?img=5' },
+    { id: 5, username: 'taylor.art', avatar: 'https://i.pravatar.cc/40?img=6' },
+    { id: 6, username: 'chris_dev', avatar: 'https://i.pravatar.cc/40?img=7' },
+  ]
+
+  // Put conversation user first in the list
+  const availableUsers = conversationUser
+    ? [conversationUser, ...otherUsers.filter(u => u.id !== conversationUser.id)]
+    : otherUsers
+
+  const toggleRecipient = (user) => {
+    setSelectedRecipients(prev =>
+      prev.find(u => u.id === user.id)
+        ? prev.filter(u => u.id !== user.id)
+        : [...prev, user]
+    )
+  }
+
+  const isSelected = (user) => selectedRecipients.find(u => u.id === user.id)
+
+  const handleSend = () => {
+    if (selectedRecipients.length === 0 && conversationUser) {
+      // If no one selected but we have conversation user, send to them
+      onSend?.([conversationUser])
+    } else {
+      onSend?.(selectedRecipients)
+    }
+  }
   const [pillPosition, setPillPosition] = useState({ x: 20, y: null }) // y: null means use default bottom position
   const [isDragging, setIsDragging] = useState(false)
   const raceInputRef = useRef(null)
@@ -208,20 +253,42 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
       {/* Bottom */}
       <div className="edit-clip-bottom">
-        <button className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`} disabled={!canProceed}>
-          <img
-            src="https://i.pravatar.cc/40?img=3"
-            alt="Profile"
-            className="edit-clip-story-avatar"
-          />
-          <span>your story</span>
-        </button>
-        <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={onNext} disabled={!canProceed}>
-          next
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </button>
+        {isConversationMode ? (
+          <>
+            <button
+              className="edit-clip-add-btn"
+              onClick={initializePanel}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <button className="edit-clip-send-btn" onClick={handleSend}>
+              send
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        ) : (
+          <>
+            <button className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`} disabled={!canProceed}>
+              <img
+                src="https://i.pravatar.cc/40?img=3"
+                alt="Profile"
+                className="edit-clip-story-avatar"
+              />
+              <span>your story</span>
+            </button>
+            <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={onNext} disabled={!canProceed}>
+              next
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
       </div>
 
       {/* Add Sound Screen */}
@@ -233,6 +300,69 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             setShowAddSound(false)
           }}
         />
+      )}
+
+      {/* User Selection Panel (Conversation Mode) */}
+      {showUserPanel && (
+        <div className="user-panel-overlay" onClick={() => setShowUserPanel(false)}>
+          <div className="user-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="user-panel-header">
+              <div className="user-panel-header-left">
+                <h3>Send to</h3>
+                {selectedRecipients.length > 1 && (
+                  <button
+                    className={`send-mode-mini-btn ${sendMode === 'together' ? 'active' : ''}`}
+                    onClick={() => setSendMode(sendMode === 'separate' ? 'together' : 'separate')}
+                  >
+                    {sendMode === 'separate' ? 'Separate' : 'Together'}
+                  </button>
+                )}
+              </div>
+              <button className="user-panel-close" onClick={() => setShowUserPanel(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Selected recipients chips */}
+            {selectedRecipients.length > 0 && (
+              <div className="user-panel-selected">
+                {selectedRecipients.map(user => (
+                  <div key={user.id} className="user-panel-chip">
+                    <img src={user.avatar} alt={user.username} />
+                    <span>{user.username}</span>
+                    <button onClick={() => toggleRecipient(user)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="user-panel-list">
+              {availableUsers.map(user => (
+                <div
+                  key={user.id}
+                  className={`user-panel-item ${isSelected(user) ? 'selected' : ''}`}
+                  onClick={() => toggleRecipient(user)}
+                >
+                  <img src={user.avatar} alt={user.username} />
+                  <span>{user.username}</span>
+                  <div className={`user-panel-check ${isSelected(user) ? 'checked' : ''}`}>
+                    {isSelected(user) && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button className="user-panel-done" onClick={handleSend}>
+              Send
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

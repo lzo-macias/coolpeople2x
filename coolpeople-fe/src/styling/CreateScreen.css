@@ -523,8 +523,15 @@
 .clip-action-btn.delete {
   width: 32px;
   height: 32px;
-  background: gray;
+  background: #777777;
   color: #FFFFFF;
+}
+
+.clip-action-btn.draft {
+  width: 36px;
+  height: 36px;
+  background: #777777;
+  color: #fff;
 }
 
 .clip-action-btn.confirm {

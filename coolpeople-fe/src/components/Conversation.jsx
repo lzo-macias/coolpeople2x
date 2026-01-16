@@ -1,11 +1,16 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
+import CreateScreen from './CreateScreen'
 import '../styling/Conversation.css'
 
 function Conversation({ conversation, onBack }) {
   const [messageText, setMessageText] = useState('')
+  const [showCreateScreen, setShowCreateScreen] = useState(false)
+  const [localMessages, setLocalMessages] = useState([])
   const { user } = conversation
-  const messages = mockConversations[conversation.id] || []
+  const mockMessages = mockConversations[conversation.id] || []
+  const messages = [...mockMessages, ...localMessages]
 
   // Current user avatar (would come from auth context in real app)
   const currentUserAvatar = 'https://i.pravatar.cc/40?img=12'
@@ -48,9 +53,22 @@ function Conversation({ conversation, onBack }) {
                 <img src={user.avatar} alt={user.username} />
               </div>
             )}
-            <div className="chat-bubble">
-              {msg.text}
-            </div>
+            {msg.mediaUrl ? (
+              <div className="chat-bubble media-bubble">
+                <video
+                  src={msg.mediaUrl}
+                  className="chat-media"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              </div>
+            ) : (
+              <div className="chat-bubble">
+                {msg.text}
+              </div>
+            )}
             {msg.isOwn && (
               <div className="chat-message-avatar">
                 <img src={currentUserAvatar} alt="You" />
@@ -74,15 +92,6 @@ function Conversation({ conversation, onBack }) {
 
         <button className="conversation-action-btn">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-            <line x1="9" y1="9" x2="9.01" y2="9" />
-            <line x1="15" y1="9" x2="15.01" y2="9" />
-          </svg>
-        </button>
-
-        <button className="conversation-action-btn">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
             <line x1="12" y1="19" x2="12" y2="23" />
@@ -90,7 +99,7 @@ function Conversation({ conversation, onBack }) {
           </svg>
         </button>
 
-        <button className="conversation-action-btn">
+        <button className="conversation-action-btn" onClick={() => setShowCreateScreen(true)}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="16" />
@@ -98,6 +107,30 @@ function Conversation({ conversation, onBack }) {
           </svg>
         </button>
       </div>
+
+      {showCreateScreen && createPortal(
+        <div className="create-studio-overlay">
+          <CreateScreen
+            onClose={() => setShowCreateScreen(false)}
+            isConversationMode={true}
+            conversationUser={user}
+            onSendToConversation={(mediaUrl) => {
+              // Add the sent clip as a message
+              const newMessage = {
+                id: `local-${Date.now()}`,
+                text: null,
+                mediaUrl: mediaUrl,
+                mediaType: 'video',
+                isOwn: true,
+                timestamp: new Date().toISOString()
+              }
+              setLocalMessages(prev => [...prev, newMessage])
+              setShowCreateScreen(false)
+            }}
+          />
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
