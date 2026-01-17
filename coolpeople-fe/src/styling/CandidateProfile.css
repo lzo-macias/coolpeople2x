@@ -5,6 +5,7 @@
   bottom: 4px;
   margin: 0 auto;
   background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  background-attachment: fixed;
   font-family: 'Inter', sans-serif;
 }
 
@@ -1418,14 +1419,15 @@
   color: #FFFFFF;
 }
 
-/* Edit Bio Overlay */
+/* Edit Profile Overlay */
 .candidate-profile .edit-bio-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #FFFFFF;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  background-attachment: fixed;
   z-index: 200;
   max-width: 396px;
   margin: 0 auto;
@@ -1433,24 +1435,7 @@
 }
 
 .candidate-profile .edit-bio-close {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #F5F5F5;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 201;
-  color: #333333;
-}
-
-.candidate-profile .edit-bio-close:hover {
-  background: #EEEEEE;
+  display: none;
 }
 
 /* Response Modal */

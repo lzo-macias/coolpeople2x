@@ -1,0 +1,304 @@
+.edit-profile {
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  background-attachment: fixed;
+  min-height: 100%;
+  color: #ffffff;
+}
+
+.settings-page {
+  min-height: 100%;
+}
+
+/* Header */
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-back-btn svg {
+  width: 24px;
+  height: 24px;
+  color: #ffffff;
+}
+
+.settings-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* Search */
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.settings-search svg {
+  width: 18px;
+  height: 18px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.settings-search input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: #ffffff;
+  outline: none;
+}
+
+.settings-search input::placeholder {
+  color: #666;
+}
+
+/* Avatar Section */
+.settings-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+}
+
+.settings-avatar-container {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.settings-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-avatar-placeholder svg {
+  width: 40px;
+  height: 40px;
+  color: #666;
+}
+
+.edit-picture-link {
+  background: none;
+  border: none;
+  color: #00F2EA;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Profile Info (Status & Party) */
+.settings-profile-info {
+  padding: 0 16px;
+  margin-bottom: 8px;
+}
+
+/* Settings Row */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-row-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+
+.settings-row-svg {
+  width: 22px;
+  height: 22px;
+  color: #888;
+}
+
+.settings-row-label {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.settings-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-row-value {
+  font-size: 14px;
+  color: #888;
+}
+
+.settings-row-right svg {
+  width: 16px;
+  height: 16px;
+  color: #555;
+}
+
+.party-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* Settings Section */
+.settings-section {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.settings-section-header span:first-child {
+  font-size: 12px;
+  color: #666;
+  text-transform: lowercase;
+}
+
+.settings-section-header svg {
+  width: 12px;
+  height: 12px;
+  color: #555;
+}
+
+.notification-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FF2A55;
+  margin-left: 4px;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Selection List */
+.selection-list {
+  padding: 0 16px;
+}
+
+.settings-row.selection {
+  padding: 16px 0;
+}
+
+.settings-row.selection.selected .settings-row-label {
+  color: #00F2EA;
+}
+
+.check-icon {
+  width: 20px;
+  height: 20px;
+  color: #00F2EA;
+}
+
+/* Danger Zone */
+.settings-section.danger {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-row.danger .settings-row-svg,
+.settings-row.danger .settings-row-label {
+  color: #888;
+}
+
+.settings-row.danger.delete .settings-row-svg,
+.settings-row.danger.delete .settings-row-label {
+  color: #FF2A55;
+}
+
+/* Icebreakers Page */
+.icebreakers-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.icebreakers-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.icebreakers-container .edit-bio {
+  background: transparent;
+}
+
+.icebreakers-container .icebreakers-section {
+  padding-top: 0;
+}
+
+.icebreakers-container .icebreakers-title {
+  display: none;
+}
+
+/* Placeholder Content */
+.placeholder-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.placeholder-content p {
+  color: #666;
+  font-size: 14px;
+}

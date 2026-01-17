@@ -4,6 +4,7 @@
   max-width: 440px;
   margin: 0 auto;
   background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  background-attachment: fixed;
   font-family: 'Inter', sans-serif;
 }
 

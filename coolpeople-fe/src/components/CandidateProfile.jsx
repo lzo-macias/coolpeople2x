@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import '../styling/CandidateProfile.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
-import EditBio from './EditBio'
+import EditProfile from './EditProfile'
 
 // Mock data for the candidate profile
 const mockCandidate = {
@@ -1179,17 +1179,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         )}
       </div>
 
-      {/* Edit Bio Overlay - for development */}
+      {/* Edit Profile Overlay */}
       {showEditBio && (
         <div className="edit-bio-overlay">
-          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-          <EditBio
-            key={`edit-${profileSections.customWritten?.length}-${profileSections.customSliders?.length}`}
-            profileData={profileSections}
+          <EditProfile
+            candidate={candidate}
+            profileSections={profileSections}
             onSave={(updatedData) => {
               setProfileSections(prev => {
                 const newSections = { ...prev }
@@ -1218,8 +1213,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
                 return newSections
               })
-              setShowEditBio(false)
             }}
+            onClose={() => setShowEditBio(false)}
           />
         </div>
       )}
