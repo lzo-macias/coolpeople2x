@@ -182,19 +182,16 @@
   color: #fff;
 }
 
-/* Race Mode Target Pill */
-.post-tag.race-mode {
+/* Target/Race Tags - golden colorscheme when active */
+.post-tag.target {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
-  color: #E8A855;
-  border: 1px solid rgba(232, 168, 85, 0.4);
-  cursor: default;
 }
 
-.post-tag.race-mode.active {
+.post-tag.target.active {
   background: linear-gradient(145deg, #3D2A1A 0%, #2A1F0F 100%);
+  border: 1px solid rgba(232, 168, 85, 0.4);
   color: #E8A855;
   box-shadow: 0 2px 12px rgba(232, 168, 85, 0.3);
 }

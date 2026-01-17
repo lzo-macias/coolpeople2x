@@ -2,17 +2,19 @@ import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
+import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/CreateScreen.css'
 
-function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation }) {
+function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated }) {
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
-  const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', or 'race'
+  const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
   const [showAddSound, setShowAddSound] = useState(false)
   const [selectedSound, setSelectedSound] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
   const [showClipConfirm, setShowClipConfirm] = useState(false)
   const [showEditClipScreen, setShowEditClipScreen] = useState(false)
   const [showPostScreen, setShowPostScreen] = useState(false)
+  const [showPartyCreationFlow, setShowPartyCreationFlow] = useState(false)
   const [raceName, setRaceName] = useState('')
   const [facingMode, setFacingMode] = useState('user') // 'user' = front, 'environment' = back
   const [cameraError, setCameraError] = useState(null)
@@ -150,7 +152,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
   const handleConfirmClip = () => {
     setShowClipConfirm(false)
-    setShowEditClipScreen(true)
+    if (selectedMode === 'party') {
+      setShowPartyCreationFlow(true)
+    } else {
+      setShowEditClipScreen(true)
+    }
   }
 
   const handleCloseEditClipScreen = () => {
@@ -170,6 +176,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     console.log('Posting:', postData)
     setShowPostScreen(false)
     onClose()
+  }
+
+  const handleClosePartyCreationFlow = () => {
+    setShowPartyCreationFlow(false)
+  }
+
+  const handlePartyCreated = (partyData) => {
+    console.log('Party created:', partyData)
+    setShowPartyCreationFlow(false)
+    onPartyCreated?.(partyData)
   }
 
   const handleDeleteClip = () => {
@@ -314,18 +330,32 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         )}
 
         {/* Record Button Row */}
-        <div className={`create-record-row ${showClipConfirm ? 'confirm-mode' : ''}`}>
-          {/* Buttons rendered in order: left, center (active), right */}
-          {(() => {
-            const RecordButton = (
+        <div className={`create-record-row ${showClipConfirm ? 'confirm-mode' : ''} mode-${selectedMode}`}>
+          {/* Buttons always in fixed order, CSS handles centering active one */}
+          {/* Distance from active: 2+ slots away = "far" class for smaller size */}
+          {!(isRecording || showClipConfirm) ? (
+            <div className="create-buttons-track">
               <button
-                key="record"
-                className={`create-record-btn ${selectedMode === 'record' ? 'active' : ''} ${isRecording ? 'recording' : ''}`}
-                onClick={() => !showClipConfirm && setSelectedMode('record')}
-                onMouseDown={() => selectedMode === 'record' && !showClipConfirm && handleRecordStart()}
+                className={`create-nominate-btn ${selectedMode === 'nominate' ? 'active' : ''} ${(selectedMode === 'race' || selectedMode === 'party') ? 'far' : ''}`}
+                onClick={() => setSelectedMode('nominate')}
+                onMouseDown={() => selectedMode === 'nominate' && handleRecordStart()}
                 onMouseUp={handleRecordEnd}
                 onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'record' && !showClipConfirm && handleRecordStart()}
+                onTouchStart={() => selectedMode === 'nominate' && handleRecordStart()}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-nominate-inner">
+                  <span className="nominate-text">Nominate</span>
+                </div>
+              </button>
+
+              <button
+                className={`create-record-btn ${selectedMode === 'record' ? 'active' : ''} ${selectedMode === 'party' ? 'far' : ''}`}
+                onClick={() => setSelectedMode('record')}
+                onMouseDown={() => selectedMode === 'record' && handleRecordStart()}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchStart={() => selectedMode === 'record' && handleRecordStart()}
                 onTouchEnd={handleRecordEnd}
               >
                 <div className="create-record-inner">
@@ -333,58 +363,84 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                   <span className="create-record-p">P</span>
                 </div>
               </button>
-            )
 
-            const NominateButton = (
               <button
-                key="nominate"
-                className={`create-nominate-btn ${selectedMode === 'nominate' ? 'active' : ''} ${isRecording ? 'recording' : ''}`}
-                onClick={() => !showClipConfirm && setSelectedMode('nominate')}
-                onMouseDown={() => selectedMode === 'nominate' && !showClipConfirm && handleRecordStart()}
+                className={`create-race-btn ${selectedMode === 'race' ? 'active' : ''} ${selectedMode === 'nominate' ? 'far' : ''}`}
+                onClick={() => setSelectedMode('race')}
+                onMouseDown={() => selectedMode === 'race' && handleRecordStart()}
                 onMouseUp={handleRecordEnd}
                 onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'nominate' && !showClipConfirm && handleRecordStart()}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-nominate-inner">
-                  <span className="nominate-text">Nominate</span>
-                </div>
-              </button>
-            )
-
-            const RaceButton = (
-              <button
-                key="race"
-                className={`create-race-btn ${selectedMode === 'race' ? 'active' : ''} ${isRecording ? 'recording' : ''}`}
-                onClick={() => !showClipConfirm && setSelectedMode('race')}
-                onMouseDown={() => selectedMode === 'race' && !showClipConfirm && handleRecordStart()}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'race' && !showClipConfirm && handleRecordStart()}
+                onTouchStart={() => selectedMode === 'race' && handleRecordStart()}
                 onTouchEnd={handleRecordEnd}
               >
                 <div className="create-race-inner">
                   <span className="race-text">Race</span>
                 </div>
               </button>
+
+              <button
+                className={`create-party-btn ${selectedMode === 'party' ? 'active' : ''} ${(selectedMode === 'nominate' || selectedMode === 'record') ? 'far' : ''}`}
+                onClick={() => setSelectedMode('party')}
+                onMouseDown={() => selectedMode === 'party' && handleRecordStart()}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchStart={() => selectedMode === 'party' && handleRecordStart()}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-party-inner">
+                  <span className="party-text">Party</span>
+                </div>
+              </button>
+            </div>
+          ) : (
+            /* Only show active button when recording or confirming - needs release handlers */
+            selectedMode === 'record' ? (
+              <button
+                className={`create-record-btn active ${isRecording ? 'recording' : ''}`}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-record-inner">
+                  <span className="create-record-c">C</span>
+                  <span className="create-record-p">P</span>
+                </div>
+              </button>
+            ) : selectedMode === 'nominate' ? (
+              <button
+                className={`create-nominate-btn active ${isRecording ? 'recording' : ''}`}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-nominate-inner">
+                  <span className="nominate-text">Nominate</span>
+                </div>
+              </button>
+            ) : selectedMode === 'race' ? (
+              <button
+                className={`create-race-btn active ${isRecording ? 'recording' : ''}`}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-race-inner">
+                  <span className="race-text">Race</span>
+                </div>
+              </button>
+            ) : (
+              <button
+                className={`create-party-btn active ${isRecording ? 'recording' : ''}`}
+                onMouseUp={handleRecordEnd}
+                onMouseLeave={handleRecordEnd}
+                onTouchEnd={handleRecordEnd}
+              >
+                <div className="create-party-inner">
+                  <span className="party-text">Party</span>
+                </div>
+              </button>
             )
-
-            // Only show active button when recording or confirming
-            if (isRecording || showClipConfirm) {
-              if (selectedMode === 'record') return RecordButton
-              if (selectedMode === 'nominate') return NominateButton
-              if (selectedMode === 'race') return RaceButton
-            }
-
-            // Order buttons so active is always in middle
-            if (selectedMode === 'record') {
-              return [NominateButton, RecordButton, RaceButton]
-            } else if (selectedMode === 'nominate') {
-              return [RecordButton, NominateButton, RaceButton]
-            } else if (selectedMode === 'race') {
-              return [RecordButton, RaceButton, NominateButton]
-            }
-          })()}
+          )}
 
           {/* Clip Confirm Actions */}
           {showClipConfirm && (
@@ -461,6 +517,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onPost={handlePost}
           isRaceMode={selectedMode === 'race'}
           raceName={raceName}
+          recordedVideoUrl={recordedVideoUrl}
+          isMirrored={recordedWithFrontCamera}
+        />
+      )}
+
+      {/* Party Creation Flow */}
+      {showPartyCreationFlow && (
+        <PartyCreationFlow
+          onClose={handleClosePartyCreationFlow}
+          onComplete={handlePartyCreated}
           recordedVideoUrl={recordedVideoUrl}
           isMirrored={recordedWithFrontCamera}
         />

@@ -67,6 +67,10 @@
   line-height: 20px;
   color: #777777;
   text-align: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
 .my-profile-optin-btn {

@@ -105,10 +105,10 @@ function PostScreen({ onClose, onPost, isRaceMode, raceName, recordedVideoUrl, i
             {targetRaces.map(race => (
               <button
                 key={race}
-                className={`post-tag ${selectedTarget === race ? 'active' : ''} ${isRaceMode ? 'race-mode' : ''}`}
+                className={`post-tag target ${selectedTarget === race ? 'active' : ''}`}
                 onClick={() => !isRaceMode && setSelectedTarget(selectedTarget === race ? null : race)}
               >
-                {isRaceMode && <span className="post-tag-dot"></span>}
+                {selectedTarget === race && <span className="post-tag-dot"></span>}
                 {race}
               </button>
             ))}

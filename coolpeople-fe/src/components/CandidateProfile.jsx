@@ -1163,7 +1163,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                             style={{ borderColor: videoPartyColor }}
                           />
                           <div className="activity-user-details">
-                            <span className="activity-party-tag" style={{ color: videoPartyColor }}>{video.user.party}</span>
+                            <span className="activity-party-tag">{video.user.party}</span>
                             <span className="activity-username">@{video.user.username}</span>
                           </div>
                         </div>

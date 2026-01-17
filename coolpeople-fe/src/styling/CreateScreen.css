@@ -171,8 +171,74 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 24px;
   position: relative;
+  width: 100%;
+}
+
+/* Buttons Track - slides to center active button */
+.create-buttons-track {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  transition: transform 0.3s ease;
+}
+
+/* Transform calculations to center active button:
+   - Gap: 24px, Inactive: 50px, Active: 85px
+   - Buttons order: Nominate, Record, Race, Party
+   - Track total width: 307px, center at 153.5px
+   - Shift = track center - button center
+*/
+
+/* Nominate active (1st): center at 42.5px, shift = 153.5 - 42.5 = 111px */
+.create-record-row.mode-nominate .create-buttons-track {
+  transform: translateX(111px);
+}
+
+/* Record active (2nd): center at 50 + 24 + 42.5 = 116.5px, shift = 153.5 - 116.5 = 37px */
+.create-record-row.mode-record .create-buttons-track {
+  transform: translateX(37px);
+}
+
+/* Race active (3rd): center at 50 + 24 + 50 + 24 + 42.5 = 190.5px, shift = 153.5 - 190.5 = -37px */
+.create-record-row.mode-race .create-buttons-track {
+  transform: translateX(-37px);
+}
+
+/* Party active (4th): center at 50 + 24 + 50 + 24 + 50 + 24 + 42.5 = 264.5px, shift = 153.5 - 264.5 = -111px */
+.create-record-row.mode-party .create-buttons-track {
+  transform: translateX(-111px);
+}
+
+/* Distance-based sizing: buttons 2+ slots away from active are smaller */
+.create-record-btn.far,
+.create-nominate-btn.far,
+.create-race-btn.far,
+.create-party-btn.far {
+  width: 40px;
+  height: 40px;
+}
+
+.create-record-btn.far .create-record-inner,
+.create-nominate-btn.far .create-nominate-inner,
+.create-race-btn.far .create-race-inner,
+.create-party-btn.far .create-party-inner {
+  width: 40px;
+  height: 40px;
+}
+
+.create-record-btn.far .create-record-c,
+.create-record-btn.far .create-record-p {
+  font-size: 16px;
+}
+
+.create-nominate-btn.far .nominate-text,
+.create-party-btn.far .party-text {
+  font-size: 7px;
+}
+
+.create-race-btn.far .race-text {
+  font-size: 8px;
 }
 
 /* Bottom Bar */
@@ -490,10 +556,20 @@
   background: none;
 }
 
-/* Confirm Mode - keeps active button centered */
+/* Confirm Mode - center button with actions to the right */
 .create-record-row.confirm-mode {
-  justify-content: flex-start;
-  padding-left: calc(50% - 42.5px);
+  justify-content: center;
+  position: relative;
+}
+
+.create-record-row.confirm-mode > button {
+  position: relative;
+  z-index: 1;
+}
+
+.create-record-row.confirm-mode .clip-inline-actions {
+  position: absolute;
+  left: calc(50% + 55px);
 }
 
 /* Clip Inline Actions */
@@ -537,4 +613,92 @@
 .clip-action-btn.confirm {
   background: linear-gradient(90deg, #00F2EA, #FF2A55);
   color: #fff;
+}
+
+/* Party Button - Same colorscheme as Nominate/CP */
+.create-party-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.create-party-btn.active {
+  width: 85px;
+  height: 85px;
+  border: 2px solid;
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.3),
+    inset 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.create-party-btn:active {
+  transform: scale(0.95);
+}
+
+.create-party-inner {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(
+    145deg,
+    #FFFFFF 0%,
+    #F8F8F8 20%,
+    #EEEEEE 40%,
+    #FFFFFF 50%,
+    #F8F8F8 60%,
+    #EEEEEE 80%,
+    #E5E5E5 100%
+  );
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 3px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.create-party-btn.active .create-party-inner {
+  width: 75px;
+  height: 75px;
+}
+
+.party-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 500;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-transform: capitalize;
+  transition: font-size 0.2s;
+}
+
+.create-party-btn.active .party-text {
+  font-size: 12px;
+}
+
+/* Party Recording State */
+.create-party-btn.recording {
+  animation: recording-pulse 1s ease-out infinite;
+}
+
+.create-party-btn.recording .create-party-inner {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+}
+
+.create-party-btn.recording .party-text {
+  -webkit-text-fill-color: #fff;
+  background: none;
 }

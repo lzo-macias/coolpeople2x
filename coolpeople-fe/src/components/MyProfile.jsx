@@ -25,9 +25,13 @@ const myProfileData = {
   ],
 }
 
-function MyProfile({ onPartyClick, onOptIn }) {
+function MyProfile({ onPartyClick, onOptIn, userParty }) {
   const [activeTab, setActiveTab] = useState('posts')
   const [showEditBio, setShowEditBio] = useState(false)
+
+  // Use user's created party if available, otherwise default to Independent
+  const currentParty = userParty ? userParty.name : myProfileData.party
+  const partyColor = userParty ? userParty.color : '#808080' // Independent is gray
 
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
@@ -44,7 +48,7 @@ function MyProfile({ onPartyClick, onOptIn }) {
           <div className="my-profile-left">
             <div
               className="my-profile-avatar-ring"
-              style={{ borderColor: myProfileData.party === 'Independent' ? '#000000' : '#FF2A55' }}
+              style={{ borderColor: partyColor }}
             >
               <img
                 src={myProfileData.avatar}
@@ -54,8 +58,14 @@ function MyProfile({ onPartyClick, onOptIn }) {
             </div>
             <div className="my-profile-info">
               <h2 className="my-profile-username">{myProfileData.username}</h2>
-              <span className="my-profile-party">{myProfileData.party}</span>
-              {!myProfileData.hasOptedIn && (
+              <button
+                className="my-profile-party"
+                onClick={() => userParty && onPartyClick?.(userParty.handle)}
+                style={{ cursor: userParty ? 'pointer' : 'default' }}
+              >
+                {currentParty}
+              </button>
+              {!myProfileData.hasOptedIn && !userParty && (
                 <button className="my-profile-optin-btn" onClick={onOptIn}>
                   opt in
                 </button>

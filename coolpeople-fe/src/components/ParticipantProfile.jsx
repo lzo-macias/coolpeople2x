@@ -94,7 +94,6 @@ function ParticipantProfile({
                 {hasParty ? (
                   <button
                     className="participant-party-btn"
-                    style={{ color: partyColor }}
                     onClick={() => onPartyClick?.(participant.party)}
                   >
                     {partyDisplay}

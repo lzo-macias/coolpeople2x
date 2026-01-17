@@ -34,6 +34,7 @@ function App() {
   const [isInConversation, setIsInConversation] = useState(false)
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
+  const [userParty, setUserParty] = useState(null) // User's created party
 
   // Navigation history stack
   const [navHistory, setNavHistory] = useState([])
@@ -297,6 +298,7 @@ function App() {
           <MyProfile
             onPartyClick={handleOpenPartyProfile}
             onOptIn={handleOptIn}
+            userParty={userParty}
           />
         </div>
       </div>
@@ -314,7 +316,13 @@ function App() {
       {/* Create Screen */}
       {showCreateScreen && (
         <div className="create-screen-container">
-          <CreateScreen onClose={() => setShowCreateScreen(false)} />
+          <CreateScreen
+            onClose={() => setShowCreateScreen(false)}
+            onPartyCreated={(partyData) => {
+              setUserParty(partyData)
+              setShowCreateScreen(false)
+            }}
+          />
         </div>
       )}
 
