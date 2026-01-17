@@ -11,7 +11,7 @@
 
 /* Video preview at top */
 .comments-video-preview {
-  background: #1a1a1a;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 100%);
   flex-shrink: 0;
   position: relative;
   cursor: pointer;
@@ -30,6 +30,7 @@
   background-position: center;
   position: relative;
   border-radius: 4px;
+  margin-top: 10px;
 }
 
 .cp-badge {
@@ -50,12 +51,14 @@
 .comments-container {
   flex: 1;
   overflow-y: auto;
-  background: #f5f5f5;
+  background: linear-gradient(180deg, #171717 0%, #0f0f0f 100%);
+  display: flex;
+  flex-direction: column;
 }
 
 .cp-comments-section,
 .regular-comments-section {
-  background: #ffffff;
+  background: transparent;
 }
 
 .cp-comments-section {
@@ -72,7 +75,8 @@
   right: 16px;
   font-size: 11px;
   font-weight: 500;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
+  /* background: linear-gradient(90deg, var(--accent-pink), var(--accent-cyan)); */
+  background: #777777;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -87,18 +91,23 @@
 .cp-divider {
   padding: 8px 16px;
   cursor: pointer;
-  background: #ffffff;
+  background: transparent;
   transition: all 0.3s ease;
 }
 
 .cp-divider:hover {
-  background: #FFFF;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cp-divider-bottom {
+  margin-top: auto;
 }
 
 .cp-divider-line {
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
-  border-radius: 2px;
+  height: 2px;
+  background: linear-gradient(90deg, #FF2A55, #00F2EA);
+  border: none;
+  border-radius: 1px;
   position: relative;
   display: flex;
   align-items: center;
@@ -110,27 +119,29 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #fafafa, #d4d4d4);
-  box-shadow:
-    2px 2px 5px rgba(0, 0, 0, 0.12),
-    -2px -2px 5px rgba(255, 255, 255, 0.9),
-    inset 1px 1px 2px rgba(255, 255, 255, 0.7),
-    inset -1px -1px 2px rgba(0, 0, 0, 0.08);
+  background: #1a1a1a;
+  border: 2px solid #333;
+  box-shadow: 0 0 0 8px #131313;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .cp-divider-text {
-  font-size: 10px;
+  font-size: 9px;
+  line-height: 10px;
   font-weight: 700;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+}
+
+.cp-divider-text .cp-c {
+  color: #FF2A55;
+}
+
+.cp-divider-text .cp-p {
+  color: #00F2EA;
 }
 
 /* Comment input */
@@ -139,8 +150,8 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #ffffff;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  background: #0f0f0f;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
@@ -156,55 +167,69 @@
   border: none;
   background: none;
   font-size: 14px;
-  color: #333;
+  color: #ffffff;
   outline: none;
 }
 
 .comment-input::placeholder {
-  color: #999;
-}
-
-.input-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.input-action-btn {
-  background: none;
-  border: none;
   color: #666;
+}
+
+.send-btn {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: #333 !important;
+  color: #666 !important;
   cursor: pointer;
-  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  flex-grow: 0;
+  padding: 0;
 }
 
-.input-action-btn:hover {
-  color: #333;
+.send-btn.active {
+  background: #FF2A55 !important;
+  color: #ffffff !important;
 }
 
-/* Override comment styles for light background */
+.send-btn.active:hover {
+  transform: scale(1.05);
+}
+
+.send-arrow {
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Override comment styles for dark background */
 .comments-section .comment {
-  background: #ffffff;
+  background: transparent;
 }
 
 .comments-section .comment-username {
-  color: #333;
+  color: #ffffff;
 }
 
 .comments-section .comment-text {
-  color: #333;
+  color: #e0e0e0;
 }
 
 .comments-section .comment-action-btn {
-  color: #666;
+  color: #888;
 }
 
 .comments-section .comment-action-btn:hover {
-  color: #333;
+  color: #ffffff;
 }
 
 .comments-section .comment-likes {
-  color: #666;
+  color: #888;
 }

@@ -2,7 +2,6 @@
   display: flex;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .comment-avatar {
@@ -40,8 +39,8 @@
 
 .comment-username-btn {
   font-size: 14px;
-  font-weight: 500;
-  color: black;
+  font-weight: 600;
+  color: #ffffff;
   background: none;
   border: none;
   padding: 0;
@@ -63,7 +62,7 @@
 .comment-party-btn {
   font-size: 13px;
   font-weight: 500;
-  color: #777777;
+  color: #999999;
   background: none;
   border: none;
   padding: 0;
@@ -128,7 +127,7 @@
 }
 
 .like-btn:hover {
-  color: #ff6b9d;
+  color: #FF2A55;
 }
 
 .like-btn:active {
@@ -152,4 +151,131 @@
 /* CP Comment highlight */
 .cp-comment {
   position: relative;
+}
+
+/* Replies list */
+.replies-list {
+  margin-top: 12px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.reply-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--accent-cyan);
+}
+
+.reply-content {
+  flex: 1;
+}
+
+.reply-username {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  margin-right: 6px;
+}
+
+.reply-text {
+  font-size: 12px;
+  color: #ccc;
+}
+
+.reply-actions {
+  margin-top: 4px;
+}
+
+.reply-action-btn {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reply-action-btn:hover {
+  color: #999;
+}
+
+/* Paywall modal */
+.paywall-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.paywall-modal {
+  background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
+  border-radius: 16px;
+  padding: 32px 24px;
+  max-width: 300px;
+  text-align: center;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.paywall-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.paywall-close:hover {
+  color: #fff;
+}
+
+.paywall-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.paywall-title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.paywall-text {
+  color: #999;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.paywall-btn {
+  background: linear-gradient(135deg, #FF2A55, #00d4d4);
+  border: none;
+  border-radius: 24px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 32px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.paywall-btn:hover {
+  transform: scale(1.05);
 }

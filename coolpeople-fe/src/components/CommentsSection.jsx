@@ -1,20 +1,81 @@
 import { useState, useRef } from 'react'
 import '../styling/CommentsSection.css'
 import Comment from './Comment'
-import EngagementScoreBar from './EngagementScoreBar'
 import { mockComments } from '../data/mockData'
 
-// CP divider states: 'expanded' (show all CP), 'collapsed' (show 1 CP), 'hidden' (divider at bottom)
-const DIVIDER_STATES = ['expanded', 'collapsed', 'hidden']
-
 function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
-  const [dividerState, setDividerState] = useState('expanded')
+  const [dividerAtBottom, setDividerAtBottom] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [showPaywall, setShowPaywall] = useState(false)
   const dragStartY = useRef(0)
+  const inputRef = useRef(null)
+  const commentsContainerRef = useRef(null)
 
-  const comments = mockComments['reel-1'] || { cpComments: [], regularComments: [] }
+  const baseComments = mockComments['reel-1'] || { cpComments: [], regularComments: [] }
+  const [userComments, setUserComments] = useState([])
+  const [commentReplies, setCommentReplies] = useState({})
+  const [replyingTo, setReplyingTo] = useState(null) // { commentId, username }
+
+  const handleReply = (commentId, username) => {
+    setReplyingTo({ commentId, username })
+    setCommentText(`@${username} `)
+    inputRef.current?.focus()
+  }
+
+  const handleSendComment = () => {
+    if (commentText.trim()) {
+      const newId = `user-${Date.now()}`
+
+      if (replyingTo) {
+        // Adding a reply to a comment
+        const newReply = {
+          id: newId,
+          username: 'You',
+          avatar: 'https://i.pravatar.cc/40?img=20',
+          text: commentText,
+          likes: 0,
+          party: 'Independent'
+        }
+        setCommentReplies(prev => ({
+          ...prev,
+          [replyingTo.commentId]: [...(prev[replyingTo.commentId] || []), newReply]
+        }))
+        setReplyingTo(null)
+
+        // Scroll to the reply after a brief delay
+        setTimeout(() => {
+          const replyElement = document.getElementById(newId)
+          replyElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      } else {
+        // Adding a new top-level comment
+        const newComment = {
+          id: newId,
+          username: 'You',
+          avatar: 'https://i.pravatar.cc/40?img=20',
+          text: commentText,
+          likes: 0,
+          party: 'Independent',
+          profileType: 'participant'
+        }
+        setUserComments([...userComments, newComment])
+
+        // Scroll to the new comment
+        setTimeout(() => {
+          const commentElement = document.getElementById(newId)
+          commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      }
+      setCommentText('')
+    }
+  }
+
+  const comments = {
+    cpComments: baseComments.cpComments,
+    regularComments: [...baseComments.regularComments, ...userComments]
+  }
 
   // Handle drag to close
   const handleTouchStart = (e) => {
@@ -62,16 +123,8 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
   }
 
   const handleDividerClick = () => {
-    const currentIndex = DIVIDER_STATES.indexOf(dividerState)
-    const nextIndex = (currentIndex + 1) % DIVIDER_STATES.length
-    setDividerState(DIVIDER_STATES[nextIndex])
+    setDividerAtBottom(!dividerAtBottom)
   }
-
-  const visibleCPComments = dividerState === 'expanded'
-    ? comments.cpComments
-    : dividerState === 'collapsed'
-      ? comments.cpComments.slice(0, 1)
-      : []
 
   return (
     <div
@@ -86,7 +139,6 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
     >
       {/* Video preview - click to close */}
       <div className="comments-video-preview" onClick={onClose}>
-        <EngagementScoreBar scores={reel?.engagementScores} />
         <div
           className="video-thumbnail"
           style={{ backgroundImage: `url(${reel?.thumbnail})` }}
@@ -96,47 +148,64 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
       </div>
 
       {/* Comments container */}
-      <div className="comments-container">
-        {/* CP Comments section */}
-        {dividerState !== 'hidden' && (
-          <div className="cp-comments-section">
-            {visibleCPComments.map((comment, index) => (
-              <div key={comment.id} className="cp-comment-wrapper">
-                <Comment
-                  comment={comment}
-                  isCP={true}
-                  onUsernameClick={onUsernameClick}
-                  onPartyClick={onPartyClick}
-                />
-                {index === visibleCPComments.length - 1 && (
-                  <span className="leave-verified-comment">leave a verified comment</span>
-                )}
-              </div>
+      <div className="comments-container" ref={commentsContainerRef}>
+        {/* CP Comments section - always show */}
+        <div className="cp-comments-section">
+          {comments.cpComments.map((comment, index) => (
+            <div key={comment.id} className="cp-comment-wrapper">
+              <Comment
+                comment={comment}
+                isCP={true}
+                onUsernameClick={onUsernameClick}
+                onPartyClick={onPartyClick}
+                onReply={handleReply}
+                userReplies={commentReplies[comment.id] || []}
+              />
+              {index === comments.cpComments.length - 1 && (
+                <span className="leave-verified-comment" onClick={() => setShowPaywall(true)}>leave a verified comment</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* CP Divider - gradient line (at top position) */}
+        {!dividerAtBottom && (
+          <div className="cp-divider" onClick={handleDividerClick}>
+            <div className="cp-divider-line">
+              <span className="cp-divider-text-bg">
+                <span className="cp-divider-text"><span className="cp-c">C</span><span className="cp-p">P</span></span>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Regular comments - only show when divider is at top */}
+        {!dividerAtBottom && (
+          <div className="regular-comments-section">
+            {comments.regularComments.map((comment) => (
+              <Comment
+                key={comment.id}
+                comment={comment}
+                isCP={false}
+                onUsernameClick={onUsernameClick}
+                onPartyClick={onPartyClick}
+                onReply={handleReply}
+                userReplies={commentReplies[comment.id] || []}
+              />
             ))}
           </div>
         )}
 
-        {/* CP Divider - gradient line */}
-        <div className="cp-divider" onClick={handleDividerClick}>
-          <div className="cp-divider-line">
-            <span className="cp-divider-text-bg">
-              <span className="cp-divider-text">CP</span>
-            </span>
+        {/* CP Divider at bottom when toggled */}
+        {dividerAtBottom && (
+          <div className="cp-divider cp-divider-bottom" onClick={handleDividerClick}>
+            <div className="cp-divider-line">
+              <span className="cp-divider-text-bg">
+                <span className="cp-divider-text"><span className="cp-c">C</span><span className="cp-p">P</span></span>
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Regular comments */}
-        <div className="regular-comments-section">
-          {comments.regularComments.map((comment) => (
-            <Comment
-              key={comment.id}
-              comment={comment}
-              isCP={false}
-              onUsernameClick={onUsernameClick}
-              onPartyClick={onPartyClick}
-            />
-          ))}
-        </div>
+        )}
       </div>
 
       {/* Comment input */}
@@ -147,36 +216,38 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           className="input-avatar"
         />
         <input
+          ref={inputRef}
           type="text"
           placeholder="add a comment"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSendComment()
+          }}
           className="comment-input"
         />
-        <div className="input-actions">
-          <button className="input-action-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-          </button>
-          <button className="input-action-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-              <line x1="9" y1="9" x2="9.01" y2="9" strokeWidth="2" />
-              <line x1="15" y1="9" x2="15.01" y2="9" strokeWidth="2" />
-            </svg>
-          </button>
-          <button className="input-action-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-            </svg>
-          </button>
-        </div>
+        <button
+          className={`send-btn ${commentText.trim() ? 'active' : ''}`}
+          onClick={handleSendComment}
+        >
+          <span className="send-arrow">↑</span>
+        </button>
       </div>
+
+      {/* Paywall modal */}
+      {showPaywall && (
+        <div className="paywall-overlay" onClick={() => setShowPaywall(false)}>
+          <div className="paywall-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="paywall-close" onClick={() => setShowPaywall(false)}>×</button>
+            <div className="paywall-icon">🔒</div>
+            <h3 className="paywall-title">Verified Comments</h3>
+            <p className="paywall-text">
+              Leaving verified comments is a premium feature. Upgrade to join the conversation with verified users.
+            </p>
+            <button className="paywall-btn">Upgrade Now</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
