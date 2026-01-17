@@ -36,6 +36,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [showPostScreen, setShowPostScreen] = useState(false)
   const [showPartyCreationFlow, setShowPartyCreationFlow] = useState(false)
   const [raceName, setRaceName] = useState('')
+  const [raceDeadline, setRaceDeadline] = useState(null)
   const [facingMode, setFacingMode] = useState('user') // 'user' = front, 'environment' = back
   const [cameraError, setCameraError] = useState(null)
   const durations = ['10m', '60s', '15s', 'PHOTO']
@@ -50,13 +51,27 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [customContactNames, setCustomContactNames] = useState({})
   const [phoneNumber, setPhoneNumber] = useState('')
 
+  // Text overlays (shared between EditClipScreen and PostScreen)
+  const [textOverlays, setTextOverlays] = useState([])
+
   // Refs
   const videoRef = useRef(null)
+  const selfieVideoRef = useRef(null)
   const streamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null)
   const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
+
+  // Sync selfie video with main video
+  const syncSelfieVideo = () => {
+    if (videoRef.current && selfieVideoRef.current && recordedVideoUrl) {
+      const timeDiff = Math.abs(videoRef.current.currentTime - selfieVideoRef.current.currentTime)
+      if (timeDiff > 0.05) {
+        selfieVideoRef.current.currentTime = videoRef.current.currentTime
+      }
+    }
+  }
 
   // Swipe handling for duration selector
   const touchStartX = useRef(0)
@@ -121,11 +136,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
   // Re-attach stream to video element when switching back to live mode
   useEffect(() => {
-    const isShowingLive = !showClipConfirm || !recordedVideoUrl
-    if (isShowingLive && videoRef.current && streamRef.current) {
+    // Only attach live stream when there's no recorded video
+    if (!recordedVideoUrl && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current
     }
-  }, [showClipConfirm, recordedVideoUrl])
+  }, [recordedVideoUrl])
 
   // Recording handlers
   const handleRecordStart = () => {
@@ -193,7 +208,27 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   }
 
   const handleCloseEditClipScreen = () => {
+    // Reset everything back to beginning
     setShowEditClipScreen(false)
+
+    // Clear recorded video
+    if (recordedVideoUrl) {
+      URL.revokeObjectURL(recordedVideoUrl)
+      setRecordedVideoUrl(null)
+    }
+
+    // Reset nominate mode state
+    setSelectedTag(null)
+    setTextOverlays([])
+    setShowClipConfirm(false)
+    setShowTagFlow(false)
+
+    // Re-attach camera stream
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+    }, 50)
   }
 
   const handleNextFromEditClip = () => {
@@ -238,7 +273,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
   // Tag flow handlers
   const handleSelectTag = (user) => {
-    setSelectedTag(user)
+    // Toggle selection - clicking selected user deselects them
+    if (selectedTag?.id === user.id) {
+      setSelectedTag(null)
+    } else {
+      setSelectedTag(user)
+    }
     setTagQuery('')
     setPhoneNumber('')
   }
@@ -322,15 +362,17 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     <div className="create-screen">
       {/* Camera Preview */}
       <div className="create-camera-preview">
-        {showClipConfirm && recordedVideoUrl ? (
+        {recordedVideoUrl ? (
           <video
             key="recorded"
+            ref={videoRef}
             src={recordedVideoUrl}
             className={`create-preview-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
             autoPlay
             loop
             muted
             playsInline
+            onTimeUpdate={syncSelfieVideo}
             onLoadedData={() => console.log('Recorded video loaded successfully')}
             onError={(e) => console.error('Recorded video error:', e)}
           />
@@ -352,37 +394,25 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         )}
       </div>
 
-      {/* Selfie Cam - Top Left when Nominate is active */}
-      {selectedMode === 'nominate' && showSelfieCam && !showTagFlow && (
+      {/* Selfie Cam - Live feed during recording phase (before we have recorded video) */}
+      {selectedMode === 'nominate' && showSelfieCam && !recordedVideoUrl && !showTagFlow && (
         <div className={`create-selfie-cam ${isRecording ? 'recording' : ''}`}>
           <button className="selfie-cam-remove" onClick={() => setShowSelfieCam(false)}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
-          {/* Show recorded video when confirming, live feed otherwise */}
-          {showClipConfirm && recordedVideoUrl ? (
-            <video
-              className={`selfie-cam-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
-              src={recordedVideoUrl}
-              autoPlay
-              loop
-              muted
-              playsInline
-            />
-          ) : (
-            <video
-              className="selfie-cam-video mirrored"
-              autoPlay
-              muted
-              playsInline
-              ref={(el) => {
-                if (el && streamRef.current) {
-                  el.srcObject = streamRef.current
-                }
-              }}
-            />
-          )}
+          <video
+            className="selfie-cam-video mirrored"
+            autoPlay
+            muted
+            playsInline
+            ref={(el) => {
+              if (el && streamRef.current) {
+                el.srcObject = streamRef.current
+              }
+            }}
+          />
           {isRecording && <div className="selfie-cam-recording-dot" />}
         </div>
       )}
@@ -768,12 +798,19 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           selectedSound={selectedSound}
           onSelectSound={setSelectedSound}
           isRaceMode={selectedMode === 'race'}
+          isNominateMode={selectedMode === 'nominate'}
           raceName={raceName}
           onRaceNameChange={setRaceName}
+          raceDeadline={raceDeadline}
+          onRaceDeadlineChange={setRaceDeadline}
           recordedVideoUrl={recordedVideoUrl}
           isMirrored={recordedWithFrontCamera}
           isConversationMode={isConversationMode}
           conversationUser={conversationUser}
+          taggedUser={selectedTag}
+          getContactDisplayName={getContactDisplayName}
+          textOverlays={textOverlays}
+          setTextOverlays={setTextOverlays}
           onSend={(recipients) => {
             console.log('Sending to:', recipients)
             onSendToConversation?.(recordedVideoUrl)
@@ -787,9 +824,15 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onClose={handleClosePostScreen}
           onPost={handlePost}
           isRaceMode={selectedMode === 'race'}
+          isNominateMode={selectedMode === 'nominate'}
           raceName={raceName}
+          raceDeadline={raceDeadline}
           recordedVideoUrl={recordedVideoUrl}
           isMirrored={recordedWithFrontCamera}
+          showSelfieCam={showSelfieCam}
+          taggedUser={selectedTag}
+          getContactDisplayName={getContactDisplayName}
+          textOverlays={textOverlays}
         />
       )}
 
@@ -801,6 +844,26 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           recordedVideoUrl={recordedVideoUrl}
           isMirrored={recordedWithFrontCamera}
         />
+      )}
+
+      {/* Selfie Cam - Rendered last to appear on top of all screens (hidden during tag flow and post screen) */}
+      {selectedMode === 'nominate' && showSelfieCam && recordedVideoUrl && !showTagFlow && !showPostScreen && (
+        <div className={`create-selfie-cam ${isRecording ? 'recording' : ''}`}>
+          <button className="selfie-cam-remove" onClick={() => setShowSelfieCam(false)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <video
+            ref={selfieVideoRef}
+            className={`selfie-cam-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
+            src={recordedVideoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        </div>
       )}
 
     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelCard.css'
 import ReelActions from './ReelActions'
@@ -190,6 +190,41 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
   const [raceFollowed, setRaceFollowed] = useState(false)
   const [raceParticipating, setRaceParticipating] = useState(false)
 
+  // Mock race deadline (290 days from now for demo)
+  const [raceDeadline] = useState(() => {
+    const deadline = new Date()
+    deadline.setDate(deadline.getDate() + 290)
+    deadline.setHours(deadline.getHours() + 1)
+    deadline.setMinutes(deadline.getMinutes() + 15)
+    return deadline
+  })
+
+  // Live countdown state
+  const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+
+  // Update countdown every second
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const now = new Date()
+      const diff = raceDeadline - now
+      if (diff <= 0) {
+        return { days: 0, hours: 0, minutes: 0, seconds: 0 }
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+      return { days, hours, minutes, seconds }
+    }
+
+    setTimeRemaining(calculateTimeRemaining())
+    const interval = setInterval(() => {
+      setTimeRemaining(calculateTimeRemaining())
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [raceDeadline])
+
   // Main nominate button flow state
   const [showNominateRaceSelect, setShowNominateRaceSelect] = useState(false)
   const [showNominateOptions, setShowNominateOptions] = useState(false)
@@ -330,6 +365,30 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
           <div className="race-modal-backdrop" onClick={() => setShowRaceModal(false)} />
           <div className="race-modal">
             <div className="race-modal-handle" />
+
+            {/* Countdown Timer */}
+            <div className="race-countdown">
+              <div className="countdown-segment">
+                <span className="segment-value">{timeRemaining.days}</span>
+                <span className="segment-label">Day(s)</span>
+              </div>
+              <span className="countdown-colon">:</span>
+              <div className="countdown-segment">
+                <span className="segment-value">{String(timeRemaining.hours).padStart(2, '0')}</span>
+                <span className="segment-label">Hour(s)</span>
+              </div>
+              <span className="countdown-colon">:</span>
+              <div className="countdown-segment">
+                <span className="segment-value">{String(timeRemaining.minutes).padStart(2, '0')}</span>
+                <span className="segment-label">Minute(s)</span>
+              </div>
+              <span className="countdown-colon">:</span>
+              <div className="countdown-segment">
+                <span className="segment-value">{String(timeRemaining.seconds).padStart(2, '0')}</span>
+                <span className="segment-label">Second(s)</span>
+              </div>
+            </div>
+
             <div className="race-modal-header">
               <div className="race-modal-title-row">
                 <h2 className="race-modal-title">{data.targetRace}</h2>

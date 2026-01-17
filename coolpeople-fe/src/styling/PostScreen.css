@@ -79,6 +79,65 @@
   bottom: 16px;
 }
 
+/* Selfie Cam inside preview */
+.post-selfie-cam {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 45px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.post-selfie-cam video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Tag display inside preview */
+.post-tag-display {
+  position: absolute;
+  bottom: 50px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.post-tag-at {
+  font-size: 12px;
+  font-weight: 700;
+  color: #00F2EA;
+}
+
+.post-tag-name {
+  font-size: 12px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #00F2EA 0%, #FF2A55 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Text overlays inside preview */
+.post-text-overlay {
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-text-content {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  white-space: pre-wrap;
+}
+
 /* Text Inputs */
 .post-text-inputs {
   margin-bottom: 24px;
@@ -335,4 +394,32 @@
 .post-submit-btn:active {
   transform: scale(0.98);
   opacity: 0.9;
+}
+
+/* Race Pill inside preview */
+.post-race-pill {
+  position: absolute;
+  bottom: 50px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(145deg, rgba(61, 42, 26, 0.9) 0%, rgba(42, 31, 15, 0.9) 100%);
+  border: 1px dashed rgba(232, 168, 85, 0.5);
+  border-radius: 20px;
+}
+
+.post-race-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #F5D98A 0%, #E8A855 100%);
+  box-shadow: 0 0 4px rgba(232, 168, 85, 0.5);
+}
+
+.post-race-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #E8A855;
 }

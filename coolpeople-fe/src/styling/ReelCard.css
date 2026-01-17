@@ -287,6 +287,46 @@
   margin: 0 auto 16px;
 }
 
+/* Race Countdown Timer */
+.race-countdown {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.countdown-segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 50px;
+}
+
+.countdown-segment .segment-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #E8A855;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-segment .segment-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(232, 168, 85, 0.7);
+  margin-top: 6px;
+}
+
+.countdown-colon {
+  font-size: 32px;
+  font-weight: 700;
+  color: #E8A855;
+  line-height: 1;
+  margin-top: 2px;
+}
+
 .race-modal-header {
   margin-bottom: 12px;
 }
@@ -436,7 +476,7 @@
 
 .race-contestant-nominations {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(232, 168, 85, 0.7);
 }
 
 .race-contestant-stats {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost, isRaceMode, raceName, recordedVideoUrl, isMirrored }) {
+function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays }) {
   const [title, setTitle] = useState('')
   const [caption, setCaption] = useState('')
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
@@ -71,6 +71,53 @@ function PostScreen({ onClose, onPost, isRaceMode, raceName, recordedVideoUrl, i
               alt="Video preview"
             />
           )}
+
+          {/* Selfie Cam inside preview - for nominate mode */}
+          {isNominateMode && showSelfieCam && recordedVideoUrl && (
+            <div className="post-selfie-cam">
+              <video
+                src={recordedVideoUrl}
+                className={isMirrored ? 'mirrored' : ''}
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            </div>
+          )}
+
+          {/* Tagged User inside preview */}
+          {isNominateMode && taggedUser && (
+            <div className="post-tag-display">
+              <span className="post-tag-at">@</span>
+              <span className="post-tag-name">
+                {taggedUser.username || (getContactDisplayName ? getContactDisplayName(taggedUser) : taggedUser.phone)}
+              </span>
+            </div>
+          )}
+
+          {/* Text Overlays inside preview */}
+          {textOverlays && textOverlays.map(textItem => (
+            <div
+              key={textItem.id}
+              className="post-text-overlay"
+              style={{
+                left: `${(textItem.x / 400) * 100}%`,
+                top: `${(textItem.y / 700) * 100}%`
+              }}
+            >
+              <span className="post-text-content">{textItem.text}</span>
+            </div>
+          ))}
+
+          {/* Race Pill inside preview */}
+          {isRaceMode && raceName && (
+            <div className="post-race-pill">
+              <span className="post-race-dot"></span>
+              <span className="post-race-name">{raceName}</span>
+            </div>
+          )}
+
           <button className="post-edit-cover-btn">Edit Cover</button>
           <button className="post-edit-video-btn">Edit Video</button>
         </div>
