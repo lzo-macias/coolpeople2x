@@ -5,6 +5,26 @@ import PostScreen from './PostScreen'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/CreateScreen.css'
 
+// Mock platform users for tagging
+const mockPlatformUsers = [
+  { id: 1, username: 'angelrivas', name: 'Angel Rivas', avatar: 'https://i.pravatar.cc/100?img=1', isOnPlatform: true },
+  { id: 2, username: 'maya.creates', name: 'Maya Johnson', avatar: 'https://i.pravatar.cc/100?img=5', isOnPlatform: true },
+  { id: 3, username: 'jordan_photo', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=8', isOnPlatform: true },
+  { id: 4, username: 'alex.design', name: 'Alex Chen', avatar: 'https://i.pravatar.cc/100?img=11', isOnPlatform: true },
+  { id: 5, username: 'sam_music', name: 'Sam Williams', avatar: 'https://i.pravatar.cc/100?img=15', isOnPlatform: true },
+  { id: 6, username: 'taylor.art', name: 'Taylor Brown', avatar: 'https://i.pravatar.cc/100?img=20', isOnPlatform: true },
+]
+
+// Mock phone contacts
+const mockContacts = [
+  { id: 101, phone: '+1 (555) 123-4567', name: 'Mom', isOnPlatform: false },
+  { id: 102, phone: '+1 (555) 234-5678', name: 'David Martinez', isOnPlatform: false },
+  { id: 103, phone: '+1 (555) 345-6789', name: null, isOnPlatform: false },
+  { id: 104, phone: '+1 (555) 456-7890', name: 'Sarah K', isOnPlatform: false },
+  { id: 105, phone: '+1 (555) 567-8901', name: null, isOnPlatform: false },
+  { id: 106, phone: '+1 (555) 678-9012', name: 'Work - John', isOnPlatform: false },
+]
+
 function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated }) {
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
@@ -19,6 +39,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [facingMode, setFacingMode] = useState('user') // 'user' = front, 'environment' = back
   const [cameraError, setCameraError] = useState(null)
   const durations = ['10m', '60s', '15s', 'PHOTO']
+
+  // Nominate mode specific state
+  const [showSelfieCam, setShowSelfieCam] = useState(true)
+  const [showTagFlow, setShowTagFlow] = useState(false)
+  const [tagQuery, setTagQuery] = useState('')
+  const [tagSource, setTagSource] = useState('platform') // 'platform', 'contacts', or 'phone'
+  const [selectedTag, setSelectedTag] = useState(null)
+  const [editingContactName, setEditingContactName] = useState(null)
+  const [customContactNames, setCustomContactNames] = useState({})
+  const [phoneNumber, setPhoneNumber] = useState('')
 
   // Refs
   const videoRef = useRef(null)
@@ -154,6 +184,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowClipConfirm(false)
     if (selectedMode === 'party') {
       setShowPartyCreationFlow(true)
+    } else if (selectedMode === 'nominate') {
+      // Show tag flow for nominate mode
+      setShowTagFlow(true)
     } else {
       setShowEditClipScreen(true)
     }
@@ -202,6 +235,64 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       }
     }, 50)
   }
+
+  // Tag flow handlers
+  const handleSelectTag = (user) => {
+    setSelectedTag(user)
+    setTagQuery('')
+    setPhoneNumber('')
+  }
+
+  const handleConfirmTag = () => {
+    // If using phone number, create a phone invite tag
+    if (tagSource === 'phone' && phoneNumber.trim()) {
+      setSelectedTag({
+        id: `phone-${Date.now()}`,
+        phone: phoneNumber.trim(),
+        name: null,
+        isOnPlatform: false,
+        isPhoneInvite: true
+      })
+    }
+    setShowTagFlow(false)
+    setShowEditClipScreen(true)
+  }
+
+  const handleSkipTag = () => {
+    setSelectedTag(null)
+    setShowTagFlow(false)
+    setShowEditClipScreen(true)
+  }
+
+  const handleSaveContactName = (contactId, newName) => {
+    setCustomContactNames(prev => ({ ...prev, [contactId]: newName }))
+    setEditingContactName(null)
+  }
+
+  const getFilteredUsers = () => {
+    const query = tagQuery.toLowerCase()
+    if (tagSource === 'platform') {
+      return mockPlatformUsers.filter(user =>
+        user.username.toLowerCase().includes(query) ||
+        user.name.toLowerCase().includes(query)
+      )
+    } else if (tagSource === 'contacts') {
+      return mockContacts.filter(contact => {
+        const displayName = customContactNames[contact.id] || contact.name || contact.phone
+        return displayName.toLowerCase().includes(query)
+      })
+    }
+    return []
+  }
+
+  const getContactDisplayName = (contact) => {
+    return customContactNames[contact.id] || contact.name || contact.phone
+  }
+
+  const filteredUsers = getFilteredUsers()
+
+  // Check if can continue (has selection or valid phone)
+  const canContinueTag = selectedTag || (tagSource === 'phone' && phoneNumber.trim().length >= 10)
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX
@@ -261,6 +352,41 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         )}
       </div>
 
+      {/* Selfie Cam - Top Left when Nominate is active */}
+      {selectedMode === 'nominate' && showSelfieCam && !showTagFlow && (
+        <div className={`create-selfie-cam ${isRecording ? 'recording' : ''}`}>
+          <button className="selfie-cam-remove" onClick={() => setShowSelfieCam(false)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          {/* Show recorded video when confirming, live feed otherwise */}
+          {showClipConfirm && recordedVideoUrl ? (
+            <video
+              className={`selfie-cam-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
+              src={recordedVideoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : (
+            <video
+              className="selfie-cam-video mirrored"
+              autoPlay
+              muted
+              playsInline
+              ref={(el) => {
+                if (el && streamRef.current) {
+                  el.srcObject = streamRef.current
+                }
+              }}
+            />
+          )}
+          {isRecording && <div className="selfie-cam-recording-dot" />}
+        </div>
+      )}
+
       {/* Top Controls */}
       <div className="create-top-controls">
         <button className="create-close-btn" onClick={showClipConfirm ? handleDeleteClip : onClose}>
@@ -308,178 +434,323 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       </div>
 
       {/* Bottom Controls */}
-      <div
-        className="create-bottom-controls"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* Duration Selector */}
-        {!isRecording && !showClipConfirm && (
-          <div className="create-duration-selector">
-            {durations.map((duration) => (
-              <button
-                key={duration}
-                className={`create-duration-btn ${selectedDuration === duration ? 'active' : ''}`}
-                onClick={() => setSelectedDuration(duration)}
-              >
-                {duration}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Record Button Row */}
-        <div className={`create-record-row ${showClipConfirm ? 'confirm-mode' : ''} mode-${selectedMode}`}>
-          {/* Buttons always in fixed order, CSS handles centering active one */}
-          {/* Distance from active: 2+ slots away = "far" class for smaller size */}
-          {!(isRecording || showClipConfirm) ? (
-            <div className="create-buttons-track">
-              <button
-                className={`create-nominate-btn ${selectedMode === 'nominate' ? 'active' : ''} ${(selectedMode === 'race' || selectedMode === 'party') ? 'far' : ''}`}
-                onClick={() => setSelectedMode('nominate')}
-                onMouseDown={() => selectedMode === 'nominate' && handleRecordStart()}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'nominate' && handleRecordStart()}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-nominate-inner">
-                  <span className="nominate-text">Nominate</span>
-                </div>
-              </button>
-
-              <button
-                className={`create-record-btn ${selectedMode === 'record' ? 'active' : ''} ${selectedMode === 'party' ? 'far' : ''}`}
-                onClick={() => setSelectedMode('record')}
-                onMouseDown={() => selectedMode === 'record' && handleRecordStart()}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'record' && handleRecordStart()}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-record-inner">
-                  <span className="create-record-c">C</span>
-                  <span className="create-record-p">P</span>
-                </div>
-              </button>
-
-              <button
-                className={`create-race-btn ${selectedMode === 'race' ? 'active' : ''} ${selectedMode === 'nominate' ? 'far' : ''}`}
-                onClick={() => setSelectedMode('race')}
-                onMouseDown={() => selectedMode === 'race' && handleRecordStart()}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'race' && handleRecordStart()}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-race-inner">
-                  <span className="race-text">Race</span>
-                </div>
-              </button>
-
-              <button
-                className={`create-party-btn ${selectedMode === 'party' ? 'active' : ''} ${(selectedMode === 'nominate' || selectedMode === 'record') ? 'far' : ''}`}
-                onClick={() => setSelectedMode('party')}
-                onMouseDown={() => selectedMode === 'party' && handleRecordStart()}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={() => selectedMode === 'party' && handleRecordStart()}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-party-inner">
-                  <span className="party-text">Party</span>
-                </div>
-              </button>
+      {!showTagFlow && (
+        <div
+          className="create-bottom-controls"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Duration Selector */}
+          {!isRecording && !showClipConfirm && (
+            <div className="create-duration-selector">
+              {durations.map((duration) => (
+                <button
+                  key={duration}
+                  className={`create-duration-btn ${selectedDuration === duration ? 'active' : ''}`}
+                  onClick={() => setSelectedDuration(duration)}
+                >
+                  {duration}
+                </button>
+              ))}
             </div>
-          ) : (
-            /* Only show active button when recording or confirming - needs release handlers */
-            selectedMode === 'record' ? (
-              <button
-                className={`create-record-btn active ${isRecording ? 'recording' : ''}`}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-record-inner">
-                  <span className="create-record-c">C</span>
-                  <span className="create-record-p">P</span>
-                </div>
-              </button>
-            ) : selectedMode === 'nominate' ? (
-              <button
-                className={`create-nominate-btn active ${isRecording ? 'recording' : ''}`}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-nominate-inner">
-                  <span className="nominate-text">Nominate</span>
-                </div>
-              </button>
-            ) : selectedMode === 'race' ? (
-              <button
-                className={`create-race-btn active ${isRecording ? 'recording' : ''}`}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-race-inner">
-                  <span className="race-text">Race</span>
-                </div>
-              </button>
+          )}
+
+          {/* Record Button Row */}
+          <div className={`create-record-row ${showClipConfirm ? 'confirm-mode' : ''} mode-${selectedMode}`}>
+            {/* Buttons always in fixed order, CSS handles centering active one */}
+            {/* Distance from active: 2+ slots away = "far" class for smaller size */}
+            {!(isRecording || showClipConfirm) ? (
+              <div className="create-buttons-track">
+                <button
+                  className={`create-nominate-btn ${selectedMode === 'nominate' ? 'active' : ''} ${(selectedMode === 'race' || selectedMode === 'party') ? 'far' : ''}`}
+                  onClick={() => setSelectedMode('nominate')}
+                  onMouseDown={() => selectedMode === 'nominate' && handleRecordStart()}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchStart={() => selectedMode === 'nominate' && handleRecordStart()}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-nominate-inner">
+                    <span className="nominate-text">Nominate</span>
+                  </div>
+                </button>
+
+                <button
+                  className={`create-record-btn ${selectedMode === 'record' ? 'active' : ''} ${selectedMode === 'party' ? 'far' : ''}`}
+                  onClick={() => setSelectedMode('record')}
+                  onMouseDown={() => selectedMode === 'record' && handleRecordStart()}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchStart={() => selectedMode === 'record' && handleRecordStart()}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-record-inner">
+                    <span className="create-record-c">C</span>
+                    <span className="create-record-p">P</span>
+                  </div>
+                </button>
+
+                <button
+                  className={`create-race-btn ${selectedMode === 'race' ? 'active' : ''} ${selectedMode === 'nominate' ? 'far' : ''}`}
+                  onClick={() => setSelectedMode('race')}
+                  onMouseDown={() => selectedMode === 'race' && handleRecordStart()}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchStart={() => selectedMode === 'race' && handleRecordStart()}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-race-inner">
+                    <span className="race-text">Race</span>
+                  </div>
+                </button>
+
+                <button
+                  className={`create-party-btn ${selectedMode === 'party' ? 'active' : ''} ${(selectedMode === 'nominate' || selectedMode === 'record') ? 'far' : ''}`}
+                  onClick={() => setSelectedMode('party')}
+                  onMouseDown={() => selectedMode === 'party' && handleRecordStart()}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchStart={() => selectedMode === 'party' && handleRecordStart()}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-party-inner">
+                    <span className="party-text">Party</span>
+                  </div>
+                </button>
+              </div>
             ) : (
-              <button
-                className={`create-party-btn active ${isRecording ? 'recording' : ''}`}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="create-party-inner">
-                  <span className="party-text">Party</span>
-                </div>
-              </button>
-            )
-          )}
+              /* Only show active button when recording or confirming - needs release handlers */
+              selectedMode === 'record' ? (
+                <button
+                  className={`create-record-btn active ${isRecording ? 'recording' : ''}`}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-record-inner">
+                    <span className="create-record-c">C</span>
+                    <span className="create-record-p">P</span>
+                  </div>
+                </button>
+              ) : selectedMode === 'nominate' ? (
+                <button
+                  className={`create-nominate-btn active ${isRecording ? 'recording' : ''}`}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-nominate-inner">
+                    <span className="nominate-text">Nominate</span>
+                  </div>
+                </button>
+              ) : selectedMode === 'race' ? (
+                <button
+                  className={`create-race-btn active ${isRecording ? 'recording' : ''}`}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-race-inner">
+                    <span className="race-text">Race</span>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  className={`create-party-btn active ${isRecording ? 'recording' : ''}`}
+                  onMouseUp={handleRecordEnd}
+                  onMouseLeave={handleRecordEnd}
+                  onTouchEnd={handleRecordEnd}
+                >
+                  <div className="create-party-inner">
+                    <span className="party-text">Party</span>
+                  </div>
+                </button>
+              )
+            )}
 
-          {/* Clip Confirm Actions */}
-          {showClipConfirm && (
-            <div className="clip-inline-actions">
-              <button className="clip-action-btn delete" onClick={handleDeleteClip}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+            {/* Clip Confirm Actions */}
+            {showClipConfirm && (
+              <div className="clip-inline-actions">
+                <button className="clip-action-btn delete" onClick={handleDeleteClip}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+                <button className="clip-action-btn draft" onClick={() => {
+                  console.log('Saving draft:', recordedVideoUrl)
+                  // In a real app, save to drafts storage
+                  handleDeleteClip()
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                </button>
+                <button className="clip-action-btn confirm" onClick={handleConfirmClip}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tag Flow Overlay - for Nominate mode */}
+      {showTagFlow && (
+        <div className="nominate-tag-flow">
+          {/* Top Section - Selected Tag Display */}
+          <div className="tag-top-section">
+            {selectedTag ? (
+              <div className="selected-tag-display">
+                <span className="tag-at">@</span>
+                <span className="tag-name">{selectedTag.username || getContactDisplayName(selectedTag)}</span>
+              </div>
+            ) : tagSource === 'phone' && phoneNumber ? (
+              <div className="selected-tag-display">
+                <span className="tag-phone-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                  </svg>
+                </span>
+                <span className="tag-name">{phoneNumber}</span>
+              </div>
+            ) : (
+              <div className="tag-placeholder-text">Tag someone in your nomination</div>
+            )}
+          </div>
+
+
+          {/* Bottom Section - Search & List */}
+          <div className="tag-bottom-section">
+            {/* Source Toggle */}
+            <div className="tag-source-toggle">
+              <button
+                className={`tag-source-btn ${tagSource === 'platform' ? 'active' : ''}`}
+                onClick={() => { setTagSource('platform'); setSelectedTag(null); }}
+              >
+                On Platform
               </button>
-              <button className="clip-action-btn draft" onClick={() => {
-                console.log('Saving draft:', recordedVideoUrl)
-                // In a real app, save to drafts storage
-                handleDeleteClip()
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
+              <button
+                className={`tag-source-btn ${tagSource === 'contacts' ? 'active' : ''}`}
+                onClick={() => { setTagSource('contacts'); setSelectedTag(null); }}
+              >
+                Contacts
               </button>
-              <button className="clip-action-btn confirm" onClick={handleConfirmClip}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
+              <button
+                className={`tag-source-btn ${tagSource === 'phone' ? 'active' : ''}`}
+                onClick={() => { setTagSource('phone'); setSelectedTag(null); }}
+              >
+                Phone #
               </button>
             </div>
-          )}
+
+            {/* Search Input or Phone Input */}
+            {tagSource === 'phone' ? (
+              <div className="tag-phone-input-container">
+                <span className="tag-phone-prefix">+1</span>
+                <input
+                  type="tel"
+                  className="tag-phone-input"
+                  placeholder="Enter phone number to invite"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                  maxLength={10}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <div className="tag-input-container">
+                <span className="tag-input-at">@</span>
+                <input
+                  type="text"
+                  className="tag-input"
+                  placeholder="search to tag someone"
+                  value={tagQuery}
+                  onChange={(e) => setTagQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* Users/Contacts List */}
+            {tagSource !== 'phone' && (
+              <div className="tag-users-list">
+                {filteredUsers.map(user => (
+                  <div
+                    key={user.id}
+                    className={`tag-user-item ${selectedTag?.id === user.id ? 'selected' : ''}`}
+                    onClick={() => handleSelectTag(user)}
+                  >
+                    {tagSource === 'platform' ? (
+                      <>
+                        <img src={user.avatar} alt={user.name} className="tag-user-avatar" />
+                        <div className="tag-user-info">
+                          <span className="tag-user-name">{user.name}</span>
+                          <span className="tag-user-handle">@{user.username}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="tag-contact-avatar">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        </div>
+                        <div className="tag-user-info">
+                          <span className="tag-user-name">{getContactDisplayName(user)}</span>
+                          {!user.isOnPlatform && <span className="tag-invite-label">Will receive invite</span>}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Phone invite message */}
+            {tagSource === 'phone' && phoneNumber.length >= 10 && (
+              <div className="tag-phone-invite-msg">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span>They'll receive an invite to join and see your nomination</span>
+              </div>
+            )}
+          </div>
+
+          {/* Tag Actions */}
+          <div className="tag-flow-actions">
+            <button className="tag-skip-btn" onClick={handleSkipTag}>
+              Skip
+            </button>
+            <button
+              className="tag-confirm-btn"
+              onClick={handleConfirmTag}
+              disabled={!canContinueTag}
+            >
+              Continue
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom Bar with Gallery */}
-      <div className="create-bottom-bar">
-        <button className="create-gallery-btn">
-          <img
-            src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=100&h=100&fit=crop"
-            alt="Gallery"
-          />
-        </button>
-      </div>
+      {!showTagFlow && (
+        <div className="create-bottom-bar">
+          <button className="create-gallery-btn">
+            <img
+              src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=100&h=100&fit=crop"
+              alt="Gallery"
+            />
+          </button>
+        </div>
+      )}
 
       {/* Add Sound Screen */}
       {showAddSound && (
