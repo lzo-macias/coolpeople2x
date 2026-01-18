@@ -43,6 +43,9 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     return Math.max(0, 14 - daysSinceChange)
   }
 
+  const [allNotificationsEnabled, setAllNotificationsEnabled] = useState(true)
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [faceIdEnabled, setFaceIdEnabled] = useState(true)
   const [notifications, setNotifications] = useState({
     likes: true,
     comments: true,
@@ -50,8 +53,9 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     mentions: true,
     messages: true,
     raceUpdates: true,
-    partyNews: false,
-    promotions: false,
+    reviews: true,
+    nominates: true,
+    reposts: true,
   })
 
   // Mock data
@@ -62,6 +66,18 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     { id: 4, image: 'https://picsum.photos/200/300?random=4' },
     { id: 5, image: 'https://picsum.photos/200/300?random=5' },
     { id: 6, image: 'https://picsum.photos/200/300?random=6' },
+  ]
+
+  const archivedPosts = [
+    { id: 1, image: 'https://picsum.photos/200/300?random=11' },
+    { id: 2, image: 'https://picsum.photos/200/300?random=12' },
+    { id: 3, image: 'https://picsum.photos/200/300?random=13' },
+    { id: 4, image: 'https://picsum.photos/200/300?random=14' },
+    { id: 5, image: 'https://picsum.photos/200/300?random=15' },
+    { id: 6, image: 'https://picsum.photos/200/300?random=16' },
+    { id: 7, image: 'https://picsum.photos/200/300?random=17' },
+    { id: 8, image: 'https://picsum.photos/200/300?random=18' },
+    { id: 9, image: 'https://picsum.photos/200/300?random=19' },
   ]
 
   const blockedUsers = [
@@ -75,11 +91,17 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     { id: 2, username: 'too_much_drama', avatar: 'https://i.pravatar.cc/150?img=50' },
   ]
 
+  const connectedDevices = [
+    { id: 1, name: 'iPhone 15 Pro', location: 'Los Angeles, CA', lastActive: 'Active now', current: true },
+    { id: 2, name: 'MacBook Pro', location: 'Los Angeles, CA', lastActive: '2 hours ago', current: false },
+    { id: 3, name: 'iPad Air', location: 'San Francisco, CA', lastActive: '3 days ago', current: false },
+  ]
+
   const parties = [
     { name: 'Independent', color: '#888888' },
     { name: 'Democrat', color: '#3B82F6' },
     { name: 'Republican', color: '#EF4444' },
-    { name: 'The Pink Lady', color: '#EC4899' },
+    { name: 'The Pink Lady Party', color: '#EC4899' },
     { name: 'Green Party', color: '#22C55E' },
     { name: 'Libertarian', color: '#F59E0B' },
   ]
@@ -97,12 +119,126 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
 
   // Mock race chart data for detail view
   const raceChartData = [
-    { id: 1, name: 'William H.', avatar: 'https://i.pravatar.cc/40?img=12', nominations: '25,000', stars: 4.8 },
-    { id: 2, name: 'Sarah J.', avatar: 'https://i.pravatar.cc/40?img=5', nominations: '18,500', stars: 4.5 },
-    { id: 3, name: 'Alex M.', avatar: 'https://i.pravatar.cc/40?img=3', nominations: '15,200', stars: 4.3 },
-    { id: 4, name: 'Mike T.', avatar: 'https://i.pravatar.cc/40?img=8', nominations: '12,800', stars: 4.1 },
-    { id: 5, name: 'Jordan P.', avatar: 'https://i.pravatar.cc/40?img=14', nominations: '9,400', stars: 3.9 },
+    { id: 1, name: 'William H.', avatar: 'https://i.pravatar.cc/40?img=12', data: [1.2, 1.5, 1.8, 2.1, 2.4, 2.6, 2.8, 2.9, 3.0], nominations: '25,000', stars: 4.8 },
+    { id: 2, name: 'Sarah J.', avatar: 'https://i.pravatar.cc/40?img=5', data: [1.1, 1.3, 1.6, 1.9, 2.2, 2.4, 2.5, 2.6, 2.7], nominations: '18,500', stars: 4.5 },
+    { id: 3, name: 'Alex M.', avatar: 'https://i.pravatar.cc/40?img=3', data: [1.0, 1.2, 1.4, 1.7, 1.9, 2.1, 2.3, 2.4, 2.5], nominations: '15,200', stars: 4.3 },
+    { id: 4, name: 'Mike T.', avatar: 'https://i.pravatar.cc/40?img=8', data: [0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.0, 2.1, 2.2], nominations: '12,800', stars: 4.1 },
+    { id: 5, name: 'Jordan P.', avatar: 'https://i.pravatar.cc/40?img=14', data: [0.8, 1.0, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9], nominations: '9,400', stars: 3.9 },
+    { id: 6, name: 'Casey R.', avatar: 'https://i.pravatar.cc/40?img=16', data: [0.7, 0.9, 1.0, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7], nominations: '7,100', stars: 3.7 },
+    { id: 7, name: 'Taylor M.', avatar: 'https://i.pravatar.cc/40?img=18', data: [0.6, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], nominations: '5,600', stars: 3.5 },
+    { id: 8, name: 'Morgan L.', avatar: 'https://i.pravatar.cc/40?img=20', data: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3], nominations: '3,200', stars: 3.2 },
   ]
+
+  // RaceChart component
+  const RaceChart = ({ candidates, onCandidateClick }) => {
+    const [hoveredId, setHoveredId] = useState(null)
+    const width = 380
+    const height = 160
+    const padding = { top: 15, right: 45, bottom: 25, left: 30 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+
+    const allValues = candidates.flatMap(c => c.data)
+    const minY = Math.min(...allValues) * 0.9
+    const maxY = Math.max(...allValues) * 1.1
+    const xLabels = ['9th', '18th', 'Today']
+
+    const getX = (index, total) => padding.left + (index / (total - 1)) * chartWidth
+    const getY = (value) => padding.top + chartHeight - ((value - minY) / (maxY - minY)) * chartHeight
+
+    const colors = [
+      '#E8A855', '#D4954A', '#C08340', '#AB7135',
+      '#976030', '#8A5528', '#7D4A20', '#704018'
+    ]
+
+    return (
+      <svg width={width} height={height} className="race-chart-svg">
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartHeight} stroke="rgba(232, 168, 85, 0.2)" />
+        <line x1={padding.left} y1={padding.top + chartHeight} x2={width - padding.right} y2={padding.top + chartHeight} stroke="rgba(232, 168, 85, 0.2)" />
+
+        <text x={padding.left - 8} y={padding.top + 5} fill="#E8A855" fontSize="10" textAnchor="end">3M</text>
+        <text x={padding.left - 8} y={padding.top + chartHeight / 2} fill="#E8A855" fontSize="10" textAnchor="end">2M</text>
+        <text x={padding.left - 8} y={padding.top + chartHeight - 5} fill="#E8A855" fontSize="10" textAnchor="end">1M</text>
+
+        {xLabels.map((label, i) => (
+          <text key={label} x={getX(i * 4, 9)} y={height - 5} fill="#E8A855" fontSize="10" textAnchor="middle">{label}</text>
+        ))}
+
+        {candidates.map((candidate, idx) => {
+          const points = candidate.data.map((val, i) => `${getX(i, candidate.data.length)},${getY(val)}`).join(' ')
+          return (
+            <polyline
+              key={candidate.id}
+              points={points}
+              fill="none"
+              stroke={colors[idx]}
+              strokeWidth={idx === 0 ? 3 : 2}
+              opacity={1 - idx * 0.08}
+              className="race-chart-line"
+              onMouseEnter={() => setHoveredId(candidate.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              style={{ cursor: 'pointer' }}
+              onClick={() => onCandidateClick?.(candidate)}
+            />
+          )
+        })}
+
+        {candidates
+          .map((candidate, idx) => ({ candidate, idx, isHovered: hoveredId === candidate.id }))
+          .sort((a, b) => (a.isHovered ? 1 : 0) - (b.isHovered ? 1 : 0))
+          .map(({ candidate, idx, isHovered }) => {
+            const lastX = getX(candidate.data.length - 1, candidate.data.length)
+            const lastY = getY(candidate.data[candidate.data.length - 1])
+            const radius = isHovered ? 18 : 12
+            const imgSize = isHovered ? 30 : 20
+            const imgOffset = imgSize / 2
+
+            return (
+              <g
+                key={`avatar-${candidate.id}`}
+                className={`race-chart-avatar ${isHovered ? 'hovered' : ''}`}
+                onMouseEnter={() => setHoveredId(candidate.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                onClick={() => onCandidateClick?.(candidate)}
+                style={{ cursor: 'pointer' }}
+              >
+                <circle
+                  cx={lastX + 18}
+                  cy={lastY}
+                  r={radius}
+                  fill="#2A1F0F"
+                  stroke={colors[idx]}
+                  strokeWidth={isHovered ? 3 : 2}
+                />
+                <clipPath id={`clip-edit-${candidate.id}`}>
+                  <circle cx={lastX + 18} cy={lastY} r={radius - 2} />
+                </clipPath>
+                <image
+                  href={candidate.avatar}
+                  x={lastX + 18 - imgOffset}
+                  y={lastY - imgOffset}
+                  width={imgSize}
+                  height={imgSize}
+                  clipPath={`url(#clip-edit-${candidate.id})`}
+                />
+                {isHovered && (
+                  <text
+                    x={lastX + 18}
+                    y={lastY + radius + 12}
+                    fill="#E8A855"
+                    fontSize="10"
+                    fontWeight="600"
+                    textAnchor="middle"
+                  >
+                    {candidate.name}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+      </svg>
+    )
+  }
 
   // Live countdown for race detail
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
@@ -149,6 +285,36 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     return party?.color || '#888888'
   }
 
+  // Count filled icebreakers
+  const getFilledIcebreakersCount = () => {
+    if (!profileSections) return 0
+    let count = 0
+
+    // Sliders
+    if (profileSections.viewsOnIce?.score !== null && profileSections.viewsOnIce?.score !== undefined) count++
+    if (profileSections.viewsOnTransRights?.score !== null && profileSections.viewsOnTransRights?.score !== undefined) count++
+    if (profileSections.viewsOnHealthcare?.score !== null && profileSections.viewsOnHealthcare?.score !== undefined) count++
+    if (profileSections.viewsOnGunControl?.score !== null && profileSections.viewsOnGunControl?.score !== undefined) count++
+
+    // Text fields
+    if (profileSections.hillToDieOn?.content) count++
+    if (profileSections.accomplishment?.content) count++
+
+    // Tags
+    if (profileSections.topicsThatEnergize?.tags?.length > 0) count++
+
+    // Games
+    if (profileSections.guessWhichTrue?.options?.some(o => o)) count++
+    if (profileSections.wouldYouRather?.optionA || profileSections.wouldYouRather?.optionB) count++
+    if (profileSections.unpopularOpinion?.opinion) count++
+
+    // Custom icebreakers
+    if (profileSections.customWritten?.length > 0) count += profileSections.customWritten.length
+    if (profileSections.customSliders?.length > 0) count += profileSections.customSliders.length
+
+    return count
+  }
+
   // Render main settings menu
   const renderMainMenu = () => (
     <div className="settings-page">
@@ -159,7 +325,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="settings-title">Settings and Configuration</h1>
+        <h1 className="settings-title">Settings</h1>
       </div>
 
       {/* Search */}
@@ -191,18 +357,26 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             </div>
           )}
         </div>
-        <button className="edit-picture-link">edit profile picture</button>
+        <button className="edit-picture-link">Edit profile picture</button>
       </div>
 
-      {/* Status, Username & Party */}
-      <div className="settings-profile-info">
+      {/* Account Section */}
+      <p className="settings-section-label">Account</p>
+      <div className="settings-card">
         <button className="settings-row" onClick={() => setActiveSection('status')}>
           <div className="settings-row-left">
-            <span className="settings-row-icon">✊</span>
+            <span className="settings-row-icon accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
             <span className="settings-row-label">Status</span>
           </div>
           <div className="settings-row-right">
-            <span className="settings-row-value">{editedCandidate.status}</span>
+            <span className="settings-row-badge">{editedCandidate.status}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -211,7 +385,12 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
 
         <button className="settings-row" onClick={() => setActiveSection('username')}>
           <div className="settings-row-left">
-            <span className="settings-row-icon">@</span>
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
+              </svg>
+            </span>
             <span className="settings-row-label">Username</span>
           </div>
           <div className="settings-row-right">
@@ -227,7 +406,14 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
 
         <button className="settings-row" onClick={() => setActiveSection('party')}>
           <div className="settings-row-left">
-            <span className="settings-row-icon">👥</span>
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
             <span className="settings-row-label">Party</span>
           </div>
           <div className="settings-row-right">
@@ -241,13 +427,22 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             </svg>
           </div>
         </button>
+      </div>
 
+      {/* Activity Section */}
+      <p className="settings-section-label">Activity</p>
+      <div className="settings-card">
         <button className="settings-row" onClick={() => setActiveSection('icebreakers')}>
           <div className="settings-row-left">
-            <span className="settings-row-icon">🧊</span>
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
             <span className="settings-row-label">Icebreakers</span>
           </div>
           <div className="settings-row-right">
+            <span className="settings-row-count">{getFilledIcebreakersCount()}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -256,23 +451,37 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
 
         <button className="settings-row" onClick={() => setActiveSection('races')}>
           <div className="settings-row-left">
-            <span className="settings-row-icon">🏁</span>
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                <line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
+            </span>
             <span className="settings-row-label">Races</span>
           </div>
           <div className="settings-row-right">
-            <span className="settings-row-value">{myRaces.length}</span>
+            <span className="settings-row-count">{myRaces.length}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </div>
         </button>
+      </div>
 
+      {/* Privacy & Data Section */}
+      <p className="settings-section-label">Privacy & Data</p>
+      <div className="settings-card">
         <button
           className={`settings-row ${editedCandidate.status === 'Candidate' ? 'disabled' : ''}`}
           onClick={() => editedCandidate.status !== 'Candidate' && setActiveSection('profile-privacy')}
         >
           <div className="settings-row-left">
-            <span className="settings-row-icon">🔒</span>
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </span>
             <span className="settings-row-label">Privacy</span>
           </div>
           <div className="settings-row-right">
@@ -287,152 +496,171 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             </svg>
           </div>
         </button>
-      </div>
 
-      {/* Other User Settings */}
-      <div className="settings-section">
-        <button className="settings-section-header">
-          <span>other user settings</span>
+        <button className="settings-row" onClick={() => setActiveSection('saved')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Saved</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
 
-        <div className="settings-list">
-          <button className="settings-row slim" onClick={() => setActiveSection('saved')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">📑</span>
-              <span className="settings-row-label">Saved</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+        <button className="settings-row" onClick={() => setActiveSection('blocked')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent-pink">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Blocked</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
 
-          <button className="settings-row slim" onClick={() => setActiveSection('blocked')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🚫</span>
-              <span className="settings-row-label">Blocked</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+      {/* Content Section */}
+      <p className="settings-section-label">Content</p>
+      <div className="settings-card">
+        <button className="settings-row" onClick={() => setActiveSection('archives')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="21 8 21 21 3 21 3 8" />
+                <rect x="1" y="3" width="22" height="5" />
+                <line x1="10" y1="12" x2="14" y2="12" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Archives</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
 
-          <button className="settings-row slim" onClick={() => setActiveSection('archives')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">📦</span>
-              <span className="settings-row-label">Archives</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+        <button className="settings-row" onClick={() => setActiveSection('notifications')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Notifications</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
 
-          <button className="settings-row slim" onClick={() => setActiveSection('notifications')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🔔</span>
-              <span className="settings-row-label">Notifications</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-
-          <button className="settings-row slim" onClick={() => setActiveSection('silenced')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🔇</span>
-              <span className="settings-row-label">Silenced</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
+        <button className="settings-row" onClick={() => setActiveSection('silenced')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Silenced</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
       </div>
 
       {/* CoolPeople Tools */}
-      <div className="settings-section">
-        <button className="settings-section-header">
-          <span>coolpeople tools</span>
+      <p className="settings-section-label">CoolPeople Tools</p>
+      <div className="settings-card">
+        <button className="settings-row" onClick={() => setActiveSection('nominations')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            </span>
+            <span className="settings-row-label">My Nominations</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
 
-        <div className="settings-list">
-          <button className="settings-row slim" onClick={() => setActiveSection('nominations')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">📋</span>
-              <span className="settings-row-label">My Nominations</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-
-          <button className="settings-row slim" onClick={() => setActiveSection('ballot')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🗳️</span>
-              <span className="settings-row-label">My Ballot</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
+        <button className="settings-row" onClick={() => setActiveSection('ballot')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent-pink">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 3h16a2 2 0 0 1 2 2v6a10 10 0 0 1-10 10A10 10 0 0 1 2 11V5a2 2 0 0 1 2-2z" />
+                <polyline points="8 10 12 14 16 10" />
+              </svg>
+            </span>
+            <span className="settings-row-label">My Ballot</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
       </div>
 
-      {/* Account & Privacy */}
-      <div className="settings-section">
-        <button className="settings-section-header">
-          <span>account & privacy</span>
+      {/* Account & Security */}
+      <p className="settings-section-label">Account & Security</p>
+      <div className="settings-card">
+        <button className="settings-row" onClick={() => setActiveSection('account')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Account</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
 
-        <div className="settings-list">
-          <button className="settings-row slim" onClick={() => setActiveSection('account')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">👤</span>
-              <span className="settings-row-label">Account</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+        <button className="settings-row" onClick={() => setActiveSection('security')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Security</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
 
-          <button className="settings-row slim" onClick={() => setActiveSection('privacy')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🔒</span>
-              <span className="settings-row-label">Privacy</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-
-          <button className="settings-row slim" onClick={() => setActiveSection('security')}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🛡️</span>
-              <span className="settings-row-label">Security</span>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="settings-section danger">
-        <div className="settings-list">
-          <button className="settings-row slim danger" onClick={() => {}}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🚪</span>
-              <span className="settings-row-label">Log Out</span>
-            </div>
-          </button>
-
-          <button className="settings-row slim danger delete" onClick={() => {}}>
-            <div className="settings-row-left">
-              <span className="settings-row-icon">🗑️</span>
-              <span className="settings-row-label">Delete Account</span>
-            </div>
-          </button>
-        </div>
+        <button className="settings-row" onClick={() => {}}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent-pink">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Log Out</span>
+          </div>
+        </button>
       </div>
     </div>
   )
@@ -642,6 +870,33 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     </div>
   )
 
+  // Render Archives section - Grid of archived posts
+  const renderArchivesSection = () => (
+    <div className="settings-page">
+      <div className="settings-header">
+        <button className="settings-back-btn" onClick={() => setActiveSection(null)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <h1 className="settings-title">Archives</h1>
+      </div>
+      {archivedPosts.length > 0 ? (
+        <div className="saved-posts-grid">
+          {archivedPosts.map(post => (
+            <div key={post.id} className="saved-post-item">
+              <img src={post.image} alt="Archived post" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>No archived posts yet</p>
+        </div>
+      )}
+    </div>
+  )
+
   // Render Blocked section - Line of blocked profiles
   const renderBlockedSection = () => (
     <div className="settings-page">
@@ -675,10 +930,9 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
 
   // Render Notifications section - Toggles with master toggle
   const renderNotificationsSection = () => {
-    const allEnabled = Object.values(notifications).every(v => v)
-
     const toggleAll = () => {
-      const newValue = !allEnabled
+      const newValue = !allNotificationsEnabled
+      setAllNotificationsEnabled(newValue)
       setNotifications({
         likes: newValue,
         comments: newValue,
@@ -686,20 +940,22 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
         mentions: newValue,
         messages: newValue,
         raceUpdates: newValue,
-        partyNews: newValue,
-        promotions: newValue,
+        reviews: newValue,
+        nominates: newValue,
+        reposts: newValue,
       })
     }
 
     const notificationLabels = {
-      likes: 'Likes',
-      comments: 'Comments',
-      follows: 'New Followers',
-      mentions: 'Mentions',
-      messages: 'Direct Messages',
-      raceUpdates: 'Race Updates',
-      partyNews: 'Party News',
-      promotions: 'Promotions',
+      likes: { label: 'Likes', icon: '❤️' },
+      comments: { label: 'Comments', icon: '💬' },
+      follows: { label: 'New Followers', icon: '👤' },
+      mentions: { label: 'Mentions', icon: '@' },
+      messages: { label: 'Direct Messages', icon: '✉️' },
+      raceUpdates: { label: 'Race Updates', icon: '🏁' },
+      reviews: { label: 'Reviews', icon: '⭐' },
+      nominates: { label: 'Nominates', icon: '🎯' },
+      reposts: { label: 'Reposts', icon: '🔄' },
     }
 
     return (
@@ -716,16 +972,17 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
         <div className="notifications-list">
           <div className="notification-item master">
             <span className="notification-label">All Notifications</span>
-            <button className={`toggle-btn ${allEnabled ? 'on' : ''}`} onClick={toggleAll}>
+            <button className={`toggle-btn ${allNotificationsEnabled ? 'on' : ''}`} onClick={toggleAll}>
               <span className="toggle-knob" />
             </button>
           </div>
 
-          <div className="notification-divider" />
-
           {Object.entries(notifications).map(([key, value]) => (
             <div key={key} className="notification-item">
-              <span className="notification-label">{notificationLabels[key]}</span>
+              <div className="notification-label-row">
+                <span className="notification-icon">{notificationLabels[key].icon}</span>
+                <span className="notification-label">{notificationLabels[key].label}</span>
+              </div>
               <button
                 className={`toggle-btn ${value ? 'on' : ''}`}
                 onClick={() => setNotifications(prev => ({ ...prev, [key]: !value }))}
@@ -767,6 +1024,150 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
           <p>No silenced users</p>
         </div>
       )}
+    </div>
+  )
+
+  // Render Security section
+  const renderSecuritySection = () => (
+    <div className="settings-page">
+      <div className="settings-header">
+        <button className="settings-back-btn" onClick={() => setActiveSection(null)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <h1 className="settings-title">Security</h1>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-list">
+          <button className="settings-row" onClick={() => setActiveSection('change-password')}>
+            <div className="settings-row-left">
+              <span className="settings-row-icon">🔑</span>
+              <span className="settings-row-label">Change Password</span>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+
+          <div className="notification-item">
+            <div className="notification-label-row">
+              <span className="notification-icon">🔐</span>
+              <span className="notification-label">Two-Factor Authentication</span>
+            </div>
+            <button
+              className={`toggle-btn ${twoFactorEnabled ? 'on' : ''}`}
+              onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+            >
+              <span className="toggle-knob" />
+            </button>
+          </div>
+
+          <div className="notification-item">
+            <div className="notification-label-row">
+              <span className="notification-icon">😊</span>
+              <span className="notification-label">Face ID / Touch ID</span>
+            </div>
+            <button
+              className={`toggle-btn ${faceIdEnabled ? 'on' : ''}`}
+              onClick={() => setFaceIdEnabled(!faceIdEnabled)}
+            >
+              <span className="toggle-knob" />
+            </button>
+          </div>
+
+          <button className="settings-row" onClick={() => setActiveSection('connected-devices')}>
+            <div className="settings-row-left">
+              <span className="settings-row-icon">📱</span>
+              <span className="settings-row-label">Connected Devices</span>
+            </div>
+            <div className="settings-row-right">
+              <span className="settings-row-value">{connectedDevices.length}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // Render Change Password section
+  const renderChangePasswordSection = () => (
+    <div className="settings-page">
+      <div className="settings-header">
+        <button className="settings-back-btn" onClick={() => setActiveSection('security')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <h1 className="settings-title">Change Password</h1>
+      </div>
+
+      <div className="username-section-content">
+        <div className="username-input-container">
+          <input
+            type="password"
+            className="username-input"
+            placeholder="Current password"
+          />
+        </div>
+        <div className="username-input-container">
+          <input
+            type="password"
+            className="username-input"
+            placeholder="New password"
+          />
+        </div>
+        <div className="username-input-container">
+          <input
+            type="password"
+            className="username-input"
+            placeholder="Confirm new password"
+          />
+        </div>
+
+        <p className="username-note">
+          Password must be at least 8 characters and include a number and special character.
+        </p>
+
+        <button className="username-save-btn">
+          Update Password
+        </button>
+      </div>
+    </div>
+  )
+
+  // Render Connected Devices section
+  const renderConnectedDevicesSection = () => (
+    <div className="settings-page">
+      <div className="settings-header">
+        <button className="settings-back-btn" onClick={() => setActiveSection('security')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <h1 className="settings-title">Connected Devices</h1>
+      </div>
+
+      <div className="users-line-list">
+        {connectedDevices.map(device => (
+          <div key={device.id} className="user-line-item">
+            <div className="user-line-left">
+              <span className="device-icon">{device.name.includes('iPhone') ? '📱' : device.name.includes('iPad') ? '📱' : '💻'}</span>
+              <div className="device-info">
+                <span className="device-name">{device.name} {device.current && <span className="current-badge">This device</span>}</span>
+                <span className="device-location">{device.location} · {device.lastActive}</span>
+              </div>
+            </div>
+            {!device.current && (
+              <button className="user-action-btn">Remove</button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 
@@ -1068,14 +1469,15 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
       {activeSection === 'races' && renderRacesSection()}
       {activeSection === 'saved' && renderSavedSection()}
       {activeSection === 'blocked' && renderBlockedSection()}
-      {activeSection === 'archives' && renderPlaceholderSection('Archives')}
+      {activeSection === 'archives' && renderArchivesSection()}
       {activeSection === 'notifications' && renderNotificationsSection()}
       {activeSection === 'silenced' && renderSilencedSection()}
       {activeSection === 'nominations' && renderPlaceholderSection('My Nominations')}
       {activeSection === 'ballot' && renderPlaceholderSection('My Ballot')}
       {activeSection === 'account' && renderPlaceholderSection('Account')}
-      {activeSection === 'privacy' && renderPlaceholderSection('Privacy')}
-      {activeSection === 'security' && renderPlaceholderSection('Security')}
+      {activeSection === 'security' && renderSecuritySection()}
+      {activeSection === 'change-password' && renderChangePasswordSection()}
+      {activeSection === 'connected-devices' && renderConnectedDevicesSection()}
 
       {/* Race Detail Slide-up Modal */}
       {selectedRaceDetail && (
@@ -1171,6 +1573,11 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Race Chart */}
+            <div className="race-modal-chart">
+              <RaceChart candidates={raceChartData} />
             </div>
 
             {/* Top Candidates List */}
