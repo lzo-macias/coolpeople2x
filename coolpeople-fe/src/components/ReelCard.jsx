@@ -227,6 +227,26 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
 
   // Main nominate button flow state
   const [showNominateRaceSelect, setShowNominateRaceSelect] = useState(false)
+  const [hasNominatedPoster, setHasNominatedPoster] = useState(false)
+
+  // Play nomination sound
+  const playNominateSound = () => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
+    oscillator.frequency.setValueAtTime(1200, audioContext.currentTime + 0.1)
+
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
+
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.2)
+  }
   const [showNominateOptions, setShowNominateOptions] = useState(false)
   const [selectedRaceForNomination, setSelectedRaceForNomination] = useState(null)
   const [showQuoteNominate, setShowQuoteNominate] = useState(false)
@@ -343,18 +363,29 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
             <p className="reel-caption">{data.caption}</p>
           </div>
           <button
-            className="nominate-btn"
+            className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
             onClick={() => {
-              if (mockFollowedRaces.length === 0) {
+              if (hasNominatedPoster) return // Already nominated
+
+              if (data.targetRace) {
+                // Has target race, nominate directly
+                setHasNominatedPoster(true)
+                playNominateSound()
+              } else if (mockFollowedRaces.length === 0) {
                 // No followed races, nominate directly to CoolPeople
-                // TODO: handle direct nomination
+                setHasNominatedPoster(true)
+                playNominateSound()
               } else {
-                // Has followed races, show race selection
+                // No target race but has followed races, show race selection
                 setShowNominateRaceSelect(true)
               }
             }}
           >
-            <span>Nominate</span>
+            {hasNominatedPoster ? (
+              <span className="nominate-check">✓</span>
+            ) : (
+              <span>Nominate</span>
+            )}
           </button>
         </div>
       </div>
@@ -409,7 +440,7 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
                       setTimeout(() => setShowRaceModal(false), 400)
                     }}
                   >
-                    {raceParticipating ? '✓' : 'Participate'}
+                    {raceParticipating ? '✓' : 'Race'}
                   </button>
                 </div>
               </div>
