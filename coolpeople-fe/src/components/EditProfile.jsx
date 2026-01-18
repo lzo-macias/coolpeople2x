@@ -97,6 +97,18 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     { id: 3, name: 'iPad Air', location: 'San Francisco, CA', lastActive: '3 days ago', current: false },
   ]
 
+  const [myNominations, setMyNominations] = useState([
+    { id: 1, user: { username: 'sarah_politics', avatar: 'https://i.pravatar.cc/40?img=5' }, race: 'General', date: '2 days ago' },
+    { id: 2, user: { username: 'mike_2024', avatar: 'https://i.pravatar.cc/40?img=8' }, race: 'Mayor Race 2025', date: '5 days ago' },
+    { id: 3, user: { username: 'jane_votes', avatar: 'https://i.pravatar.cc/40?img=9' }, race: 'General', date: '1 week ago' },
+    { id: 4, user: { username: 'alex_liberty', avatar: 'https://i.pravatar.cc/40?img=12' }, race: 'City Council District 5', date: '1 week ago' },
+    { id: 5, user: { username: 'rosa_change', avatar: 'https://i.pravatar.cc/40?img=16' }, race: 'General', date: '2 weeks ago' },
+    { id: 6, user: { username: 'david_future', avatar: 'https://i.pravatar.cc/40?img=18' }, race: 'State Senate Race', date: '2 weeks ago' },
+    { id: 7, user: { username: 'emma_voice', avatar: 'https://i.pravatar.cc/40?img=23' }, race: 'General', date: '3 weeks ago' },
+    { id: 8, user: { username: 'chris_2025', avatar: 'https://i.pravatar.cc/40?img=25' }, race: 'The Pink Lady Competition', date: '1 month ago' },
+  ])
+  const [nominationSearch, setNominationSearch] = useState('')
+
   const parties = [
     { name: 'Independent', color: '#888888' },
     { name: 'Democrat', color: '#3B82F6' },
@@ -398,6 +410,35 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             {!canChangeUsername() && (
               <span className="settings-row-note">{daysUntilUsernameChange()}d left</span>
             )}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </button>
+
+        <button className="settings-row" onClick={() => setActiveSection('premium')}>
+          <div className="settings-row-left">
+            <span className="settings-row-icon accent-gradient">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2">
+                <defs>
+                  <linearGradient id="icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#00F2EA" />
+                    <stop offset="100%" stopColor="#FF2A55" />
+                  </linearGradient>
+                </defs>
+                <rect x="3" y="3" width="7" height="7" stroke="url(#icon-gradient)" />
+                <rect x="14" y="3" width="7" height="7" stroke="url(#icon-gradient)" />
+                <rect x="3" y="14" width="7" height="7" stroke="url(#icon-gradient)" />
+                <rect x="14" y="14" width="3" height="3" stroke="url(#icon-gradient)" />
+                <rect x="18" y="14" width="3" height="3" stroke="url(#icon-gradient)" />
+                <rect x="14" y="18" width="3" height="3" stroke="url(#icon-gradient)" />
+                <rect x="18" y="18" width="3" height="3" stroke="url(#icon-gradient)" />
+              </svg>
+            </span>
+            <span className="settings-row-label">Premium</span>
+          </div>
+          <div className="settings-row-right">
+            <span className="settings-row-value">Upgrade</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -1171,6 +1212,70 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
     </div>
   )
 
+  // Render My Nominations section
+  const renderNominationsSection = () => {
+    const filteredNominations = myNominations.filter(nom =>
+      nom.user.username.toLowerCase().includes(nominationSearch.toLowerCase()) ||
+      nom.race.toLowerCase().includes(nominationSearch.toLowerCase())
+    )
+
+    const handleUnnominate = (nominationId) => {
+      setMyNominations(prev => prev.filter(n => n.id !== nominationId))
+    }
+
+    return (
+      <div className="settings-page">
+        <div className="settings-header">
+          <button className="settings-back-btn" onClick={() => { setActiveSection(null); setNominationSearch(''); }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="settings-title">My Nominations</h1>
+        </div>
+
+        {/* Search */}
+        <div className="settings-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search nominations"
+            value={nominationSearch}
+            onChange={(e) => setNominationSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Nominations List */}
+        <div className="my-nominations-list">
+          {filteredNominations.length > 0 ? (
+            filteredNominations.map(nomination => (
+              <div key={nomination.id} className="my-nom-item">
+                <img src={nomination.user.avatar} alt={nomination.user.username} className="my-nom-avatar" />
+                <div className="my-nom-info">
+                  <span className="my-nom-username">{nomination.user.username}</span>
+                  <span className="my-nom-race">{nomination.race}</span>
+                </div>
+                <button
+                  className="unnominate-btn"
+                  onClick={() => handleUnnominate(nomination.id)}
+                >
+                  Unnominate
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">
+              <p>{nominationSearch ? 'No nominations found' : 'No nominations yet'}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // Render placeholder section
   const renderPlaceholderSection = (title) => (
     <div className="settings-page">
@@ -1472,9 +1577,10 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
       {activeSection === 'archives' && renderArchivesSection()}
       {activeSection === 'notifications' && renderNotificationsSection()}
       {activeSection === 'silenced' && renderSilencedSection()}
-      {activeSection === 'nominations' && renderPlaceholderSection('My Nominations')}
+      {activeSection === 'nominations' && renderNominationsSection()}
       {activeSection === 'ballot' && renderPlaceholderSection('My Ballot')}
       {activeSection === 'account' && renderPlaceholderSection('Account')}
+      {activeSection === 'premium' && renderPlaceholderSection('Premium')}
       {activeSection === 'security' && renderSecuritySection()}
       {activeSection === 'change-password' && renderChangePasswordSection()}
       {activeSection === 'connected-devices' && renderConnectedDevicesSection()}

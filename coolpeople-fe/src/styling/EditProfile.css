@@ -211,6 +211,22 @@
   color: #FF2A55;
 }
 
+.settings-row-icon.accent-gradient {
+  background: linear-gradient(135deg, rgba(0, 242, 234, 0.15) 0%, rgba(255, 42, 85, 0.15) 100%);
+}
+
+.settings-row-icon.accent-gradient svg {
+  stroke: url(#icon-gradient);
+}
+
+.settings-row-icon.accent-gold {
+  background: rgba(255, 215, 0, 0.15);
+}
+
+.settings-row-icon.accent-gold svg {
+  color: #FFD700;
+}
+
 .settings-row-svg {
   width: 22px;
   height: 22px;
@@ -425,15 +441,15 @@
   max-width: 440px;
   margin: 0 auto;
   padding: 20px 16px 32px;
-  background: #1a1a1a;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
   display: flex;
   justify-content: center;
 }
 
 .icebreakers-save-btn {
-  background: none;
+  background: transparent;
   border: none;
-  color: #FF2A55;
+  color: #ffffff;
   font-size: 17px;
   font-weight: 600;
   cursor: pointer;
@@ -1278,4 +1294,57 @@
 .device-location {
   font-size: 12px;
   color: #666;
+}
+
+/* My Nominations List (EditProfile) */
+.my-nominations-list {
+  padding: 0 16px;
+}
+
+.my-nominations-list .my-nom-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.my-nominations-list .my-nom-item:last-child {
+  border-bottom: none;
+}
+
+.my-nominations-list .my-nom-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.my-nominations-list .my-nom-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.my-nominations-list .my-nom-username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.my-nominations-list .my-nom-race {
+  font-size: 12px;
+  color: #666;
+}
+
+.unnominate-btn {
+  background: rgba(255, 42, 85, 0.15);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #FF2A55;
+  cursor: pointer;
 }
