@@ -1,0 +1,492 @@
+.party-settings {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  color: #ffffff;
+  z-index: 9999;
+  overflow-y: auto;
+}
+
+.party-settings-page {
+  min-height: 100vh;
+}
+
+/* Header */
+.party-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.party-settings-back {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.party-settings-back svg {
+  width: 18px;
+  height: 18px;
+  color: #888;
+}
+
+.party-settings-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* Profile Section */
+.party-settings-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+.party-settings-avatar-container {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.party-settings-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-settings-color-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 3px solid;
+}
+
+.party-settings-name {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.party-settings-edit-link {
+  background: none;
+  border: none;
+  color: #00F2EA;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Quick Actions */
+.party-settings-actions {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.party-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+}
+
+.party-action-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.party-action-btn span {
+  font-size: 11px;
+}
+
+.party-action-btn:hover {
+  color: #ffffff;
+}
+
+/* Section */
+.party-settings-section {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+.party-settings-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 16px 16px 8px;
+  margin: 0;
+}
+
+/* Card */
+.party-settings-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 0 16px;
+  margin: 0 16px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Row */
+.party-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  text-align: left;
+}
+
+.party-settings-row:last-child {
+  border-bottom: none;
+}
+
+.party-settings-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.party-settings-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.party-settings-row-label {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.party-settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.party-settings-row-sublabel {
+  font-size: 12px;
+  color: #666;
+}
+
+.party-settings-row.no-hover {
+  cursor: default;
+}
+
+.party-settings-row-value {
+  font-size: 14px;
+  color: #666;
+}
+
+.party-settings-row-count {
+  font-size: 13px;
+  color: #666;
+}
+
+.party-settings-chevron {
+  width: 16px;
+  height: 16px;
+  color: #444;
+}
+
+.party-settings-badge {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Row Icon */
+.party-settings-row-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.party-settings-row-icon svg {
+  width: 18px;
+  height: 18px;
+  color: #888;
+}
+
+.party-settings-row-icon.accent {
+  background: rgba(0, 242, 234, 0.15);
+}
+
+.party-settings-row-icon.accent svg {
+  color: #00F2EA;
+}
+
+/* Members Avatars Stack */
+.party-members-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.party-member-mini-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #1f1f1f;
+  object-fit: cover;
+}
+
+/* Theme Dot */
+.party-theme-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+/* Theme Grid */
+.party-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 24px;
+}
+
+.party-theme-option {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: transform 0.2s ease;
+}
+
+.party-theme-option:hover {
+  transform: scale(1.1);
+}
+
+.party-theme-option.selected {
+  box-shadow: 0 0 0 3px #1f1f1f, 0 0 0 5px currentColor;
+}
+
+.party-theme-option svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Members List */
+.party-members-list,
+.party-requests-list {
+  padding: 0 16px;
+}
+
+.party-member-item,
+.party-request-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.party-member-item:last-child,
+.party-request-item:last-child {
+  border-bottom: none;
+}
+
+.party-member-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-member-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.party-member-username {
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.party-member-role {
+  font-size: 12px;
+  color: #666;
+  text-transform: capitalize;
+}
+
+.party-member-action {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #666;
+}
+
+.party-member-action svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Request Actions */
+.party-request-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.party-request-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.party-request-btn.accept {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+}
+
+.party-request-btn.decline {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+}
+
+/* Media Grid */
+.party-settings-media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 0 16px;
+}
+
+.party-settings-media-item {
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+.party-settings-media-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Danger Zone */
+.party-settings-danger {
+  padding: 24px 16px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.party-settings-danger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #888;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.party-settings-danger-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.party-settings-danger-btn.delete {
+  color: #FF2A55;
+  border-color: rgba(255, 42, 85, 0.3);
+}
+
+/* Toggle Switch */
+.party-toggle {
+  width: 44px;
+  min-width: 44px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.party-toggle.active {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+}
+
+.party-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  transition: left 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: block;
+}
+
+.party-toggle.active .party-toggle-knob {
+  left: auto;
+  right: 2px;
+}
+
+/* Placeholder */
+.party-settings-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 14px;
+}

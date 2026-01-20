@@ -592,6 +592,8 @@
   background: linear-gradient(90deg, #FF2A55, #00F2EA);
   border: none;
   border-radius: 1px;
+  -webkit-mask-image: linear-gradient(to right, black 0%, black calc(50% - 22px), transparent calc(50% - 22px), transparent calc(50% + 22px), black calc(50% + 22px), black 100%);
+  mask-image: linear-gradient(to right, black 0%, black calc(50% - 22px), transparent calc(50% - 22px), transparent calc(50% + 22px), black calc(50% + 22px), black 100%);
 }
 
 .nomination-divider.community {
@@ -608,9 +610,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-  padding: 4px 8px;
-  border-radius: 12px;
+  background: transparent;
+  padding: 0;
 }
 
 .cp-badge-circle {

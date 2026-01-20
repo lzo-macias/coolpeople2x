@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
 import CreateScreen from './CreateScreen'
+import PartySettings from './PartySettings'
 import '../styling/Conversation.css'
 
 function Conversation({ conversation, onBack }) {
   const [messageText, setMessageText] = useState('')
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [localMessages, setLocalMessages] = useState([])
+  const [showPartySettings, setShowPartySettings] = useState(false)
   const { user } = conversation
+  const isPartyChat = conversation.isParty || false
   const mockMessages = mockConversations[conversation.id] || []
   const messages = [...mockMessages, ...localMessages]
 
@@ -32,7 +35,7 @@ function Conversation({ conversation, onBack }) {
           <span className="conversation-username">{user.username}</span>
         </div>
 
-        <button className="conversation-menu-btn">
+        <button className="conversation-menu-btn" onClick={() => setShowPartySettings(true)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="12" cy="5" r="2" />
             <circle cx="12" cy="12" r="2" />
@@ -129,6 +132,19 @@ function Conversation({ conversation, onBack }) {
             }}
           />
         </div>,
+        document.body
+      )}
+
+      {showPartySettings && createPortal(
+        <PartySettings
+          party={{
+            name: isPartyChat ? conversation.partyName : user.username,
+            avatar: isPartyChat ? conversation.partyAvatar : user.avatar,
+            color: conversation.partyColor || '#EC4899'
+          }}
+          isAdmin={true}
+          onClose={() => setShowPartySettings(false)}
+        />,
         document.body
       )}
     </div>
