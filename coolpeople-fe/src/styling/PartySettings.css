@@ -28,7 +28,7 @@
 .party-settings-back {
   width: 36px;
   height: 36px;
-  background: rgba(255, 255, 255, 0.08);
+  background: none;
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -395,6 +395,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   margin: 0 16px;
+  padding-bottom: 40px;
 }
 
 .party-settings-media-item {
@@ -489,4 +490,441 @@
   padding: 60px 20px;
   color: #666;
   font-size: 14px;
+}
+
+/* Info Box */
+.party-settings-info-box {
+  margin: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+
+.party-settings-info-box h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 8px;
+}
+
+.party-settings-info-box p {
+  font-size: 13px;
+  color: #888;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+/* Cycle Tiers */
+.cycle-tier {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cycle-tier:last-of-type {
+  margin-bottom: 16px;
+}
+
+.cycle-tier-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cycle-tier-badge.small {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.cycle-tier-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.cycle-tier-badge.large {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.cycle-tier-text {
+  font-size: 13px;
+  color: #aaa;
+  line-height: 1.5;
+}
+
+.cycle-note {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Disabled toggle */
+.party-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Extended row with longer description */
+.party-settings-row.extended {
+  padding: 20px 0;
+  align-items: flex-start;
+}
+
+.party-settings-row.extended .party-settings-row-sublabel {
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* More Menu Popup */
+.party-more-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  z-index: 10000;
+}
+
+.party-more-menu {
+  position: absolute;
+  top: 315px;
+  right: 16px;
+  background: #0a0a0a;
+  border-radius: 12px;
+  padding: 6px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.party-more-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.party-more-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.party-more-option svg {
+  width: 16px;
+  height: 16px;
+  color: #888;
+}
+
+.party-more-option.danger {
+  color: #FF2A55;
+}
+
+.party-more-option.danger svg {
+  color: #FF2A55;
+}
+
+/* Share Menu */
+.party-share-menu {
+  position: absolute;
+  top: 315px;
+  left: 16px;
+  background: #0a0a0a;
+  border-radius: 12px;
+  padding: 6px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.party-share-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 6px 0;
+}
+
+.party-share-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.party-share-mini-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid #0a0a0a;
+  object-fit: cover;
+}
+
+/* Send to Users Screen */
+.party-send-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.party-send-search svg {
+  width: 18px;
+  height: 18px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.party-send-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 15px;
+}
+
+.party-send-search-input::placeholder {
+  color: #666;
+}
+
+.party-send-list {
+  padding: 0 16px;
+}
+
+.party-send-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  text-align: left;
+}
+
+.party-send-item:last-child {
+  border-bottom: none;
+}
+
+.party-send-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-send-username {
+  flex: 1;
+  font-size: 15px;
+  color: #fff;
+}
+
+.party-send-status-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  background: #333;
+  color: #fff;
+  transition: all 0.2s ease;
+  min-width: 70px;
+}
+
+.party-send-status-btn:hover {
+  background: #444;
+}
+
+.party-send-status-btn.sent {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+}
+
+.party-done-btn {
+  position: fixed;
+  bottom: 24px;
+  left: 16px;
+  right: 16px;
+  max-width: 398px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #333;
+  border: none;
+  border-radius: 12px;
+  color: #666;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.party-done-btn.active {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+}
+
+/* Member Actions */
+.party-member-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.party-member-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.party-member-action-btn svg {
+  width: 18px;
+  height: 18px;
+  color: #666;
+  transition: color 0.2s ease;
+}
+
+.party-member-action-btn:hover svg {
+  color: #fff;
+}
+
+.party-member-action-btn.ban:hover svg {
+  color: #FF2A55;
+}
+
+/* Banned Members */
+.party-banned-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px;
+}
+
+.party-banned-search-row .party-send-search {
+  flex: 1;
+  margin: 0;
+}
+
+.party-unban-all-btn {
+  padding: 10px 14px;
+  background: #333;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.party-unban-all-btn:hover {
+  background: #444;
+}
+
+.party-banned-list {
+  padding: 0 16px;
+}
+
+.party-banned-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.party-banned-item:last-child {
+  border-bottom: none;
+}
+
+.party-banned-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-banned-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.party-banned-username {
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.party-banned-date {
+  font-size: 12px;
+  color: #666;
+}
+
+.party-ban-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: #333;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 85px;
+}
+
+.party-ban-toggle-btn:hover {
+  background: #444;
+}
+
+.party-ban-toggle-btn.unbanned {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.party-banned-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.party-banned-empty svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+}
+
+.party-banned-empty p {
+  font-size: 14px;
+  margin: 0;
 }
