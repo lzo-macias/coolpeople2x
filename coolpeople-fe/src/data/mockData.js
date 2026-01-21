@@ -685,6 +685,10 @@ export const mockMessages = [
     unreadCount: 63,
     isOnline: true,
     hasUnread: true,
+    isParty: true,
+    partyName: 'The Pink Lady Party',
+    partyAvatar: 'https://i.pravatar.cc/60?img=23',
+    partyColor: '#EC4899',
   },
   {
     id: 'msg-2',
@@ -750,6 +754,10 @@ export const mockMessages = [
     unreadCount: 0,
     isOnline: true,
     hasUnread: true,
+    isParty: true,
+    partyName: 'The Pink Lady Party',
+    partyAvatar: 'https://i.pravatar.cc/60?img=23',
+    partyColor: '#EC4899',
   },
 ]
 

@@ -41,6 +41,29 @@ function App() {
   const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
   const [userStories, setUserStories] = useState([]) // User's stories (nominations)
   const [conversations, setConversations] = useState({ ...mockConversations }) // Chat messages by conversation ID
+  const [userActivity, setUserActivity] = useState([]) // Track all user actions for details page
+
+  // Function to track user activity (likes, comments, nominations, etc.)
+  const trackActivity = (type, video) => {
+    const activity = {
+      id: `act-${Date.now()}`,
+      type,
+      action: type === 'like' ? 'liked' : type === 'comment' ? 'commented' : type === 'nominate' ? 'nominated' : type === 'repost' ? 'reposted' : type === 'endorse' ? 'endorsed' : type === 'ballot' ? 'added to ballot' : type === 'favorite' ? 'favorited' : type,
+      timestamp: 'Just now',
+      video: {
+        thumbnail: video.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
+        videoUrl: video.videoUrl || null, // Keep video URL separate for video playback
+        isMirrored: video.isMirrored || false, // Track if video should be mirrored
+        user: video.user || { username: 'unknown', avatar: 'https://i.pravatar.cc/40?img=1', party: 'Independent' },
+        race: video.targetRace || null,
+        likes: video.stats?.likes || '0',
+        comments: video.stats?.comments || '0',
+        shares: video.stats?.shares || '0',
+        caption: video.caption || video.title || '',
+      },
+    }
+    setUserActivity(prev => [activity, ...prev])
+  }
 
   // Ref for scrolling reels feed to top after posting
   const reelsFeedRef = useRef(null)
@@ -460,11 +483,12 @@ function App() {
               <ReelCard
                 key={reel.id}
                 reel={reel}
-                isPageActive={currentPage === 1}
+                isPageActive={currentPage === 1 && !showCreateScreen && !showProfile && !showPartyProfile && !showParticipantProfile && !showComments}
                 onOpenComments={() => handleOpenComments(reel)}
                 onUsernameClick={handleReelUsernameClick}
                 onPartyClick={handleReelPartyClick}
                 onEngagementClick={handleEngagementClick}
+                onTrackActivity={trackActivity}
               />
             ))}
           </div>
@@ -499,6 +523,7 @@ function App() {
             userPosts={userPosts}
             hasOptedIn={hasOptedIn}
             onOpenComments={handleOpenComments}
+            userActivity={userActivity}
           />
         </div>
       </div>
@@ -572,6 +597,7 @@ function App() {
             onPartyClick={handleOpenPartyProfile}
             onUserClick={handleOpenProfile}
             onOpenComments={handleOpenComments}
+            userActivity={userActivity}
           />
         </div>
       )}

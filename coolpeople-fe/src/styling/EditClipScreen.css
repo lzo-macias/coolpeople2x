@@ -89,12 +89,110 @@
   opacity: 0.7;
 }
 
+/* Mode Switch Buttons */
+.edit-clip-side-btn.mode-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+  padding: 0;
+}
+
+.edit-clip-side-btn.mode-btn:active {
+  transform: scale(0.9);
+}
+
+/* Nominate, Record (CP), Party - White/Silver shimmer */
+.edit-clip-side-btn.mode-btn.nominate-mode,
+.edit-clip-side-btn.mode-btn.record-mode,
+.edit-clip-side-btn.mode-btn.party-mode {
+  background: linear-gradient(
+    145deg,
+    #FFFFFF 0%,
+    #F8F8F8 20%,
+    #EEEEEE 40%,
+    #FFFFFF 50%,
+    #F8F8F8 60%,
+    #EEEEEE 80%,
+    #E5E5E5 100%
+  );
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Race - Gold shimmer */
+.edit-clip-side-btn.mode-btn.race-mode {
+  background: linear-gradient(
+    145deg,
+    #F5D98A 0%,
+    #E8A855 20%,
+    #D4954A 40%,
+    #E8A855 50%,
+    #F5D98A 60%,
+    #E8A855 80%,
+    #C4843A 100%
+  );
+  box-shadow:
+    0 2px 6px rgba(232, 168, 85, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mode-btn-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 7px;
+  font-weight: 500;
+  text-transform: capitalize;
+  letter-spacing: -0.3px;
+}
+
+/* Nominate and Party - Gradient text */
+.edit-clip-side-btn.mode-btn.nominate-mode .mode-btn-text,
+.edit-clip-side-btn.mode-btn.party-mode .mode-btn-text {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Record (CP) - Split color text */
+.edit-clip-side-btn.mode-btn.record-mode .mode-btn-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-btn-text .mode-c {
+  color: #00F2EA;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.mode-btn-text .mode-p {
+  color: #FF2A55;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* Race - Dark text */
+.edit-clip-side-btn.mode-btn.race-mode .mode-btn-text {
+  color: #2A1F0F;
+}
+
 /* Bottom */
 .edit-clip-bottom {
   position: relative;
   z-index: 10;
   margin-top: auto;
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 20px;
@@ -125,6 +223,55 @@
   height: 32px;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.edit-clip-send-friends-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  flex-shrink: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.edit-clip-send-friends-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.edit-clip-send-friends-btn svg {
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.edit-clip-send-friends-btn:active {
+  transform: scale(0.92);
+}
+
+.edit-clip-send-friends-btn:hover {
+  box-shadow: 0 4px 16px rgba(0, 242, 234, 0.25), 0 4px 16px rgba(255, 42, 85, 0.25);
 }
 
 .edit-clip-next-btn {
@@ -406,7 +553,8 @@
   border-top-right-radius: 20px;
   padding: 20px;
   padding-bottom: calc(20px + env(safe-area-inset-bottom));
-  max-height: 60%;
+  height: 85vh;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease;
@@ -608,8 +756,8 @@
 .user-panel {
   width: 100%;
   max-width: 430px;
-  height: 70vh;
-  background: #fff;
+  height: 85vh;
+  background: #000;
   border-radius: 20px 20px 0 0;
   display: flex;
   flex-direction: column;
@@ -623,92 +771,6 @@
   to {
     transform: translateY(0);
   }
-}
-
-.user-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.user-panel-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.user-panel-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #222;
-  margin: 0;
-}
-
-.user-panel-close {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  padding: 4px;
-}
-
-/* Send Mode Mini Toggle */
-.send-mode-mini-btn {
-  padding: 6px 12px;
-  background: #e8e8e8;
-  border: none;
-  border-radius: 14px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-}
-
-.send-mode-mini-btn:active {
-  opacity: 0.8;
-}
-
-.user-panel-selected {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.user-panel-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 4px;
-  background: linear-gradient(90deg, rgba(0, 242, 234, 0.15), rgba(255, 42, 85, 0.15));
-  border: 1px solid rgba(255, 42, 85, 0.25);
-  border-radius: 20px;
-}
-
-.user-panel-chip img {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.user-panel-chip span {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-}
-
-.user-panel-chip button {
-  background: none;
-  border: none;
-  color: #999;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
 }
 
 .user-panel-list {
@@ -728,7 +790,7 @@
 
 .user-panel-item:active,
 .user-panel-item.selected {
-  background: rgba(255, 42, 85, 0.08);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .user-panel-item img {
@@ -742,40 +804,115 @@
   flex: 1;
   font-size: 15px;
   font-weight: 500;
-  color: #222;
+  color: #fff;
 }
 
-.user-panel-check {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid #ddd;
+/* Search Bar */
+.user-panel-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.user-panel-search svg {
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.user-panel-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: #fff;
+}
+
+.user-panel-search input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Send Button on Each Row */
+.user-panel-send-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 65px;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.user-panel-send-btn.sent {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+}
+
+/* Send Together Button */
+.user-panel-send-together {
+  margin: 12px 20px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
-.user-panel-check.checked {
-  background: linear-gradient(90deg, #00F2EA, #FF2A55);
-  border-color: transparent;
-  color: #fff;
+.user-panel-send-together.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.user-panel-send-together.active svg {
+  color: #22c55e;
 }
 
 .user-panel-done {
   margin: 16px 20px;
   padding: 16px;
-  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  background: rgba(255, 255, 255, 0.1);
   border: none;
   border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  margin-bottom: max(16px, env(safe-area-inset-bottom));
+  margin-bottom: max(20px, calc(env(safe-area-inset-bottom) + 16px));
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.user-panel-done.active {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+}
+
+.user-panel-done.active svg {
+  color: #fff;
 }
 
 .user-panel-done:active {
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 /* Race Picker Slide-up */

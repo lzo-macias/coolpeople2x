@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange }) {
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
 
-  // Restart video from beginning when screen mounts
+  // Restart video from beginning when screen mounts or video URL changes
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
       videoRef.current.currentTime = 0
@@ -18,11 +18,14 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         videoRef.current.pause()
       }
     }
-  }, [])
+  }, [recordedVideoUrl])
   const [isEditingRace, setIsEditingRace] = useState(false)
   const [showUserPanel, setShowUserPanel] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState([])
   const [sendMode, setSendMode] = useState('separate') // 'separate' or 'together'
+  const [userSource, setUserSource] = useState('platform') // 'platform' or 'contacts'
+  const [sendTogether, setSendTogether] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState('')
 
   // Initialize selected recipients with conversation user when panel opens
   const initializePanel = () => {
@@ -33,7 +36,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   }
 
   // Mock users for the selection panel - conversation user first if exists
-  const otherUsers = [
+  const platformUsers = [
     { id: 1, username: 'maya_creates', avatar: 'https://i.pravatar.cc/40?img=1' },
     { id: 2, username: 'alex.design', avatar: 'https://i.pravatar.cc/40?img=2' },
     { id: 3, username: 'jordan_photo', avatar: 'https://i.pravatar.cc/40?img=4' },
@@ -42,10 +45,30 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     { id: 6, username: 'chris_dev', avatar: 'https://i.pravatar.cc/40?img=7' },
   ]
 
-  // Put conversation user first in the list
-  const availableUsers = conversationUser
-    ? [conversationUser, ...otherUsers.filter(u => u.id !== conversationUser.id)]
-    : otherUsers
+  // Mock contacts
+  const contactsList = [
+    { id: 101, username: 'Mom', avatar: 'https://i.pravatar.cc/40?img=32', phone: '+1 (555) 123-4567' },
+    { id: 102, username: 'David Martinez', avatar: 'https://i.pravatar.cc/40?img=33', phone: '+1 (555) 234-5678' },
+    { id: 103, username: 'Sarah K', avatar: 'https://i.pravatar.cc/40?img=34', phone: '+1 (555) 345-6789' },
+    { id: 104, username: 'Work - John', avatar: 'https://i.pravatar.cc/40?img=35', phone: '+1 (555) 456-7890' },
+  ]
+
+  // Get users based on source and search query
+  const getAvailableUsers = () => {
+    const users = userSource === 'platform' ? platformUsers : contactsList
+    const baseList = conversationUser
+      ? [conversationUser, ...users.filter(u => u.id !== conversationUser.id)]
+      : users
+
+    if (!userSearchQuery.trim()) return baseList
+
+    const query = userSearchQuery.toLowerCase()
+    return baseList.filter(user =>
+      user.username.toLowerCase().includes(query)
+    )
+  }
+
+  const availableUsers = getAvailableUsers()
 
   const toggleRecipient = (user) => {
     setSelectedRecipients(prev =>
@@ -90,14 +113,14 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const [mentionSource, setMentionSource] = useState('platform')
 
   // Mock users for mentions
-  const platformUsers = [
+  const mentionPlatformUsers = [
     { id: 1, username: 'angelrivas', name: 'Angel Rivas', avatar: 'https://i.pravatar.cc/100?img=1' },
     { id: 2, username: 'maya.creates', name: 'Maya Johnson', avatar: 'https://i.pravatar.cc/100?img=5' },
     { id: 3, username: 'jordan_photo', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=8' },
     { id: 4, username: 'alex.design', name: 'Alex Chen', avatar: 'https://i.pravatar.cc/100?img=11' },
   ]
 
-  const contactUsers = [
+  const mentionContactUsers = [
     { id: 101, phone: '+1 (555) 123-4567', name: 'Mom' },
     { id: 102, phone: '+1 (555) 234-5678', name: 'David Martinez' },
     { id: 103, phone: '+1 (555) 345-6789', name: 'Sarah K' },
@@ -287,7 +310,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
   const getFilteredMentionUsers = () => {
     const query = mentionQuery.toLowerCase()
-    const users = mentionSource === 'platform' ? platformUsers : contactUsers
+    const users = mentionSource === 'platform' ? mentionPlatformUsers : mentionContactUsers
     return users.filter(user => {
       const searchStr = (user.username || user.name || user.phone || '').toLowerCase()
       return searchStr.includes(query)
@@ -532,7 +555,9 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
             autoPlay
             loop
+            muted
             playsInline
+            crossOrigin="anonymous"
           />
         ) : (
           <img
@@ -561,9 +586,11 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
         <div className="edit-clip-side-controls">
           <button className="edit-clip-side-btn" onClick={() => {
-            console.log('Saving to drafts:', recordedVideoUrl)
-            // TODO: Save to drafts storage
-            onClose()
+            if (onSaveDraft) {
+              onSaveDraft()
+            } else {
+              onClose()
+            }
           }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -598,6 +625,26 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               <line x1="12" y1="4" x2="12" y2="20" />
             </svg>
           </button>
+
+          {/* Mode Switch Buttons - Race and Party only */}
+          {currentMode !== 'race' && onModeChange && (
+            <button
+              className="edit-clip-side-btn mode-btn race-mode"
+              onClick={() => onModeChange('race')}
+              title="Switch to Race"
+            >
+              <span className="mode-btn-text">Race</span>
+            </button>
+          )}
+          {currentMode !== 'party' && onModeChange && (
+            <button
+              className="edit-clip-side-btn mode-btn party-mode"
+              onClick={() => onModeChange('party')}
+              title="Switch to Party"
+            >
+              <span className="mode-btn-text">Party</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -788,9 +835,12 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           </>
         ) : (
           <>
-            <button className={`edit-clip-drafts-btn ${!canProceed ? 'disabled' : ''}`} disabled={!canProceed} onClick={() => {
-              console.log('Saving to drafts:', recordedVideoUrl)
-              onClose()
+            <button className="edit-clip-drafts-btn" onClick={() => {
+              if (onSaveDraft) {
+                onSaveDraft()
+              } else {
+                onClose()
+              }
             }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -806,6 +856,12 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 className="edit-clip-story-avatar"
               />
               <span>your story</span>
+            </button>
+            <button className="edit-clip-send-friends-btn" onClick={() => setShowUserPanel(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
             </button>
             <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={onNext} disabled={!canProceed}>
               next
@@ -828,64 +884,70 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         />
       )}
 
-      {/* User Selection Panel (Conversation Mode) */}
+      {/* User Selection Panel */}
       {showUserPanel && (
-        <div className="user-panel-overlay" onClick={() => setShowUserPanel(false)}>
+        <div className="user-panel-overlay" onClick={() => { setShowUserPanel(false); setUserSearchQuery(''); }}>
           <div className="user-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="user-panel-header">
-              <div className="user-panel-header-left">
-                <h3>Send to</h3>
-                {selectedRecipients.length > 1 && (
-                  <button
-                    className={`send-mode-mini-btn ${sendMode === 'together' ? 'active' : ''}`}
-                    onClick={() => setSendMode(sendMode === 'separate' ? 'together' : 'separate')}
-                  >
-                    {sendMode === 'separate' ? 'Separate' : 'Together'}
-                  </button>
-                )}
-              </div>
-              <button className="user-panel-close" onClick={() => setShowUserPanel(false)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+            {/* Search Bar */}
+            <div className="user-panel-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                autoFocus
+              />
             </div>
-
-            {/* Selected recipients chips */}
-            {selectedRecipients.length > 0 && (
-              <div className="user-panel-selected">
-                {selectedRecipients.map(user => (
-                  <div key={user.id} className="user-panel-chip">
-                    <img src={user.avatar} alt={user.username} />
-                    <span>{user.username}</span>
-                    <button onClick={() => toggleRecipient(user)}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
 
             <div className="user-panel-list">
               {availableUsers.map(user => (
-                <div
-                  key={user.id}
-                  className={`user-panel-item ${isSelected(user) ? 'selected' : ''}`}
-                  onClick={() => toggleRecipient(user)}
-                >
+                <div key={user.id} className="user-panel-item">
                   <img src={user.avatar} alt={user.username} />
                   <span>{user.username}</span>
-                  <div className={`user-panel-check ${isSelected(user) ? 'checked' : ''}`}>
-                    {isSelected(user) && (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    )}
-                  </div>
+                  <button
+                    className={`user-panel-send-btn ${isSelected(user) ? 'sent' : ''}`}
+                    onClick={() => toggleRecipient(user)}
+                  >
+                    {isSelected(user) ? 'Sent' : 'Send'}
+                  </button>
                 </div>
               ))}
             </div>
 
-            <button className="user-panel-done" onClick={handleSend}>
-              Send
+            {/* Send Together Button */}
+            <button
+              className={`user-panel-send-together ${sendTogether ? 'active' : ''}`}
+              onClick={() => setSendTogether(!sendTogether)}
+            >
+              {sendTogether && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              )}
+              Send together
+            </button>
+
+            <button
+              className={`user-panel-done ${selectedRecipients.length > 0 ? 'active' : ''}`}
+              onClick={() => {
+                // Pause any playing video
+                if (videoRef.current) {
+                  videoRef.current.pause()
+                }
+                handleSend()
+                setShowUserPanel(false)
+                setUserSearchQuery('')
+                // Navigate to scoreboard
+                if (onCompleteToScoreboard) {
+                  onCompleteToScoreboard()
+                }
+              }}
+            >
+              Complete
             </button>
           </div>
         </div>

@@ -177,7 +177,7 @@ const mockFollowedRaces = [
   { id: 'pinklady', name: 'The Pink Lady', icon: 'https://i.pravatar.cc/40?img=47' },
 ]
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -200,7 +200,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // Helper to pause video when navigating away
   const pauseVideo = () => {
-    console.log('[Video] pauseVideo called');
     if (videoRef.current) {
       videoRef.current.pause()
     }
@@ -208,7 +207,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // Helper to resume video when returning from modals
   const resumeVideo = () => {
-    console.log('[Video] resumeVideo called, isPageActive:', isPageActive);
     if (videoRef.current && isPageActive) {
       videoRef.current.play().catch(() => {})
     }
@@ -228,12 +226,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // Race modal state
   const [showRaceModal, setShowRaceModal] = useState(false)
-
-  // Debug: Log when showRaceModal changes
-  useEffect(() => {
-    console.log('[RaceModal] showRaceModal changed to:', showRaceModal);
-  }, [showRaceModal])
-
   const [nominatedCandidates, setNominatedCandidates] = useState(new Set())
   const [nominationCounts, setNominationCounts] = useState(() => {
     const counts = {}
@@ -360,9 +352,13 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
-              {data.user.party}
-            </button>
+            {data.user.party !== 'Independent' ? (
+              <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
+                {data.user.party}
+              </button>
+            ) : (
+              <span className="party-tag">{data.user.party}</span>
+            )}
             <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
               @{data.user.username}
             </button>
@@ -397,7 +393,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
         {/* Right side actions - move down when no nominate button (participant posts) */}
         <div className={`reel-actions-container ${data.user.isParticipant ? 'no-nominate' : ''}`}>
-          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} />
+          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} />
         </div>
 
         {/* Bottom info */}
@@ -408,11 +404,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               <button
                 className="reel-target-pill"
                 onClick={(e) => {
-                  console.log('[RaceModal] Pill clicked - opening modal');
                   e.stopPropagation();
                   pauseVideo();
                   setShowRaceModal(true);
-                  console.log('[RaceModal] showRaceModal set to true');
                 }}
               >
                 <span className="target-pill-dot"></span>
@@ -428,9 +422,13 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
               />
               <div className="reel-user-details">
-                <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
-                  {data.user.party}
-                </button>
+                {data.user.party !== 'Independent' ? (
+                  <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
+                    {data.user.party}
+                  </button>
+                ) : (
+                  <span className="party-tag">{data.user.party}</span>
+                )}
                 <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
                   {data.user.username}
                 </button>
@@ -470,7 +468,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
       </div>
 
       {/* Race Slide-up Modal - portaled to modal-root for z-index */}
-      {showRaceModal && console.log('[RaceModal] Rendering modal via portal to modal-root')}
       {showRaceModal && createPortal(
         <>
           <div
@@ -485,7 +482,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               zIndex: 2147483646
             }}
             onClick={() => {
-              console.log('[RaceModal] Backdrop clicked - closing modal');
               setShowRaceModal(false);
               resumeVideo();
             }}

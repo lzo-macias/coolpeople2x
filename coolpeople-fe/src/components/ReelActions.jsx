@@ -2,7 +2,7 @@ import { useState } from 'react'
 import '../styling/ReelActions.css'
 import { getPartyColor } from '../data/mockData'
 
-function ReelActions({ user, stats, onOpenComments }) {
+function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const partyColor = getPartyColor(user?.party)
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(stats?.likes || '9,999')
@@ -16,6 +16,10 @@ function ReelActions({ user, stats, onOpenComments }) {
       // Parse and increment
       const num = parseInt(likeCount.replace(/,/g, '')) + 1
       setLikeCount(num.toLocaleString())
+      // Track the like activity
+      if (onTrackActivity && reel) {
+        onTrackActivity('like', reel)
+      }
     }
     setIsLiked(!isLiked)
   }

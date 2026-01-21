@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
 import CreateScreen from './CreateScreen'
 import PartySettings from './PartySettings'
+import ChatSettings from './ChatSettings'
 import '../styling/Conversation.css'
 
 // Audio Message Component
@@ -465,15 +466,28 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       )}
 
       {showPartySettings && createPortal(
-        <PartySettings
-          party={{
-            name: isPartyChat ? conversation.partyName : user.username,
-            avatar: isPartyChat ? conversation.partyAvatar : user.avatar,
-            color: conversation.partyColor || '#EC4899'
-          }}
-          isAdmin={true}
-          onClose={() => setShowPartySettings(false)}
-        />,
+        isPartyChat ? (
+          <PartySettings
+            party={{
+              name: conversation.partyName,
+              avatar: conversation.partyAvatar,
+              color: conversation.partyColor || '#EC4899'
+            }}
+            isAdmin={true}
+            onClose={() => setShowPartySettings(false)}
+          />
+        ) : (
+          <ChatSettings
+            chat={{
+              name: user.username,
+              username: user.username,
+              avatar: user.avatar,
+              color: '#3B82F6'
+            }}
+            isGroupChat={false}
+            onClose={() => setShowPartySettings(false)}
+          />
+        ),
         document.body
       )}
     </div>

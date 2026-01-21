@@ -53,6 +53,118 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
   // Text overlays (shared between EditClipScreen and PostScreen)
   const [textOverlays, setTextOverlays] = useState([])
+  const [showSentConfirmation, setShowSentConfirmation] = useState(false)
+
+  // Drafts & Media Panel state
+  const [showMediaPanel, setShowMediaPanel] = useState(false)
+  const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
+  const [drafts, setDrafts] = useState([]) // Saved drafts
+
+  // Mock recent media from phone (in real app, this would come from device)
+  const mockRecentMedia = [
+    { id: 'recent-1', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4', timestamp: Date.now() - 1000 * 60 * 5 },
+    { id: 'recent-2', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', timestamp: Date.now() - 1000 * 60 * 30 },
+    { id: 'recent-3', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', timestamp: Date.now() - 1000 * 60 * 60 },
+    { id: 'recent-4', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 2 },
+    { id: 'recent-5', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 5 },
+    { id: 'recent-6', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 },
+    { id: 'recent-7', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 * 2 },
+    { id: 'recent-8', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3 },
+  ]
+
+  // Get combined recents (phone media + drafts from last 30 days)
+  const getRecentsWithDrafts = () => {
+    const thirtyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 30
+    const recentDrafts = drafts
+      .filter(d => d.timestamp > thirtyDaysAgo)
+      .map(d => ({ ...d, isDraft: true }))
+
+    const combined = [...mockRecentMedia, ...recentDrafts]
+    return combined.sort((a, b) => b.timestamp - a.timestamp)
+  }
+
+  // Capture thumbnail from video
+  const captureThumbnail = () => {
+    if (!videoRef.current) return null
+
+    try {
+      const video = videoRef.current
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 360
+      canvas.height = video.videoHeight || 640
+      const ctx = canvas.getContext('2d')
+
+      // If mirrored, flip the canvas
+      if (recordedWithFrontCamera) {
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      return canvas.toDataURL('image/jpeg', 0.8)
+    } catch (err) {
+      console.error('Error capturing thumbnail:', err)
+      return null
+    }
+  }
+
+  // Save to drafts function
+  const saveToDrafts = (videoUrl, isMirrored = false) => {
+    const thumbnail = captureThumbnail()
+
+    // Use base64 data for persistent storage, fallback to URL for external videos
+    const videoData = recordedVideoBase64 || videoUrl
+
+    const newDraft = {
+      id: `draft-${Date.now()}`,
+      type: 'video',
+      videoUrl: videoData,
+      thumbnail: thumbnail || videoData,
+      isMirrored,
+      timestamp: Date.now(),
+      mode: selectedMode,
+      raceName: raceName || null,
+      raceDeadline: raceDeadline || null,
+      taggedUser: selectedTag || null,
+      textOverlays: [...textOverlays],
+    }
+    setDrafts(prev => [newDraft, ...prev])
+    return newDraft
+  }
+
+  // Load draft into editor
+  const loadDraft = (draft) => {
+    setRecordedVideoUrl(draft.videoUrl)
+    setRecordedWithFrontCamera(draft.isMirrored || false)
+    if (draft.mode) setSelectedMode(draft.mode)
+    if (draft.raceName) setRaceName(draft.raceName)
+    if (draft.raceDeadline) setRaceDeadline(draft.raceDeadline)
+    if (draft.taggedUser) setSelectedTag(draft.taggedUser)
+    if (draft.textOverlays) setTextOverlays(draft.textOverlays)
+    setShowMediaPanel(false)
+    setShowClipConfirm(false)
+    setShowEditClipScreen(true)
+  }
+
+  // Load recent media (from phone) into editor
+  const loadRecentMedia = (media) => {
+    setRecordedVideoUrl(media.videoUrl)
+    setRecordedWithFrontCamera(false)
+    // Reset any previous draft state
+    setSelectedMode('record')
+    setRaceName('')
+    setRaceDeadline(null)
+    setSelectedTag(null)
+    setTextOverlays([])
+    setShowMediaPanel(false)
+    setShowClipConfirm(false)
+    setShowEditClipScreen(true)
+  }
+
+  // Delete draft
+  const deleteDraft = (draftId) => {
+    setDrafts(prev => prev.filter(d => d.id !== draftId))
+  }
 
   // Refs
   const videoRef = useRef(null)
@@ -61,6 +173,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null)
+  const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // Store base64 for drafts
   const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
 
   // Sync selfie video with main video
@@ -178,6 +291,14 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         console.log('Recorded blob size:', blob.size)
         const url = URL.createObjectURL(blob)
         setRecordedVideoUrl(url)
+
+        // Convert blob to base64 for persistent storage in drafts
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setRecordedVideoBase64(reader.result)
+        }
+        reader.readAsDataURL(blob)
+
         setShowClipConfirm(true)
       }
 
@@ -220,6 +341,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       URL.revokeObjectURL(recordedVideoUrl)
       setRecordedVideoUrl(null)
     }
+    setRecordedVideoBase64(null)
 
     // Reset nominate mode state
     setSelectedTag(null)
@@ -296,6 +418,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       URL.revokeObjectURL(recordedVideoUrl)
       setRecordedVideoUrl(null)
     }
+    setRecordedVideoBase64(null)
     setShowClipConfirm(false)
 
     // Re-attach camera stream after a brief delay to ensure video element is ready
@@ -405,7 +528,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             className={`create-preview-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
             autoPlay
             loop
+            muted
             playsInline
+            crossOrigin="anonymous"
             onTimeUpdate={syncSelfieVideo}
             onLoadedData={() => console.log('Recorded video loaded successfully')}
             onError={(e) => console.error('Recorded video error:', e)}
@@ -642,8 +767,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                   </svg>
                 </button>
                 <button className="clip-action-btn draft" onClick={() => {
-                  console.log('Saving draft:', recordedVideoUrl)
-                  // In a real app, save to drafts storage
+                  saveToDrafts(recordedVideoUrl, recordedWithFrontCamera)
+                  setShowSentConfirmation(true)
+                  setTimeout(() => setShowSentConfirmation(false), 1500)
                   handleDeleteClip()
                 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -807,12 +933,119 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       {/* Bottom Bar with Gallery */}
       {!showTagFlow && (
         <div className="create-bottom-bar">
-          <button className="create-gallery-btn">
+          <button className="create-gallery-btn" onClick={() => setShowMediaPanel(true)}>
             <img
-              src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=100&h=100&fit=crop"
+              src={drafts.length > 0 ? drafts[0].thumbnail : "https://images.unsplash.com/photo-1551632811-561732d1e306?w=100&h=100&fit=crop"}
               alt="Gallery"
             />
+            {drafts.length > 0 && <span className="gallery-draft-badge">{drafts.length}</span>}
           </button>
+        </div>
+      )}
+
+      {/* Media Panel (Drafts & Recents) */}
+      {showMediaPanel && (
+        <div className="media-panel-overlay" onClick={() => setShowMediaPanel(false)}>
+          <div className="media-panel" onClick={(e) => e.stopPropagation()}>
+            {/* Tab Header */}
+            <div className="media-panel-header">
+              <button
+                className={`media-panel-tab ${mediaPanelTab === 'recents' ? 'active' : ''}`}
+                onClick={() => setMediaPanelTab('recents')}
+              >
+                Recents
+              </button>
+              <button
+                className={`media-panel-tab ${mediaPanelTab === 'drafts' ? 'active' : ''}`}
+                onClick={() => setMediaPanelTab('drafts')}
+              >
+                Drafts
+              </button>
+            </div>
+
+            {/* Media Grid */}
+            <div className="media-panel-grid">
+              {mediaPanelTab === 'recents' ? (
+                getRecentsWithDrafts().map(item => (
+                  <div
+                    key={item.id}
+                    className="media-grid-item"
+                    onClick={() => item.isDraft ? loadDraft(item) : loadRecentMedia(item)}
+                  >
+                    <img src={item.thumbnail} alt="" />
+                    {item.type === 'video' && (
+                      <div className="media-item-video-icon">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </div>
+                    )}
+                    {item.isDraft && (
+                      <div className="media-item-draft-badge">draft</div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                drafts.length > 0 ? (
+                  drafts.map(draft => (
+                    <div
+                      key={draft.id}
+                      className="media-grid-item draft-item"
+                      onClick={() => loadDraft(draft)}
+                    >
+                      <img src={draft.thumbnail} alt="" />
+                      <div className="media-item-video-icon">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </div>
+                      <button
+                        className="draft-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteDraft(draft.id)
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <div className="draft-mode-badge">
+                        {draft.mode === 'race' ? 'Race' : draft.mode === 'nominate' ? 'Nominate' : draft.mode === 'party' ? 'Party' : 'Post'}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="media-panel-empty">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    <span>No drafts yet</span>
+                    <p>Save videos to continue editing later</p>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sent Confirmation Animation */}
+      {showSentConfirmation && (
+        <div className="sent-confirmation">
+          <div className="sent-check-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#sentGradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <defs>
+                <linearGradient id="sentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#00F2EA" />
+                  <stop offset="100%" stopColor="#FF2A55" />
+                </linearGradient>
+              </defs>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
         </div>
       )}
 
@@ -849,6 +1082,23 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             console.log('Sending to:', recipients)
             onSendToConversation?.(recordedVideoUrl, recordedWithFrontCamera)
           }}
+          onCompleteToScoreboard={() => {
+            // Close edit screen and show sent confirmation
+            setShowEditClipScreen(false)
+            setShowSentConfirmation(true)
+            // Hide confirmation after animation
+            setTimeout(() => {
+              setShowSentConfirmation(false)
+            }, 1500)
+          }}
+          onSaveDraft={() => {
+            saveToDrafts(recordedVideoUrl, recordedWithFrontCamera)
+            setShowSentConfirmation(true)
+            setTimeout(() => setShowSentConfirmation(false), 1500)
+            handleCloseEditClipScreen()
+          }}
+          currentMode={selectedMode}
+          onModeChange={setSelectedMode}
         />
       )}
 

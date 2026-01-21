@@ -288,7 +288,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [] }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
@@ -702,12 +702,16 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </div>
             <div className="profile-info">
               <h2 className="profile-username">{candidate.username}</h2>
-              <button
-                className="profile-party-btn"
-                onClick={() => onPartyClick?.(candidate.party)}
-              >
-                {candidate.party}
-              </button>
+              {candidate.party !== 'Independent' ? (
+                <button
+                  className="profile-party-btn"
+                  onClick={() => onPartyClick?.(candidate.party)}
+                >
+                  {candidate.party}
+                </button>
+              ) : (
+                <span className="profile-party-text">{candidate.party}</span>
+              )}
             </div>
           </div>
 
@@ -1199,10 +1203,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {/* Details Tab */}
         {activeTab === 'details' && (
           <div className="activity-feed">
-            {activityFeed.map((activity) => {
+            {/* Show real user activity first, then fill with mock data */}
+            {[...userActivity, ...activityFeed].map((activity) => {
               const config = activityConfig[activity.type]
               const video = activity.video
-              const videoPartyColor = getPartyColor(video.user.party)
+              const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
+              const hasVideoUrl = !!video?.videoUrl
               return (
                 <div key={activity.id} className="activity-item">
                   {/* Action indicator at top - full width */}
@@ -1211,7 +1217,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     <span className="activity-action-text">
                       {activity.type === 'repost' || activity.type === 'post' ? 'post by' : activity.action}
                     </span>
-                    <span className="activity-action-user">{video.user.username}</span>
+                    <span className="activity-action-user">{video?.user?.username || 'unknown'}</span>
                     <span className="activity-timestamp">{activity.timestamp}</span>
                   </div>
 
@@ -1220,12 +1226,32 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
                   {/* Video container */}
                   <div className="activity-video-container">
-                    <img src={video.thumbnail} alt="" className="activity-video-thumbnail" />
+                    {hasVideoUrl ? (
+                      <video
+                        src={video.videoUrl}
+                        className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
+                        loop
+                        muted
+                        playsInline
+                        autoPlay
+                      />
+                    ) : video?.thumbnail ? (
+                      <img
+                        src={video.thumbnail}
+                        alt=""
+                        className="activity-video-thumbnail"
+                        onError={(e) => {
+                          e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
+                        }}
+                      />
+                    ) : (
+                      <div className="activity-video-thumbnail activity-video-placeholder" />
+                    )}
 
                     {/* Overlay content */}
                     <div className="activity-video-overlay">
                       <div className="activity-info">
-                        {video.race && (
+                        {video?.race && (
                           <div className="activity-race-pill">
                             <span className="activity-race-dot"></span>
                             {video.race}
@@ -1233,17 +1259,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                         )}
                         <div className="activity-user-row">
                           <img
-                            src={video.user.avatar}
-                            alt={video.user.username}
+                            src={video?.user?.avatar}
+                            alt={video?.user?.username}
                             className="activity-user-avatar"
                             style={{ borderColor: videoPartyColor }}
                           />
                           <div className="activity-user-details">
-                            <span className="activity-party-tag">{video.user.party}</span>
-                            <span className="activity-username">@{video.user.username}</span>
+                            <span className="activity-party-tag">{video?.user?.party}</span>
+                            <span className="activity-username">@{video?.user?.username}</span>
                           </div>
                         </div>
-                        <p className="activity-caption">{video.caption}</p>
+                        <p className="activity-caption">{video?.caption}</p>
                       </div>
                     </div>
                   </div>

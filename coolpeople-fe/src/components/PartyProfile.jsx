@@ -414,7 +414,6 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
     { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
-    { name: 'Details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
   const renderStars = (count) => {

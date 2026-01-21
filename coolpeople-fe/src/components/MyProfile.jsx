@@ -1,8 +1,119 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
-import { generateSparklineData } from '../data/mockData'
+import { generateSparklineData, getPartyColor } from '../data/mockData'
 import '../styling/MyProfile.css'
+
+// Activity type colors and icons (same as CandidateProfile)
+const activityConfig = {
+  like: { color: '#FF4D6A', icon: '♥' },
+  nominate: { color: '#00F2EA', icon: '★' },
+  repost: { color: '#4CAF50', icon: '↻' },
+  comment: { color: '#FFB800', icon: '💬' },
+  endorsement: { color: '#9B59B6', icon: '✓' },
+  ballot: { color: '#FF9500', icon: '☐' },
+  favorite: { color: '#FFD700', icon: '★' },
+}
+
+// Activity Video Item component with IntersectionObserver for auto-play
+function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
+  const videoRef = useRef(null)
+  const containerRef = useRef(null)
+  const config = activityConfig[activity.type] || activityConfig.like
+  const video = activity.video
+  const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
+
+  // Check if we have a video URL to play - prefer video over thumbnail
+  const hasVideoUrl = !!video?.videoUrl
+
+  // IntersectionObserver for auto-play when 50% visible
+  useEffect(() => {
+    if (!hasVideoUrl || !containerRef.current) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (videoRef.current) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            videoRef.current.play().catch(() => {})
+          } else {
+            videoRef.current.pause()
+          }
+        }
+      },
+      { threshold: 0.5 }
+    )
+
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [hasVideoUrl])
+
+  return (
+    <div className="activity-item" ref={containerRef}>
+      {/* Action indicator at top - full width */}
+      <div className="activity-action-badge">
+        <span className="activity-action-icon" style={{ color: config.color }}>{config.icon}</span>
+        <span className="activity-action-text">
+          {activity.type === 'repost' || activity.type === 'post' ? 'post by' : activity.action}
+        </span>
+        <span className="activity-action-user">{video?.user?.username || 'unknown'}</span>
+        <span className="activity-timestamp">{activity.timestamp}</span>
+      </div>
+
+      {/* Video card */}
+      <div className="activity-video-card">
+        {/* Video container */}
+        <div className="activity-video-container">
+          {hasVideoUrl ? (
+            <video
+              ref={videoRef}
+              src={video.videoUrl}
+              className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
+              loop
+              muted
+              playsInline
+            />
+          ) : video?.thumbnail ? (
+            <img
+              src={video.thumbnail}
+              alt=""
+              className="activity-video-thumbnail"
+              onError={(e) => {
+                e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
+              }}
+            />
+          ) : (
+            <div className="activity-video-thumbnail activity-video-placeholder" />
+          )}
+
+          {/* Overlay content */}
+          <div className="activity-video-overlay">
+            <div className="activity-info">
+              {video?.race && (
+                <div className="activity-race-pill">
+                  <span className="activity-race-dot"></span>
+                  {video.race}
+                </div>
+              )}
+              <div className="activity-user-row">
+                <img
+                  src={video?.user?.avatar}
+                  alt={video?.user?.username}
+                  className="activity-user-avatar"
+                  style={{ borderColor: videoPartyColor }}
+                />
+                <div className="activity-user-details">
+                  <span className="activity-party-tag">{video?.user?.party}</span>
+                  <span className="activity-username">@{video?.user?.username}</span>
+                </div>
+              </div>
+              <p className="activity-caption">{video?.caption}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Current logged-in user data (independent, not opted into social credit)
 const myProfileData = {
@@ -27,7 +138,7 @@ const myProfileData = {
   ],
 }
 
-function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments }) {
+function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [] }) {
   const [activeTab, setActiveTab] = useState('posts')
   const [showEditBio, setShowEditBio] = useState(false)
   const [showSinglePost, setShowSinglePost] = useState(false)
@@ -97,7 +208,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Tags', id: 'tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
-    { name: 'Bio', id: 'bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
+    { name: 'Details', id: 'details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
   return (
@@ -218,8 +329,24 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
           </div>
         )}
 
-        {activeTab === 'bio' && (
-          <EditBio />
+        {activeTab === 'details' && (
+          <div className="activity-feed">
+            {userActivity.length === 0 ? (
+              <div className="activity-empty">
+                <p>No activity yet</p>
+                <span>Your likes, comments, and nominations will appear here</span>
+              </div>
+            ) : (
+              userActivity.map((activity) => (
+                <ActivityVideoItem
+                  key={activity.id}
+                  activity={activity}
+                  activityConfig={activityConfig}
+                  getPartyColor={getPartyColor}
+                />
+              ))
+            )}
+          </div>
         )}
       </div>
 
