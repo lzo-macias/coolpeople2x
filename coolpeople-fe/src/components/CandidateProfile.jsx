@@ -5,6 +5,25 @@ import { getPartyColor, generateSparklineData } from '../data/mockData'
 import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 
+// CoolPeople Tier System
+const CP_TIERS = [
+  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '🥉' },
+  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '🥈' },
+  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '🥇' },
+  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '💎' },
+  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '👑' },
+  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '🔥' },
+]
+
+const getCurrentTier = (points) => {
+  return CP_TIERS.find(tier => points >= tier.min && points <= tier.max) || CP_TIERS[0]
+}
+
+const getNextTier = (points) => {
+  const currentIndex = CP_TIERS.findIndex(tier => points >= tier.min && points <= tier.max)
+  return currentIndex < CP_TIERS.length - 1 ? CP_TIERS[currentIndex + 1] : null
+}
+
 // Mock data for the candidate profile
 const mockCandidate = {
   id: 'user-1',
@@ -14,6 +33,9 @@ const mockCandidate = {
   nominations: '9,999',
   followers: '1M',
   change: '+301.26',
+  cpPoints: 3247, // CoolPeople points - determines tier
+  // Races the candidate is competing in (CP is always included for social credit users)
+  races: ['CP', 'NYC Mayor 2024', 'City Council District 5'],
   isFollowing: false,
   isFavorited: false,
   sparklineData: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
@@ -32,16 +54,28 @@ const mockCandidate = {
   ],
 }
 
-const mockTags = ['all', 'trans', 'police', 'honesty', 'generosity', 'humour']
-
-// Sparkline data for each tag category
-const tagSparklineData = {
-  all: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
-  trans: [30, 35, 32, 40, 45, 42, 50, 55, 52, 60, 58, 62, 65, 68, 70, 72, 75, 78, 80, 85],
-  police: [60, 55, 58, 52, 48, 50, 45, 48, 42, 40, 38, 42, 45, 48, 50, 52, 55, 58, 60, 62],
-  honesty: [70, 72, 75, 78, 80, 82, 85, 83, 80, 78, 82, 85, 88, 90, 92, 94, 96, 95, 93, 95],
-  generosity: [50, 52, 55, 58, 60, 58, 55, 52, 50, 55, 60, 65, 70, 75, 80, 78, 75, 72, 70, 68],
-  humour: [40, 45, 50, 55, 60, 65, 70, 68, 72, 75, 78, 80, 75, 70, 72, 78, 82, 85, 88, 92],
+// Race data for CP filtering - everyone in social credit is in CP race
+const raceData = {
+  'CP': {
+    cpPoints: 3247,
+    change: '+87.50',
+    tier: 'Gold'
+  },
+  'NYC Mayor 2024': {
+    cpPoints: 1850,
+    change: '+42.30',
+    tier: 'Silver'
+  },
+  'City Council District 5': {
+    cpPoints: 4200,
+    change: '-15.20',
+    tier: 'Gold'
+  },
+  'State Assembly': {
+    cpPoints: 890,
+    change: '+120.00',
+    tier: 'Bronze'
+  },
 }
 
 // CP paid nominations (verified paid reviews)
@@ -302,7 +336,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   }, [passedCandidate?.username])
 
   const [activeTab, setActiveTab] = useState('bio')
-  const [selectedTags, setSelectedTags] = useState(['all']) // array of active tag names
+  const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter
   const [isFollowing, setIsFollowing] = useState(candidate.isFollowing)
   const [isFavorited, setIsFavorited] = useState(candidate.isFavorited)
   const [searchQuery, setSearchQuery] = useState('')
@@ -320,6 +354,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [reviewResponses, setReviewResponses] = useState({}) // { nominationId: responseText }
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [selectedPeriod, setSelectedPeriod] = useState('1M')
+  const [cpCardExpanded, setCpCardExpanded] = useState(false)
 
   // Convert posts to reel format for SinglePostView with variable engagement scores
   const trends = ['up', 'down', 'stable']
@@ -466,15 +502,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     setDragOverItem(null)
   }
 
-  // Chart colors cycle (for filtered chart based on tag count)
-  const chartColors = [
-    '#0EFB49', // green (default/all only)
-    '#00F2EA', // teal
-    '#FF2A55', // pink
-    '#FFD700', // gold
-    '#9B59B6', // purple
-  ]
-
   const partyColor = getPartyColor(candidate.party)
 
   // Get color from gradient based on position (0-10 score)
@@ -498,101 +525,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     }
   }
 
-  // Handle tag click - toggle on/off
-  const handleTagClick = (tag) => {
-    setSelectedTags(prev => {
-      if (prev.includes(tag)) {
-        // Remove tag
-        const newTags = prev.filter(t => t !== tag)
-        // If nothing selected, default back to 'all'
-        return newTags.length === 0 ? ['all'] : newTags
-      } else {
-        // Add tag
-        return [...prev, tag]
-      }
-    })
-  }
-
-  // Get chart color based on selected tags
-  const getChartColor = () => {
-    // If only 'all' is selected, return green
-    if (selectedTags.length === 1 && selectedTags[0] === 'all') {
-      return '#0EFB49' // green
-    }
-    // Count tags excluding 'all'
-    const tagCount = selectedTags.filter(t => t !== 'all').length
-    // Cycle through colors, cap at last color
-    const colorIndex = Math.min(tagCount, chartColors.length - 1)
-    return chartColors[colorIndex]
-  }
-
-  const chartColor = getChartColor()
-
-  // Get filtered sparkline data based on selected tags
-  const getFilteredSparklineData = () => {
-    // If only 'all' is selected, return overall data
-    if (selectedTags.length === 1 && selectedTags[0] === 'all') {
-      return tagSparklineData.all
-    }
-    // Get tags excluding 'all'
-    const activeTags = selectedTags.filter(t => t !== 'all')
-    if (activeTags.length === 0) return tagSparklineData.all
-
-    // If one tag, return its data
-    if (activeTags.length === 1) {
-      return tagSparklineData[activeTags[0]] || tagSparklineData.all
-    }
-
-    // Multiple tags: average the data points
-    const dataLength = tagSparklineData.all.length
-    const averaged = []
-    for (let i = 0; i < dataLength; i++) {
-      const sum = activeTags.reduce((acc, tag) => {
-        return acc + (tagSparklineData[tag]?.[i] || 0)
-      }, 0)
-      averaged.push(Math.round(sum / activeTags.length))
-    }
-    return averaged
-  }
-
-  const filteredSparklineData = getFilteredSparklineData()
-
-  // Calculate badge positions based on sparkline data
-  const getBadgePositions = (data) => {
-    if (!data || data.length < 2) return { ratingTop: 10, changeTop: 45 }
-
-    const chartHeight = 84
-    const min = Math.min(...data)
-    const max = Math.max(...data)
-    const range = max - min || 1
-
-    // Get the last value (where the line ends)
-    const lastValue = data[data.length - 1]
-
-    // Calculate Y position of the end point (inverted because SVG y=0 is top)
-    const endY = chartHeight - ((lastValue - min) / range) * chartHeight
-
-    // Position rating badge slightly below the end point, but not too low
-    const ratingTop = Math.max(5, Math.min(endY + 5, 40))
-
-    // Position change indicator below rating, but above baseline (baseline is ~50% = 42px)
-    const changeTop = Math.min(ratingTop + 30, 55)
-
-    return { ratingTop, changeTop }
-  }
-
-  const badgePositions = getBadgePositions(filteredSparklineData)
-
-  // Calculate change value from sparkline data
-  const getChangeValue = (data) => {
-    if (!data || data.length < 2) return '+0.00'
-    const first = data[0]
-    const last = data[data.length - 1]
-    const change = ((last - first) / first) * 100
-    return change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2)
-  }
-
-  const filteredChange = getChangeValue(filteredSparklineData)
 
   // Handle guess selection
   const handleGuess = (index) => {
@@ -727,7 +659,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{candidate.races || '8'}</span>
+                <span className="stat-number">{candidate.races?.length || '8'}</span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
@@ -818,45 +750,322 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           />
         </div>
 
-        {/* Filtered Chart - Full Width */}
-        <div className="chart-container full-width">
-          <div className="chart-wrapper">
-            <Sparkline
-              data={filteredSparklineData}
-              color={chartColor}
-              width={340}
-              height={84}
-              strokeWidth={2}
-              showBaseline={true}
-            />
-            <div className="chart-change-indicator" style={{ top: `${badgePositions.changeTop}px` }}>
-              <span
-                className="chart-change"
-                style={{ background: '#42FF87' }}
-              >
-                {filteredChange}
-              </span>
+        {/* CoolPeople Points Card */}
+        {(() => {
+          // Get race-specific data
+          const currentRaceData = raceData[selectedRace] || raceData['CP']
+          const cpPoints = currentRaceData.cpPoints
+          const raceChange = currentRaceData.change
+          const currentTier = getCurrentTier(cpPoints)
+          const nextTier = getNextTier(cpPoints)
+
+          // Calculate progress to next tier
+          const tierRange = (nextTier?.min || currentTier.max + 1) - currentTier.min
+          const progressInTier = cpPoints - currentTier.min
+          const progressPercent = Math.min((progressInTier / tierRange) * 100, 100)
+          const pointsToNext = nextTier ? nextTier.min - cpPoints : 0
+
+          // Get tier percentile (mock for now)
+          const tierPercentile = currentTier.name === 'Gold' ? '3' :
+                                 currentTier.name === 'Diamond' ? '1' :
+                                 currentTier.name === 'Silver' ? '15' :
+                                 currentTier.name === 'Bronze' ? '40' :
+                                 currentTier.name === 'Master' ? '0.5' : '0.1'
+
+          return (
+            <div className={`cp-card ${cpCardExpanded ? 'expanded' : 'minimized'}`} onClick={() => setCpCardExpanded(!cpCardExpanded)}>
+              {/* Header - only in expanded mode */}
+              {cpCardExpanded && (
+                <div className="cp-header">
+                  <div className="cp-level">
+                    <div className="level-badge" style={{
+                      background: `linear-gradient(135deg, ${currentTier.color}33, ${currentTier.color}22)`,
+                      borderColor: `${currentTier.color}4D`
+                    }}>
+                      {currentTier.icon}
+                    </div>
+                    <div className="level-info">
+                      <h3 style={{ color: currentTier.color }}>{currentTier.name.toUpperCase()}</h3>
+                      <span>Top {tierPercentile}% of users</span>
+                    </div>
+                  </div>
+                  <div className="cp-total">
+                    <div className="points">{cpPoints.toLocaleString()} <span>CP</span></div>
+                    <div className={`change ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange} this week</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Minimized header row - period selector + cp total inline */}
+              {!cpCardExpanded && (
+                <div className="cp-minimized-row">
+                  <div className="period-selector" onClick={(e) => e.stopPropagation()}>
+                    {['1W', '1M', '3M', 'ALL'].map((period) => (
+                      <button
+                        key={period}
+                        className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
+                        onClick={() => setSelectedPeriod(period)}
+                      >
+                        {period}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="cp-total-mini">
+                    <span className="tier-icon-mini" style={{ color: currentTier.color }}>{currentTier.icon}</span>
+                    <span className="points-mini">{cpPoints.toLocaleString()}</span>
+                    <span className="cp-label-mini">CP</span>
+                    <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Time Period Selector - only in expanded mode */}
+              {cpCardExpanded && (
+                <div className="period-selector" onClick={(e) => e.stopPropagation()}>
+                  {['1W', '1M', '3M', 'ALL'].map((period) => (
+                    <button
+                      key={period}
+                      className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
+                      onClick={() => setSelectedPeriod(period)}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Chart */}
+              {(() => {
+                // Generate different data based on selected period
+                const periodConfig = {
+                  '1W': { dataPoints: 7, volatility: 0.02, changeMultiplier: 1 },
+                  '1M': { dataPoints: 30, volatility: 0.03, changeMultiplier: 4 },
+                  '3M': { dataPoints: 90, volatility: 0.05, changeMultiplier: 12 },
+                  'ALL': { dataPoints: 180, volatility: 0.08, changeMultiplier: 24 },
+                }
+                const config = periodConfig[selectedPeriod]
+
+                // Calculate period-specific change
+                const baseChange = parseFloat(raceChange)
+                const periodChange = baseChange * config.changeMultiplier
+                const isNegativeChange = periodChange < 0
+
+                // Get current and next tier for chart bounds
+                const tierMin = currentTier.min
+                const tierMax = nextTier ? nextTier.min : currentTier.max
+                const fullTierRange = tierMax - tierMin
+
+                // Generate CP history data based on period - jagged like real charts
+                const generateCPHistory = () => {
+                  const currentCP = cpPoints
+                  const history = []
+                  const startCP = currentCP - periodChange
+
+                  // Use seeded random for consistent results
+                  const seededRandom = (seed) => {
+                    const x = Math.sin(seed * 9999) * 10000
+                    return x - Math.floor(x)
+                  }
+
+                  for (let i = 0; i < config.dataPoints; i++) {
+                    const progress = i / (config.dataPoints - 1)
+                    const baseValue = startCP + (currentCP - startCP) * progress
+
+                    // Jagged noise - random ups and downs
+                    const rand1 = (seededRandom(i * 13.7) - 0.5) * 2
+                    const rand2 = (seededRandom(i * 7.3 + 100) - 0.5) * 2
+                    const spike = seededRandom(i * 3.1) > 0.85 ? (seededRandom(i * 2.1) - 0.5) * 4 : 0
+
+                    const noise = (rand1 * fullTierRange * config.volatility) +
+                                  (rand2 * fullTierRange * config.volatility * 0.5) +
+                                  (spike * fullTierRange * config.volatility)
+
+                    const value = baseValue + noise * (1 - progress * 0.2)
+                    history.push(value)
+                  }
+                  history[history.length - 1] = currentCP
+                  return history
+                }
+
+                const cpHistory = generateCPHistory()
+
+                // Calculate zoomed view bounds based on actual data range
+                const dataMin = Math.min(...cpHistory)
+                const dataMax = Math.max(...cpHistory)
+                const dataPadding = (dataMax - dataMin) * 0.1
+
+                // Chart bounds: zoom to data range for detail
+                const chartBottom = Math.min(dataMin - dataPadding, tierMin)
+                const chartTop = Math.max(dataMax + dataPadding, cpPoints + 200)
+                const chartRange = chartTop - chartBottom
+
+                // Convert CP value to Y position (for data and interval lines)
+                const cpToY = (cp) => {
+                  return 90 - ((cp - chartBottom) / chartRange) * 75
+                }
+
+                // Next tier (goal) is always fixed at top regardless of scale
+                const goalLineY = 8
+
+                // Generate interval lines between tiers
+                const generateIntervalLines = () => {
+                  const lines = []
+                  // Determine good interval based on tier range
+                  let interval
+                  if (fullTierRange <= 1000) interval = 250
+                  else if (fullTierRange <= 2500) interval = 500
+                  else if (fullTierRange <= 5000) interval = 500
+                  else interval = 1000
+
+                  // Start from tier min, go up in intervals
+                  let value = Math.ceil(chartBottom / interval) * interval
+                  while (value <= chartTop) {
+                    // Skip if too close to tier boundaries
+                    if (Math.abs(value - tierMin) > interval * 0.3 &&
+                        Math.abs(value - tierMax) > interval * 0.3) {
+                      lines.push(value)
+                    }
+                    value += interval
+                  }
+                  return lines
+                }
+
+                const intervalLines = generateIntervalLines()
+                const lastY = cpToY(cpPoints)
+
+                // Format values for labels
+                const formatValue = (val) => {
+                  if (val >= 1000) {
+                    const k = val / 1000
+                    return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`
+                  }
+                  return val.toString()
+                }
+
+                // Format period change for display
+                const formatPeriodChange = () => {
+                  const prefix = periodChange >= 0 ? '+' : ''
+                  return `${prefix}${periodChange.toFixed(2)}`
+                }
+
+                return (
+                  <div className="chart-area">
+                    <svg className="chart-svg" viewBox="0 0 340 100" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="chartGradientGreen" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(16, 185, 129, 0.3)"/>
+                          <stop offset="100%" stopColor="rgba(16, 185, 129, 0)"/>
+                        </linearGradient>
+                        <linearGradient id="chartGradientRed" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(239, 68, 68, 0.3)"/>
+                          <stop offset="100%" stopColor="rgba(239, 68, 68, 0)"/>
+                        </linearGradient>
+                      </defs>
+
+                      {/* Interval gridlines */}
+                      {intervalLines.map((val) => {
+                        const y = cpToY(val)
+                        if (y < 5 || y > 95) return null
+                        return (
+                          <g key={val}>
+                            <line x1="0" y1={y} x2="310" y2={y} className="interval-line"/>
+                            <text x="335" y={y + 3} className="interval-label" fill="rgba(255,255,255,0.3)" textAnchor="end">
+                              {formatValue(val)}
+                            </text>
+                          </g>
+                        )
+                      })}
+
+                      {/* Tier threshold lines: current tier (bottom) and next tier (goal at top) */}
+                      {cpToY(tierMin) <= 95 && cpToY(tierMin) >= 5 && (
+                        <>
+                          <line x1="0" y1={cpToY(tierMin)} x2="310" y2={cpToY(tierMin)} className="tier-threshold-line current" stroke={currentTier.color}/>
+                          <text x="335" y={cpToY(tierMin) + 3} className="tier-label" fill={currentTier.color} textAnchor="end">
+                            {formatValue(tierMin)}
+                          </text>
+                        </>
+                      )}
+                      {/* Goal line - always fixed at top */}
+                      {nextTier && (
+                        <>
+                          <line x1="0" y1={goalLineY} x2="310" y2={goalLineY} className="tier-threshold-line next goal" stroke={nextTier.color}/>
+                          <text x="335" y={goalLineY + 3} className="tier-label" fill={nextTier.color} textAnchor="end">
+                            {formatValue(tierMax)}
+                          </text>
+                        </>
+                      )}
+
+                      {/* Area fill - convert CP history to path */}
+                      {(() => {
+                        const points = cpHistory.map((cp, i) => {
+                          const x = (i / (cpHistory.length - 1)) * 340
+                          const y = cpToY(cp)
+                          return `${x},${y}`
+                        })
+                        const linePath = `M${points.join(' L')}`
+                        const areaPath = `${linePath} L340,100 L0,100 Z`
+                        const pointColor = isNegativeChange ? '#ef4444' : '#10b981'
+                        return (
+                          <>
+                            <path className={`chart-area-fill ${isNegativeChange ? 'negative' : 'positive'}`} d={areaPath}/>
+                            <path className={`chart-line ${isNegativeChange ? 'negative' : 'positive'}`} d={linePath}/>
+                            {/* Current point indicator */}
+                            <circle cx="340" cy={lastY} r="5" fill={pointColor}/>
+                            <circle cx="340" cy={lastY} r="8" fill="none" stroke={pointColor} strokeWidth="2" opacity="0.3"/>
+                          </>
+                        )
+                      })()}
+                    </svg>
+                  </div>
+                )
+              })()}
+
+              {/* Progress to Next Level - only in expanded mode */}
+              {cpCardExpanded && nextTier && (
+                <div className="progress-section">
+                  <div className="progress-header">
+                    <div className="current" style={{ color: currentTier.color }}>
+                      <span className="icon">{currentTier.icon}</span>
+                      {currentTier.name}
+                    </div>
+                    <div className="next">{pointsToNext.toLocaleString()} CP to {nextTier.icon} {nextTier.name}</div>
+                  </div>
+                  <div className="progress-bar-wrap">
+                    <div
+                      className="progress-bar-fill"
+                      style={{
+                        width: `${progressPercent}%`,
+                        background: `linear-gradient(90deg, ${currentTier.color}, ${nextTier.color})`
+                      }}
+                    ></div>
+                  </div>
+                  <div className="progress-text">
+                    <span>{currentTier.min.toLocaleString()} CP</span>
+                    <span>{nextTier.min.toLocaleString()} CP</span>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )
+        })()}
+
+        {/* Race Pills - only show if candidate is in 2+ races */}
+        {candidate.races && candidate.races.length > 1 && (
+          <div className="tag-pills-container">
+            <div className="tag-pills">
+              {candidate.races.map((race) => (
+                <button
+                  key={race}
+                  className={`tag-pill ${selectedRace === race ? 'active' : ''}`}
+                  onClick={() => setSelectedRace(race)}
+                >
+                  {race}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* Tag Pills */}
-        <div className="tag-pills-container">
-          <div className="tag-pills">
-            {mockTags.map((tag) => {
-              const isActive = selectedTags.includes(tag)
-              return (
-                <button
-                  key={tag}
-                  className={`tag-pill ${isActive ? 'active' : ''}`}
-                  onClick={() => handleTagClick(tag)}
-                >
-                  {tag}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+        )}
 
         {/* Nominations List */}
         <div className="nominations-list">

@@ -358,3 +358,339 @@
 .participant-profile .edit-bio-close:hover {
   background: #EEEEEE;
 }
+
+/* ==================== */
+/* CP CARD - CoolPeople Points */
+/* ==================== */
+.participant-profile .cp-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 12px;
+  backdrop-filter: blur(8px);
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.participant-profile .cp-card.minimized {
+  padding: 12px 20px;
+}
+
+/* Minimized row - period selector + cp total inline */
+.participant-profile .cp-card .cp-minimized-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.participant-profile .cp-card .cp-total-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.participant-profile .cp-card .tier-icon-mini {
+  font-size: 16px;
+}
+
+.participant-profile .cp-card .points-mini {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.participant-profile .cp-card .cp-label-mini {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.participant-profile .cp-card .change-mini {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.participant-profile .cp-card .change-mini.positive {
+  color: #10b981;
+}
+
+.participant-profile .cp-card .change-mini.negative {
+  color: #ef4444;
+}
+
+.participant-profile .cp-card.minimized .chart-area {
+  height: 80px;
+  margin-bottom: 8px;
+}
+
+/* CP Card Header */
+.participant-profile .cp-card .cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.participant-profile .cp-card .cp-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.participant-profile .cp-card .level-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 1px solid;
+}
+
+.participant-profile .cp-card .level-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.participant-profile .cp-card .level-info span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.participant-profile .cp-card .cp-total {
+  text-align: right;
+}
+
+.participant-profile .cp-card .cp-total .points {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+.participant-profile .cp-card .cp-total .points span {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+.participant-profile .cp-card .cp-total .change {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.participant-profile .cp-card .cp-total .change.positive {
+  color: #10b981;
+}
+
+.participant-profile .cp-card .cp-total .change.negative {
+  color: #ef4444;
+}
+
+/* Time Period Selector */
+.participant-profile .cp-card .period-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.participant-profile .cp-card .period-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.participant-profile .cp-card .period-btn:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.participant-profile .cp-card .period-btn.active {
+  background: #1a1a1e;
+  color: #FFFFFF;
+}
+
+/* Chart Area */
+.participant-profile .cp-card .chart-area {
+  position: relative;
+  height: 120px;
+  margin-bottom: 20px;
+}
+
+.participant-profile .cp-card .chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.participant-profile .cp-card .chart-line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.participant-profile .cp-card .chart-line.positive {
+  stroke: #10b981;
+}
+
+.participant-profile .cp-card .chart-line.negative {
+  stroke: #ef4444;
+}
+
+.participant-profile .cp-card .chart-area-fill.positive {
+  fill: url(#chartGradientGreenPart);
+}
+
+.participant-profile .cp-card .chart-area-fill.negative {
+  fill: url(#chartGradientRedPart);
+}
+
+.participant-profile .cp-card .tier-threshold-line {
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.participant-profile .cp-card .tier-threshold-line.current {
+  opacity: 0.7;
+}
+
+.participant-profile .cp-card .tier-threshold-line.next {
+  opacity: 0.6;
+}
+
+.participant-profile .cp-card .tier-label {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Interval gridlines */
+.participant-profile .cp-card .interval-line {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.participant-profile .cp-card .interval-label {
+  font-size: 8px;
+  font-weight: 500;
+}
+
+/* Progress Section */
+.participant-profile .cp-card .progress-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.participant-profile .cp-card .progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.participant-profile .cp-card .progress-header .current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.participant-profile .cp-card .progress-header .current .icon {
+  font-size: 16px;
+}
+
+.participant-profile .cp-card .progress-header .next {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.participant-profile .cp-card .progress-bar-wrap {
+  position: relative;
+  height: 8px;
+  background: #1a1a1e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.participant-profile .cp-card .progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.participant-profile .cp-card .progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Tag Pills */
+.participant-profile .tag-pills-container {
+  overflow-x: auto;
+  margin: 0 12px 18px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.participant-profile .tag-pills-container::-webkit-scrollbar {
+  display: none;
+}
+
+.participant-profile .tag-pills {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.participant-profile .tag-pill {
+  height: 28px;
+  min-width: fit-content;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: #777777;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.participant-profile .tag-pill:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #AAAAAA;
+}
+
+.participant-profile .tag-pill.active {
+  background: #00F2EA;
+  color: #111111;
+  font-weight: 600;
+  border-color: transparent;
+}
+
+.participant-profile .tag-pill.active:hover {
+  filter: brightness(1.1);
+}

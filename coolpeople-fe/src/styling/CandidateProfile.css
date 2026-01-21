@@ -307,6 +307,7 @@
 
 .profile-content.posts-active {
   padding: 0;
+  padding-top: 20px;
   padding-bottom: 80px;
 }
 
@@ -357,34 +358,291 @@
   color: #888888;
 }
 
-/* Chart Container */
-.chart-container {
-  background: rgba(255, 255, 255, 0.03);
+/* ==================== */
+/* CP CARD - CoolPeople Points */
+/* ==================== */
+.cp-card {
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 10px;
-  backdrop-filter: blur(10px);
-}
-
-.chart-container.header-chart {
-  margin-top: 8px;
-}
-
-.chart-container.full-width {
-  width: 100%;
+  border-radius: 16px;
+  padding: 20px;
   margin-bottom: 16px;
+  backdrop-filter: blur(8px);
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
 }
 
-.chart-wrapper {
-  width: 100%;
+.cp-card.minimized {
+  padding: 12px 20px;
+}
+
+/* Minimized row - period selector + cp total inline */
+.cp-card .cp-minimized-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cp-card .cp-total-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cp-card .tier-icon-mini {
+  font-size: 16px;
+}
+
+.cp-card .points-mini {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.cp-card .cp-label-mini {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cp-card .change-mini {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.cp-card .change-mini.positive {
+  color: #10b981;
+}
+
+.cp-card .change-mini.negative {
+  color: #ef4444;
+}
+
+.cp-card.minimized .chart-area {
+  height: 80px;
+  margin-bottom: 8px;
+}
+
+/* CP Card Header */
+.cp-card .cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.cp-card .cp-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cp-card .level-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 1px solid;
+}
+
+.cp-card .level-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.cp-card .level-info span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cp-card .cp-total {
+  text-align: right;
+}
+
+.cp-card .cp-total .points {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+.cp-card .cp-total .points span {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+.cp-card .cp-total .change {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.cp-card .cp-total .change.positive {
+  color: #10b981;
+}
+
+.cp-card .cp-total .change.negative {
+  color: #ef4444;
+}
+
+/* Time Period Selector */
+.cp-card .period-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.cp-card .period-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.cp-card .period-btn:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cp-card .period-btn.active {
+  background: #1a1a1e;
+  color: #FFFFFF;
+}
+
+/* Chart Area */
+.cp-card .chart-area {
   position: relative;
+  height: 120px;
+  margin-bottom: 20px;
+}
+
+.cp-card .chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.cp-card .chart-line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cp-card .chart-line.positive {
+  stroke: #10b981;
+}
+
+.cp-card .chart-line.negative {
+  stroke: #ef4444;
+}
+
+.cp-card .chart-area-fill.positive {
+  fill: url(#chartGradientGreen);
+}
+
+.cp-card .chart-area-fill.negative {
+  fill: url(#chartGradientRed);
+}
+
+.cp-card .tier-threshold-line {
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.cp-card .tier-threshold-line.current {
+  opacity: 0.7;
+}
+
+.cp-card .tier-threshold-line.next {
+  opacity: 0.6;
+}
+
+.cp-card .tier-label {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Interval gridlines */
+.cp-card .interval-line {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.cp-card .interval-label {
+  font-size: 8px;
+  font-weight: 500;
+}
+
+/* Progress Section */
+.cp-card .progress-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.cp-card .progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cp-card .progress-header .current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cp-card .progress-header .current .icon {
+  font-size: 16px;
+}
+
+.cp-card .progress-header .next {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cp-card .progress-bar-wrap {
+  position: relative;
+  height: 8px;
+  background: #1a1a1e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cp-card .progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.cp-card .progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* Chart Rating Badge - Gold gradient from Figma */
 .chart-rating-badge {
-  position: absolute;
-  top: 10px;
-  right: 5px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -426,50 +684,6 @@
   right: auto;
   margin: 0 auto 16px;
   justify-content: center;
-}
-
-/* Chart Change Indicator */
-.chart-change-indicator {
-  position: absolute;
-  right: 30px;
-  top: 45px;
-  z-index: 2;
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.chart-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: #888888;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.chart-wrapper {
-  display: flex;
-  justify-content: center;
-}
-
-.chart-change {
-  min-width: 55px;
-  height: 24px;
-  background: #42FF87;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 15px;
-  color: #000000;
-  padding: 0 8px;
 }
 
 /* Tag Pills */
@@ -1263,6 +1477,7 @@
   flex-direction: column;
   gap: 20px;
   padding: 0;
+  padding-top: 20px;
 }
 
 .activity-item {

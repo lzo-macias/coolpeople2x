@@ -229,7 +229,7 @@
 .party-profile .profile-tabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-evenly;
   padding: 0 10px;
   margin-top: 20px;
   margin-bottom: 20px;
@@ -284,6 +284,21 @@
   padding: 14px 12px 80px;
 }
 
+.party-profile .profile-content.posts-active {
+  padding: 0;
+  padding-top: 20px;
+  padding-bottom: 80px;
+}
+
+/* Activity Feed - Details Tab */
+.party-profile .activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  padding-top: 20px;
+}
+
 /* Search */
 .party-profile .profile-search {
   display: inline-flex;
@@ -329,6 +344,289 @@
 
 .party-profile .search-input::placeholder {
   color: #888888;
+}
+
+/* ==================== */
+/* CP CARD - CoolPeople Points */
+/* ==================== */
+.party-profile .cp-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(8px);
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.party-profile .cp-card.minimized {
+  padding: 12px 20px;
+}
+
+/* Minimized row - period selector + cp total inline */
+.party-profile .cp-card .cp-minimized-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.party-profile .cp-card .cp-total-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.party-profile .cp-card .tier-icon-mini {
+  font-size: 16px;
+}
+
+.party-profile .cp-card .points-mini {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.party-profile .cp-card .cp-label-mini {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.party-profile .cp-card .change-mini {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.party-profile .cp-card .change-mini.positive {
+  color: #10b981;
+}
+
+.party-profile .cp-card .change-mini.negative {
+  color: #ef4444;
+}
+
+.party-profile .cp-card.minimized .chart-area {
+  height: 80px;
+  margin-bottom: 8px;
+}
+
+/* CP Card Header */
+.party-profile .cp-card .cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.party-profile .cp-card .cp-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.party-profile .cp-card .level-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 1px solid;
+}
+
+.party-profile .cp-card .level-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.party-profile .cp-card .level-info span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.party-profile .cp-card .cp-total {
+  text-align: right;
+}
+
+.party-profile .cp-card .cp-total .points {
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+.party-profile .cp-card .cp-total .points span {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+.party-profile .cp-card .cp-total .change {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.party-profile .cp-card .cp-total .change.positive {
+  color: #10b981;
+}
+
+.party-profile .cp-card .cp-total .change.negative {
+  color: #ef4444;
+}
+
+/* Time Period Selector */
+.party-profile .cp-card .period-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.party-profile .cp-card .period-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.party-profile .cp-card .period-btn:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.party-profile .cp-card .period-btn.active {
+  background: #1a1a1e;
+  color: #FFFFFF;
+}
+
+/* Chart Area */
+.party-profile .cp-card .chart-area {
+  position: relative;
+  height: 120px;
+  margin-bottom: 20px;
+}
+
+.party-profile .cp-card .chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.party-profile .cp-card .chart-line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.party-profile .cp-card .chart-line.positive {
+  stroke: #10b981;
+}
+
+.party-profile .cp-card .chart-line.negative {
+  stroke: #ef4444;
+}
+
+.party-profile .cp-card .chart-area-fill.positive {
+  fill: url(#chartGradientGreenParty);
+}
+
+.party-profile .cp-card .chart-area-fill.negative {
+  fill: url(#chartGradientRedParty);
+}
+
+.party-profile .cp-card .tier-threshold-line {
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.party-profile .cp-card .tier-threshold-line.current {
+  opacity: 0.7;
+}
+
+.party-profile .cp-card .tier-threshold-line.next {
+  opacity: 0.6;
+}
+
+.party-profile .cp-card .tier-label {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Interval gridlines */
+.party-profile .cp-card .interval-line {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.party-profile .cp-card .interval-label {
+  font-size: 8px;
+  font-weight: 500;
+}
+
+/* Progress Section */
+.party-profile .cp-card .progress-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.party-profile .cp-card .progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.party-profile .cp-card .progress-header .current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.party-profile .cp-card .progress-header .current .icon {
+  font-size: 16px;
+}
+
+.party-profile .cp-card .progress-header .next {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.party-profile .cp-card .progress-bar-wrap {
+  position: relative;
+  height: 8px;
+  background: #1a1a1e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.party-profile .cp-card .progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.party-profile .cp-card .progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* Chart Container */
@@ -408,6 +706,15 @@
   height: 12px;
   color: #FFFFFF;
   filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Rating badge below Verified Members label */
+.party-profile .chart-rating-badge.below-verified {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin: 0 auto 16px;
+  justify-content: center;
 }
 
 /* Chart Change Indicator */
@@ -1036,6 +1343,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   padding: 8px;
+  padding-top: 20px;
 }
 
 .party-profile .party-post-item {
