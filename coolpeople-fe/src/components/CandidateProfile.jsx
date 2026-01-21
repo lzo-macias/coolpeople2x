@@ -306,6 +306,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [isFollowing, setIsFollowing] = useState(candidate.isFollowing)
   const [isFavorited, setIsFavorited] = useState(candidate.isFavorited)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
   const [profileSections, setProfileSections] = useState(initialProfileSections)
   const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
@@ -828,14 +829,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               strokeWidth={2}
               showBaseline={true}
             />
-            <div className="chart-rating-badge" style={{ top: `${badgePositions.ratingTop}px` }}>
-              <span className="rating-value">3.2</span>
-              <div className="rating-star-circle">
-                <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </div>
-            </div>
             <div className="chart-change-indicator" style={{ top: `${badgePositions.changeTop}px` }}>
               <span
                 className="chart-change"
@@ -879,6 +872,16 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               </div>
             </div>
             <span className="cp-section-label verified">Verified Reviews</span>
+          </div>
+
+          {/* Rating Badge */}
+          <div className="chart-rating-badge below-verified">
+            <span className="rating-value">3.2</span>
+            <div className="rating-star-circle">
+              <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </div>
           </div>
 
           {/* Paid Nominations */}

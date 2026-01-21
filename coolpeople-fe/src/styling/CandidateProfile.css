@@ -3,7 +3,7 @@
   width: 100%;
   max-width: 440px;
   bottom: 4px;
-  margin: 0 auto;
+  margin: -12px auto 0;
   background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
   background-attachment: fixed;
   font-family: 'Inter', sans-serif;
@@ -247,7 +247,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  margin-top: 20px;
+  margin-top: 8px;
   margin-bottom: 20px;
   border-bottom: 1px solid #444444;
   position: relative;
@@ -302,6 +302,7 @@
 /* Content */
 .profile-content {
   padding: 14px 12px 80px;
+  margin-top: -20px;
 }
 
 .profile-content.posts-active {
@@ -416,6 +417,15 @@
   height: 12px;
   color: #FFFFFF;
   filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Rating badge below Verified Reviews label */
+.chart-rating-badge.below-verified {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin: 0 auto 16px;
+  justify-content: center;
 }
 
 /* Chart Change Indicator */
@@ -1428,25 +1438,26 @@ video.activity-video-thumbnail.mirrored {
 
 /* Dev Edit Button */
 .candidate-profile .dev-edit-btn {
-  position: absolute;
-  top: 7px;
-  left: 9px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
+  position: fixed;
+  top: 100px;
+  left: calc(50% - 265px); /* Position in dead space beside the app */
+  background: rgba(100, 100, 100, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
   cursor: pointer;
-  padding: 6px;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #777777;
+  color: #FFFFFF;
   transition: all 0.2s ease;
-  z-index: 10;
+  z-index: 9999;
 }
 
 .candidate-profile .dev-edit-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(150, 150, 150, 0.9);
   color: #FFFFFF;
+  transform: scale(1.05);
 }
 
 /* Edit Profile Overlay */
