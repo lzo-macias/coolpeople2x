@@ -200,6 +200,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // Helper to pause video when navigating away
   const pauseVideo = () => {
+    console.log('[Video] pauseVideo called');
     if (videoRef.current) {
       videoRef.current.pause()
     }
@@ -207,6 +208,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // Helper to resume video when returning from modals
   const resumeVideo = () => {
+    console.log('[Video] resumeVideo called, isPageActive:', isPageActive);
     if (videoRef.current && isPageActive) {
       videoRef.current.play().catch(() => {})
     }
@@ -223,7 +225,15 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
       video.pause()
     }
   }, [isVisible, isPageActive])
+
+  // Race modal state
   const [showRaceModal, setShowRaceModal] = useState(false)
+
+  // Debug: Log when showRaceModal changes
+  useEffect(() => {
+    console.log('[RaceModal] showRaceModal changed to:', showRaceModal);
+  }, [showRaceModal])
+
   const [nominatedCandidates, setNominatedCandidates] = useState(new Set())
   const [nominationCounts, setNominationCounts] = useState(() => {
     const counts = {}
@@ -393,8 +403,18 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         {/* Bottom info */}
         <div className="reel-bottom">
           <div className="reel-info">
+            {/* Race Target Pill - opens race modal */}
             {data.targetRace && (
-              <button className="reel-target-pill" onClick={(e) => { e.stopPropagation(); pauseVideo(); setShowRaceModal(true); }}>
+              <button
+                className="reel-target-pill"
+                onClick={(e) => {
+                  console.log('[RaceModal] Pill clicked - opening modal');
+                  e.stopPropagation();
+                  pauseVideo();
+                  setShowRaceModal(true);
+                  console.log('[RaceModal] showRaceModal set to true');
+                }}
+              >
                 <span className="target-pill-dot"></span>
                 {data.targetRace}
               </button>
@@ -449,11 +469,46 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         </div>
       </div>
 
-      {/* Race Slide-up Modal */}
+      {/* Race Slide-up Modal - portaled to modal-root for z-index */}
+      {showRaceModal && console.log('[RaceModal] Rendering modal via portal to modal-root')}
       {showRaceModal && createPortal(
         <>
-          <div className="race-modal-backdrop" onClick={() => { setShowRaceModal(false); resumeVideo(); }} />
-          <div className="race-modal">
+          <div
+            className="race-modal-backdrop"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 2147483646
+            }}
+            onClick={() => {
+              console.log('[RaceModal] Backdrop clicked - closing modal');
+              setShowRaceModal(false);
+              resumeVideo();
+            }}
+          />
+          <div
+            className="race-modal"
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: '50%',
+              width: '100%',
+              maxWidth: '440px',
+              height: '70vh',
+              background: 'linear-gradient(180deg, #3D2A1A 0%, #2A1F0F 100%)',
+              borderRadius: '24px 24px 0 0',
+              padding: '12px 20px 32px',
+              zIndex: 2147483647,
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box',
+              animation: 'slideUpCentered 0.3s ease-out forwards'
+            }}
+          >
             <div className="race-modal-handle" />
 
             {/* Countdown Timer */}
@@ -568,7 +623,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             </div>
           </div>
         </>,
-        document.body
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Race Selection Slide-up for main Nominate button */}
@@ -612,7 +667,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             </div>
           </div>
         </>,
-        document.body
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Quote or Nominate Options Slide-up */}
@@ -659,7 +714,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             </div>
           </div>
         </>,
-        document.body
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Quote Nominate Screen */}

@@ -8,7 +8,20 @@ borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
 
 */
 
+/* Modal root - renders above everything */
+#modal-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
 
+#modal-root > * {
+  pointer-events: auto;
+}
 
 .app {
   height: 100%;

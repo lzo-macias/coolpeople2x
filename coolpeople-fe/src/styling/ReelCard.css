@@ -302,34 +302,33 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 99998;
+  z-index: 9999;
 }
 
 .race-modal {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
-  height: 70vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
   max-width: 440px;
-  margin-left: auto;
-  margin-right: auto;
+  height: 70vh;
   background: linear-gradient(180deg, #3D2A1A 0%, #2A1F0F 100%);
   border-radius: 24px 24px 0 0;
   padding: 12px 20px 32px;
-  z-index: 99999;
-  animation: slideUp 0.3s ease-out;
+  z-index: 2147483647;
+  animation: slideUpCentered 0.3s ease-out forwards;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
 
-@keyframes slideUp {
+@keyframes slideUpCentered {
   from {
-    transform: translateY(100%);
+    transform: translateX(-50%) translateY(100%);
   }
   to {
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
@@ -594,16 +593,15 @@
 .nominate-modal {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
   max-width: 440px;
-  margin-left: auto;
-  margin-right: auto;
   background: #FFFFFF;
   border-radius: 24px 24px 0 0;
   padding: 12px 20px 32px;
-  z-index: 99997;
-  animation: slideUp 0.3s ease-out;
+  z-index: 2147483645;
+  animation: slideUpCentered 0.3s ease-out forwards;
   box-sizing: border-box;
 }
 
