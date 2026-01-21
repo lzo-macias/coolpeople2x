@@ -25,7 +25,7 @@ const mockContacts = [
   { id: 106, phone: '+1 (555) 678-9012', name: 'Work - John', isOnPlatform: false },
 ]
 
-function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated }) {
+function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty }) {
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
   const [showAddSound, setShowAddSound] = useState(false)
@@ -196,6 +196,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   }
 
   const handleConfirmClip = () => {
+    // Pause video before transitioning
+    if (videoRef.current) {
+      videoRef.current.pause()
+    }
     setShowClipConfirm(false)
     if (selectedMode === 'party') {
       setShowPartyCreationFlow(true)
@@ -236,14 +240,45 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowPostScreen(true)
   }
 
+  // Manage video playback when transitioning between screens
+  useEffect(() => {
+    if (videoRef.current && recordedVideoUrl) {
+      if (showEditClipScreen || showPostScreen || showPartyCreationFlow) {
+        // Pause when another screen is shown
+        videoRef.current.pause()
+      } else {
+        // Resume and restart when returning to this screen
+        videoRef.current.currentTime = 0
+        videoRef.current.play().catch(() => {})
+      }
+    }
+  }, [showEditClipScreen, showPostScreen, showPartyCreationFlow, recordedVideoUrl])
+
   const handleClosePostScreen = () => {
     setShowPostScreen(false)
   }
 
   const handlePost = (postData) => {
     console.log('Posting:', postData)
-    setShowPostScreen(false)
-    onClose()
+
+    // Use targetRace from PostScreen if provided, otherwise use raceName from race mode
+    const finalTargetRace = postData.targetRace || (selectedMode === 'race' ? raceName : null)
+
+    // Create the post with video and all data
+    if (onPostCreated) {
+      onPostCreated({
+        ...postData,
+        videoUrl: recordedVideoUrl,
+        isMirrored: recordedWithFrontCamera,
+        targetRace: finalTargetRace,
+        isNomination: selectedMode === 'nominate',
+        taggedUser: selectedTag,
+        textOverlays: textOverlays,
+      })
+    } else {
+      setShowPostScreen(false)
+      onClose()
+    }
   }
 
   const handleClosePartyCreationFlow = () => {
@@ -370,7 +405,6 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             className={`create-preview-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
             autoPlay
             loop
-            muted
             playsInline
             onTimeUpdate={syncSelfieVideo}
             onLoadedData={() => console.log('Recorded video loaded successfully')}
@@ -813,7 +847,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           setTextOverlays={setTextOverlays}
           onSend={(recipients) => {
             console.log('Sending to:', recipients)
-            onSendToConversation?.(recordedVideoUrl)
+            onSendToConversation?.(recordedVideoUrl, recordedWithFrontCamera)
           }}
         />
       )}
@@ -833,6 +867,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           taggedUser={selectedTag}
           getContactDisplayName={getContactDisplayName}
           textOverlays={textOverlays}
+          userParty={userParty}
         />
       )}
 

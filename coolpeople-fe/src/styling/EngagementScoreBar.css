@@ -7,6 +7,12 @@
   -ms-overflow-style: none;
 }
 
+/* Empty spacer to maintain flex layout when no scores */
+.engagement-bar-spacer {
+  height: 80px;
+  flex-shrink: 0;
+}
+
 .engagement-bar::-webkit-scrollbar {
   display: none;
 }

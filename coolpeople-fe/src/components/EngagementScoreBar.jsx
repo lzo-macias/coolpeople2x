@@ -20,7 +20,8 @@ const isPositiveChange = (change) => {
 }
 
 function EngagementScoreBar({ scores, onItemClick }) {
-  if (!scores || scores.length === 0) return null
+  // Return empty spacer to maintain flex layout even when no scores
+  if (!scores || scores.length === 0) return <div className="engagement-bar-spacer" />
 
   // Generate stable random positions once per score
   const randomPositions = useMemo(() => {

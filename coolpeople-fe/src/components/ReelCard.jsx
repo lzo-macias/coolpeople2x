@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelCard.css'
 import ReelActions from './ReelActions'
@@ -177,7 +177,52 @@ const mockFollowedRaces = [
   { id: 'pinklady', name: 'The Pink Lady', icon: 'https://i.pravatar.cc/40?img=47' },
 ]
 
-function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick }) {
+  const videoRef = useRef(null)
+  const cardRef = useRef(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  // IntersectionObserver to detect when video is in viewport
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting && entry.intersectionRatio > 0.5)
+      },
+      { threshold: 0.5 }
+    )
+
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [])
+
+  // Helper to pause video when navigating away
+  const pauseVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.pause()
+    }
+  }
+
+  // Helper to resume video when returning from modals
+  const resumeVideo = () => {
+    if (videoRef.current && isPageActive) {
+      videoRef.current.play().catch(() => {})
+    }
+  }
+
+  // Play/pause video based on visibility and page active state
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (isVisible && isPageActive) {
+      video.play().catch(() => {})
+    } else {
+      video.pause()
+    }
+  }, [isVisible, isPageActive])
   const [showRaceModal, setShowRaceModal] = useState(false)
   const [nominatedCandidates, setNominatedCandidates] = useState(new Set())
   const [nominationCounts, setNominationCounts] = useState(() => {
@@ -305,10 +350,10 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            <button className="party-tag clickable" onClick={() => onPartyClick?.(data.user.party)}>
+            <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
               {data.user.party}
             </button>
-            <button className="username clickable" onClick={() => onUsernameClick?.(data.user)}>
+            <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
               @{data.user.username}
             </button>
           </div>
@@ -318,18 +363,30 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
   }
 
   return (
-    <div className="reel-card">
-      <div
-        className="reel-media"
-        style={{ backgroundImage: `url(${data.thumbnail})` }}
-      />
+    <div className="reel-card" ref={cardRef}>
+      {data.videoUrl ? (
+        <video
+          ref={videoRef}
+          src={data.videoUrl}
+          className={`reel-media-video ${data.isMirrored ? 'mirrored' : ''}`}
+          loop
+          playsInline
+          onError={(e) => console.error('Video error:', e, 'src:', data.videoUrl)}
+          onLoadedData={() => console.log('Video loaded:', data.videoUrl)}
+        />
+      ) : (
+        <div
+          className="reel-media"
+          style={{ backgroundImage: `url(${data.thumbnail})` }}
+        />
+      )}
 
       <div className="reel-overlay">
         {/* Top engagement sparkline charts */}
-        <EngagementScoreBar scores={data.engagementScores} onItemClick={onEngagementClick} />
+        <EngagementScoreBar scores={data.engagementScores} onItemClick={(score) => { pauseVideo(); onEngagementClick?.(score) }} />
 
-        {/* Right side actions */}
-        <div className="reel-actions-container">
+        {/* Right side actions - move down when no nominate button (participant posts) */}
+        <div className={`reel-actions-container ${data.user.isParticipant ? 'no-nominate' : ''}`}>
           <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} />
         </div>
 
@@ -337,7 +394,7 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
         <div className="reel-bottom">
           <div className="reel-info">
             {data.targetRace && (
-              <button className="reel-target-pill" onClick={() => setShowRaceModal(true)}>
+              <button className="reel-target-pill" onClick={(e) => { e.stopPropagation(); pauseVideo(); setShowRaceModal(true); }}>
                 <span className="target-pill-dot"></span>
                 {data.targetRace}
               </button>
@@ -348,13 +405,13 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
                 alt={data.user.username}
                 className="reel-user-avatar clickable"
                 style={{ borderColor: getPartyColor(data.user.party) }}
-                onClick={() => onUsernameClick?.(data.user)}
+                onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
               />
               <div className="reel-user-details">
-                <button className="party-tag clickable" onClick={() => onPartyClick?.(data.user.party)}>
+                <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
                   {data.user.party}
                 </button>
-                <button className="username clickable" onClick={() => onUsernameClick?.(data.user)}>
+                <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
                   {data.user.username}
                 </button>
               </div>
@@ -362,38 +419,40 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
             <p className="reel-title">{data.title}</p>
             <p className="reel-caption">{data.caption}</p>
           </div>
-          <button
-            className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
-            onClick={() => {
-              if (hasNominatedPoster) return // Already nominated
+          {/* Hide nominate button for participant posts (they can't be nominated as candidates) */}
+          {!data.user.isParticipant && (
+            <button
+              className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
+              onClick={() => {
+                if (hasNominatedPoster) return // Already nominated
 
-              if (data.targetRace) {
-                // Has target race, nominate directly
-                setHasNominatedPoster(true)
-                playNominateSound()
-              } else if (mockFollowedRaces.length === 0) {
-                // No followed races, nominate directly to CoolPeople
-                setHasNominatedPoster(true)
-                playNominateSound()
-              } else {
-                // No target race but has followed races, show race selection
-                setShowNominateRaceSelect(true)
-              }
-            }}
-          >
-            {hasNominatedPoster ? (
-              <span className="nominate-check">✓</span>
-            ) : (
-              <span>Nominate</span>
-            )}
-          </button>
+                if (data.targetRace) {
+                  // Has target race - auto-nominate with checkmark and sound
+                  setHasNominatedPoster(true)
+                  playNominateSound()
+                } else if (mockFollowedRaces.length > 0) {
+                  // No target race but has followed races, show race selection first
+                  setShowNominateRaceSelect(true)
+                } else {
+                  // No followed races, go to quote screen with no race
+                  setShowQuoteNominate(true)
+                }
+              }}
+            >
+              {hasNominatedPoster ? (
+                <span className="nominate-check">✓</span>
+              ) : (
+                <span>Nominate</span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Race Slide-up Modal */}
       {showRaceModal && createPortal(
         <>
-          <div className="race-modal-backdrop" onClick={() => setShowRaceModal(false)} />
+          <div className="race-modal-backdrop" onClick={() => { setShowRaceModal(false); resumeVideo(); }} />
           <div className="race-modal">
             <div className="race-modal-handle" />
 
@@ -448,11 +507,11 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
             <div className="race-modal-chart">
               <RaceChart
                 candidates={raceChartData}
-                onCandidateClick={(candidate) => onUsernameClick?.({
+                onCandidateClick={(candidate) => { pauseVideo(); onUsernameClick?.({
                   username: candidate.name,
                   avatar: candidate.avatar,
                   party: 'Independent'
-                })}
+                }) }}
               />
             </div>
             <div className="race-contestants-list">
@@ -462,11 +521,11 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
                   <div
                     key={candidate.id}
                     className="race-contestant-row"
-                    onClick={() => onUsernameClick?.({
+                    onClick={() => { pauseVideo(); onUsernameClick?.({
                       username: candidate.name,
                       avatar: candidate.avatar,
                       party: 'Independent'
-                    })}
+                    }) }}
                   >
                     <span className="race-contestant-rank">{idx + 1}</span>
                     <img src={candidate.avatar} alt={candidate.name} className="race-contestant-avatar" />
@@ -515,7 +574,7 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
       {/* Race Selection Slide-up for main Nominate button */}
       {showNominateRaceSelect && createPortal(
         <>
-          <div className="nominate-modal-backdrop" onClick={() => setShowNominateRaceSelect(false)} />
+          <div className="nominate-modal-backdrop" onClick={() => { setShowNominateRaceSelect(false); resumeVideo(); }} />
           <div className="nominate-modal race-select">
             <div className="nominate-modal-handle" />
             <h3 className="nominate-modal-title">Select a Race</h3>
@@ -562,6 +621,7 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
           <div className="nominate-modal-backdrop" onClick={() => {
             setShowNominateOptions(false)
             setSelectedRaceForNomination(null)
+            resumeVideo()
           }} />
           <div className="nominate-modal nominate-options">
             <div className="nominate-modal-handle" />
@@ -610,10 +670,15 @@ function ReelCard({ reel, isPreview = false, onOpenComments, onUsernameClick, on
           onClose={() => {
             setShowQuoteNominate(false)
             setSelectedRaceForNomination(null)
+            resumeVideo()
           }}
           onComplete={() => {
             setShowQuoteNominate(false)
             setSelectedRaceForNomination(null)
+            // Show checkmark and play sound after completing nomination
+            setHasNominatedPoster(true)
+            playNominateSound()
+            resumeVideo()
           }}
         />
       )}

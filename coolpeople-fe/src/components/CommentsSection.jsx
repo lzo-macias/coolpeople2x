@@ -139,12 +139,21 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
     >
       {/* Video preview - click to close */}
       <div className="comments-video-preview" onClick={onClose}>
-        <div
-          className="video-thumbnail"
-          style={{ backgroundImage: `url(${reel?.thumbnail})` }}
-        >
-          {/* <span className="cp-badge">CP</span> */}
-        </div>
+        {reel?.videoUrl ? (
+          <video
+            src={reel.videoUrl}
+            className={`video-thumbnail-video ${reel.isMirrored ? 'mirrored' : ''}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <div
+            className="video-thumbnail"
+            style={{ backgroundImage: `url(${reel?.thumbnail})` }}
+          />
+        )}
       </div>
 
       {/* Comments container */}

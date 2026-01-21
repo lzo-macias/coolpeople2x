@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import EditBio from './EditBio'
+import SinglePostView from './SinglePostView'
+import { generateSparklineData } from '../data/mockData'
 import '../styling/MyProfile.css'
 
 // Current logged-in user data (independent, not opted into social credit)
@@ -25,13 +27,72 @@ const myProfileData = {
   ],
 }
 
-function MyProfile({ onPartyClick, onOptIn, userParty }) {
+function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments }) {
   const [activeTab, setActiveTab] = useState('posts')
   const [showEditBio, setShowEditBio] = useState(false)
+  const [showSinglePost, setShowSinglePost] = useState(false)
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
 
   // Use user's created party if available, otherwise default to Independent
   const currentParty = userParty ? userParty.name : myProfileData.party
   const partyColor = userParty ? userParty.color : '#808080' // Independent is gray
+
+  // Convert default images to reel format with variable engagement scores
+  const trends = ['up', 'down', 'stable']
+  const mockRaces = ['NYC Mayor 2024', 'City Council District 5', 'State Assembly']
+  const defaultPostsAsReels = myProfileData.postImages.map((img, i) => ({
+    id: `default-${i}`,
+    thumbnail: img,
+    user: {
+      username: myProfileData.username,
+      avatar: myProfileData.avatar,
+      party: currentParty,
+    },
+    title: '',
+    caption: '',
+    targetRace: mockRaces[i % mockRaces.length],
+    stats: { votes: '0', likes: '0', comments: '0', shazam: '0', shares: '0' },
+    engagementScores: [
+      {
+        id: `eng-${i}-1`,
+        username: myProfileData.username,
+        avatar: myProfileData.avatar,
+        party: currentParty,
+        sparklineData: generateSparklineData(trends[i % 3]),
+        recentChange: i % 2 === 0 ? '+1' : null,
+        trend: trends[i % 3],
+      },
+      {
+        id: `eng-${i}-2`,
+        username: 'Lzo.macias',
+        avatar: 'https://i.pravatar.cc/40?img=1',
+        party: 'Democrat',
+        sparklineData: generateSparklineData(trends[(i + 1) % 3]),
+        recentChange: i % 3 === 0 ? '+2' : null,
+        trend: trends[(i + 1) % 3],
+      },
+      {
+        id: `eng-${i}-3`,
+        username: 'Sarah.J',
+        avatar: 'https://i.pravatar.cc/40?img=5',
+        party: 'Republican',
+        sparklineData: generateSparklineData(trends[(i + 2) % 3]),
+        recentChange: null,
+        trend: trends[(i + 2) % 3],
+      },
+    ],
+  }))
+
+  // Combine user posts with default posts (user posts already have reel format)
+  const allPosts = userPosts.length > 0
+    ? [...userPosts, ...defaultPostsAsReels]
+    : defaultPostsAsReels
+
+  // Handle post click to open SinglePostView
+  const handlePostClick = (index) => {
+    setSelectedPostIndex(index)
+    setShowSinglePost(true)
+  }
 
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
@@ -65,7 +126,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty }) {
               >
                 {currentParty}
               </button>
-              {!myProfileData.hasOptedIn && !userParty && (
+              {!hasOptedIn && (
                 <button className="my-profile-optin-btn" onClick={onOptIn}>
                   opt in
                 </button>
@@ -127,9 +188,25 @@ function MyProfile({ onPartyClick, onOptIn, userParty }) {
       <div className="my-profile-content">
         {activeTab === 'posts' && (
           <div className="posts-grid">
-            {myProfileData.postImages.map((post, index) => (
-              <div key={index} className="post-item">
-                <img src={post} alt={`Post ${index + 1}`} />
+            {allPosts.map((post, index) => (
+              <div
+                key={post.id || index}
+                className="post-item"
+                onClick={() => handlePostClick(index)}
+              >
+                {post.videoUrl ? (
+                  <video
+                    src={post.videoUrl}
+                    className={post.isMirrored ? 'mirrored' : ''}
+                    muted
+                    playsInline
+                    loop
+                    onMouseOver={(e) => e.target.play()}
+                    onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                  />
+                ) : (
+                  <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
+                )}
               </div>
             ))}
           </div>
@@ -156,6 +233,19 @@ function MyProfile({ onPartyClick, onOptIn, userParty }) {
           </button>
           <EditBio />
         </div>
+      )}
+
+      {/* Single Post View */}
+      {showSinglePost && (
+        <SinglePostView
+          posts={allPosts}
+          initialIndex={selectedPostIndex}
+          onClose={() => setShowSinglePost(false)}
+          onEndReached={() => setShowSinglePost(false)}
+          onPartyClick={onPartyClick}
+          onOpenComments={onOpenComments}
+          profileName={myProfileData.username}
+        />
       )}
     </div>
   )

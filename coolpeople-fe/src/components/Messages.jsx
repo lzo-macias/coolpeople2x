@@ -92,7 +92,7 @@ const mockActivityNotifications = {
   ],
 }
 
-function Messages({ onConversationChange }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
@@ -134,8 +134,26 @@ function Messages({ onConversationChange }) {
     onConversationChange?.(false)
   }
 
-  // Get stories users (excluding 'add')
-  const storyUsers = mockStories.filter(s => !s.isAdd)
+  // Get stories users (excluding 'add'), including user's own stories
+  const userStoryItems = (userStories || []).map((story, idx) => ({
+    id: `user-story-${idx}`,
+    username: 'Your Story',
+    avatar: story.image,
+    hasUnread: false,
+    party: story.party,
+    isOwnStory: true,
+    stories: [{
+      id: story.id,
+      image: story.videoUrl || story.image,
+      videoUrl: story.videoUrl,
+      timestamp: 'Just now',
+      taggedUser: story.taggedUser,
+    }]
+  }))
+
+  // Combine user stories with mock stories
+  const allStoryUsers = [...userStoryItems, ...mockStories.filter(s => !s.isAdd)]
+  const storyUsers = allStoryUsers
 
   // Story navigation handlers
   const openStory = (userIndex, e) => {
@@ -215,6 +233,8 @@ function Messages({ onConversationChange }) {
       <Conversation
         conversation={activeConversation}
         onBack={handleCloseConversation}
+        sharedConversations={conversations}
+        setSharedConversations={setConversations}
       />
     )
   }
@@ -268,7 +288,22 @@ function Messages({ onConversationChange }) {
 
         {/* Story content */}
         <div className="story-content">
-          <img src={currentStory.image} alt="Story" />
+          {currentStory.videoUrl ? (
+            <video
+              src={currentStory.videoUrl}
+              autoPlay
+              loop
+              playsInline
+              muted
+            />
+          ) : (
+            <img src={currentStory.image} alt="Story" />
+          )}
+          {currentStory.taggedUser && (
+            <div className="story-tagged-user">
+              @{currentStory.taggedUser.username || currentStory.taggedUser.name || currentStory.taggedUser.phone}
+            </div>
+          )}
         </div>
 
         {/* Navigation zones */}
@@ -588,32 +623,34 @@ function Messages({ onConversationChange }) {
           <button className="messages-see-all">See all</button>
         </div>
         <div className="messages-stories-row">
-          {mockStories.map((story, index) => (
+          {/* Add story button */}
+          <div
+            className="messages-story-item"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setShowLivePhoto(true)
+            }}
+          >
+            <div className="messages-story-add">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </div>
+            <span className="messages-story-name">Add Story</span>
+          </div>
+
+          {/* User stories and other stories */}
+          {storyUsers.map((story, index) => (
             <div
               key={story.id}
               className="messages-story-item"
-              onClick={(e) => {
-                if (story.isAdd) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setShowLivePhoto(true)
-                } else {
-                  openStory(index - 1, e)
-                }
-              }}
+              onClick={(e) => openStory(index, e)}
             >
-              {story.isAdd ? (
-                <div className="messages-story-add">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                </div>
-              ) : (
-                <div className={`messages-story-avatar ${story.hasUnread ? 'has-unread' : ''}`}>
-                  <img src={story.avatar} alt={story.username} />
-                </div>
-              )}
-              <span className="messages-story-name">{story.isAdd ? 'Add Story' : story.username}</span>
+              <div className={`messages-story-avatar ${story.hasUnread ? 'has-unread' : ''} ${story.isOwnStory ? 'own-story' : ''}`}>
+                <img src={story.avatar} alt={story.username} />
+              </div>
+              <span className="messages-story-name">{story.username}</span>
             </div>
           ))}
         </div>

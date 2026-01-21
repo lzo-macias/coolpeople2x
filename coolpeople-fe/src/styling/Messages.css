@@ -550,10 +550,28 @@
   overflow: hidden;
 }
 
-.story-content img {
+.story-content img,
+.story-content video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.story-tagged-user {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 8px 16px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.messages-story-avatar.own-story {
+  border: 2px solid #00d4d4;
 }
 
 /* Navigation zones */

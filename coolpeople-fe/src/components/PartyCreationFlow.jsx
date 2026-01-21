@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import '../styling/PartyCreationFlow.css'
 
 function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }) {
@@ -10,6 +10,21 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
   const [partyPhotoPreview, setPartyPhotoPreview] = useState(null)
   const [partyColor, setPartyColor] = useState('#FF2A55')
   const fileInputRef = useRef(null)
+  const videoRef = useRef(null)
+
+  // Restart video from beginning when screen mounts
+  useEffect(() => {
+    if (videoRef.current && recordedVideoUrl) {
+      videoRef.current.currentTime = 0
+      videoRef.current.play().catch(() => {})
+    }
+    // Cleanup - pause when unmounting
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause()
+      }
+    }
+  }, [])
 
   // Party Type & Privacy
   const [partyType, setPartyType] = useState('open') // 'open', 'closed'
@@ -37,8 +52,16 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
 
   // Post Settings (like PostScreen)
   const [selectedTarget, setSelectedTarget] = useState(null)
-  const [selectedPostTo, setSelectedPostTo] = useState('Your Feed')
+  const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
   const [selectedSendTo, setSelectedSendTo] = useState([])
+
+  const togglePostTo = (option) => {
+    setSelectedPostTo(prev =>
+      prev.includes(option)
+        ? prev.filter(o => o !== option)
+        : [...prev, option]
+    )
+  }
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
 
@@ -77,6 +100,9 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     '#EC4899', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
     '#14B8A6', '#EAB308', '#E11D48', '#0EA5E9'
   ]
+
+  // Confirmation dialog state
+  const [showConfirmation, setShowConfirmation] = useState(false)
 
   const handlePhotoSelect = (e) => {
     const file = e.target.files[0]
@@ -127,9 +153,53 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     return index >= 0 ? index + 1 : null
   }
 
+  // Show confirmation dialog before creating party
   const handleCreateParty = () => {
-    // Display name with "Party" suffix
-    const displayName = partyName.trim() ? `${partyName.trim()} Party` : `${partyHandle} Party`
+    setShowConfirmation(true)
+  }
+
+  // Helper to strip "Party" suffix if user typed it (since we auto-add it)
+  const stripPartySuffix = (name) => {
+    const trimmed = name.trim()
+    // Remove "Party" from end (case-insensitive)
+    if (trimmed.toLowerCase().endsWith(' party')) {
+      return trimmed.slice(0, -6).trim()
+    }
+    if (trimmed.toLowerCase() === 'party') {
+      return ''
+    }
+    return trimmed
+  }
+
+  // Helper to convert to title case (capitalize first letter of each word)
+  // except for common small words (unless it's the first word)
+  const toTitleCase = (str) => {
+    if (!str) return ''
+    const smallWords = ['of', 'the', 'and', 'in', 'on', 'at', 'to', 'for', 'with', 'a', 'an', 'but', 'or', 'nor', 'by']
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map((word, index) => {
+        if (index === 0 || !smallWords.includes(word)) {
+          return word.charAt(0).toUpperCase() + word.slice(1)
+        }
+        return word
+      })
+      .join(' ')
+  }
+
+  // Combined helper: strip suffix and apply title case
+  const formatPartyName = (name) => {
+    return toTitleCase(stripPartySuffix(name))
+  }
+
+  // Actually create the party after confirmation
+  const confirmCreateParty = () => {
+    setShowConfirmation(false)
+    // Display name with "Party" suffix (strip if user already typed it, apply title case)
+    const cleanName = formatPartyName(partyName)
+    const cleanHandle = formatPartyName(partyHandle)
+    const displayName = cleanName ? `${cleanName} Party` : `${cleanHandle} Party`
     const partyData = {
       name: displayName,
       handle: partyHandle,
@@ -137,6 +207,7 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
       photo: partyPhoto,
       color: partyColor,
       introVideo: recordedVideoUrl,
+      introVideoMirrored: isMirrored,
       type: partyType,
       privacy: partyPrivacy,
       requireApproval: partyType === 'closed', // closed requires approval
@@ -185,11 +256,11 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
         <div className="party-video-preview">
           {recordedVideoUrl ? (
             <video
+              ref={videoRef}
               src={recordedVideoUrl}
               className={isMirrored ? 'mirrored' : ''}
               autoPlay
               loop
-              muted
               playsInline
             />
           ) : (
@@ -502,13 +573,24 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
           </div>
         </div>
 
-        {/* Post To */}
+        {/* Post To - Multi-select */}
         <div className="party-option-row stacked">
           <span className="party-option-label">Post To</span>
           <div className="party-type-tags">
-            <button className="party-type-tag active">
+            <button
+              className={`party-type-tag ${selectedPostTo.includes('Your Feed') ? 'active' : ''}`}
+              onClick={() => togglePostTo('Your Feed')}
+            >
               Your Feed
             </button>
+            {(partyName || partyHandle) && (
+              <button
+                className={`party-type-tag ${selectedPostTo.includes(`${formatPartyName(partyName) || formatPartyName(partyHandle)} Party`) ? 'active' : ''}`}
+                onClick={() => togglePostTo(`${formatPartyName(partyName) || formatPartyName(partyHandle)} Party`)}
+              >
+                {formatPartyName(partyName) || formatPartyName(partyHandle)} Party
+              </button>
+            )}
           </div>
         </div>
 
@@ -592,6 +674,34 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
           Post
         </button>
       </div>
+
+      {/* Confirmation Dialog */}
+      {showConfirmation && (
+        <div className="party-confirm-overlay">
+          <div className="party-confirm-dialog">
+            <div className="party-confirm-icon" style={{ background: partyColor }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <h3 className="party-confirm-title">Create {formatPartyName(partyName) || formatPartyName(partyHandle)} Party?</h3>
+            <p className="party-confirm-message">
+              You're currently <strong>Independent</strong>. Creating this party will change your affiliation from Independent to <strong style={{ color: partyColor }}>{formatPartyName(partyName) || formatPartyName(partyHandle)} Party</strong>.
+            </p>
+            <div className="party-confirm-actions">
+              <button className="party-confirm-cancel" onClick={() => setShowConfirmation(false)}>
+                Stay Independent
+              </button>
+              <button className="party-confirm-create" style={{ background: partyColor }} onClick={confirmCreateParty}>
+                Create Party
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

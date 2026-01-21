@@ -697,3 +697,87 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Confirmation Dialog */
+.party-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.party-confirm-dialog {
+  background: #1a1a1a;
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+}
+
+.party-confirm-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.party-confirm-title {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.party-confirm-message {
+  color: #999;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.party-confirm-message strong {
+  color: #fff;
+}
+
+.party-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.party-confirm-cancel {
+  background: transparent;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.party-confirm-cancel:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.party-confirm-create {
+  border: none;
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.party-confirm-create:active {
+  opacity: 0.9;
+}

@@ -1225,13 +1225,19 @@
 .candidate-profile .post-item {
   aspect-ratio: 156 / 235;
   overflow: hidden;
+  cursor: pointer;
 }
 
-.candidate-profile .post-item img {
+.candidate-profile .post-item img,
+.candidate-profile .post-item video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.candidate-profile .post-item video.mirrored {
+  transform: scaleX(-1);
 }
 
 /* Activity Feed - Details Tab */

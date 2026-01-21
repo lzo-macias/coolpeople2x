@@ -245,13 +245,19 @@
 .my-profile .post-item {
   aspect-ratio: 156 / 235;
   overflow: hidden;
+  cursor: pointer;
 }
 
-.my-profile .post-item img {
+.my-profile .post-item img,
+.my-profile .post-item video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.my-profile .post-item video.mirrored {
+  transform: scaleX(-1);
 }
 
 /* Placeholders */

@@ -3,6 +3,7 @@ import '../styling/PartyProfile.css'
 import Sparkline from './Sparkline'
 import { getPartyColor } from '../data/mockData'
 import EditBio from './EditBio'
+import SinglePostView from './SinglePostView'
 
 // Mock data for the party profile
 const mockParty = {
@@ -110,7 +111,7 @@ const regularMemberTestimonials = [
   },
 ]
 
-function PartyProfile({ party: passedParty, onMemberClick }) {
+function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
   // Merge passed party with defaults for missing properties
   const party = { ...mockParty, ...passedParty }
 
@@ -121,6 +122,17 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
   const [hasJoined, setHasJoined] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showEditBio, setShowEditBio] = useState(false)
+  const [showSinglePost, setShowSinglePost] = useState(false)
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+
+  // Get all posts for this party (either passed or empty)
+  const allPosts = party.posts || []
+
+  // Handle post click to open SinglePostView
+  const handlePostClick = (index) => {
+    setSelectedPostIndex(index)
+    setShowSinglePost(true)
+  }
 
   // Profile sections state for icebreakers (with mock data)
   const [profileSections, setProfileSections] = useState({
@@ -518,6 +530,41 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
 
       {/* Content - dark background */}
       <div className="profile-content">
+        {/* Posts Tab Content */}
+        {activeTab === 'posts' && (
+          <div className="party-posts-grid">
+            {allPosts.length > 0 ? (
+              allPosts.map((post, index) => (
+                <div
+                  key={post.id || index}
+                  className="party-post-item"
+                  onClick={() => handlePostClick(index)}
+                >
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop'} alt={`Post ${index + 1}`} />
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="party-posts-empty">
+                <p>No posts yet</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab !== 'posts' && (
+        <>
         {/* Search Bar */}
         <div className="profile-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -872,6 +919,8 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
             })}
           </div>
         )}
+        </>
+        )}
       </div>
 
       {/* Edit Bio Overlay - for development */}
@@ -884,6 +933,19 @@ function PartyProfile({ party: passedParty, onMemberClick }) {
           </button>
           <EditBio profileData={profileSections} onSave={handleSaveProfile} />
         </div>
+      )}
+
+      {/* Single Post View */}
+      {showSinglePost && allPosts.length > 0 && (
+        <SinglePostView
+          posts={allPosts}
+          initialIndex={selectedPostIndex}
+          onClose={() => setShowSinglePost(false)}
+          onEndReached={() => setShowSinglePost(false)}
+          onUsernameClick={onMemberClick}
+          onOpenComments={onOpenComments}
+          profileName={party.name}
+        />
       )}
     </div>
   )

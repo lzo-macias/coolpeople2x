@@ -16,7 +16,7 @@ export const PARTY_COLORS = {
 export const getPartyColor = (party) => PARTY_COLORS[party] || '#00d4d4'
 
 // Helper to generate sparkline data (jagged stock chart pattern)
-const generateSparklineData = (trend = 'up', points = 20) => {
+export const generateSparklineData = (trend = 'up', points = 20) => {
   const data = []
   let value = 50 + Math.random() * 20
   for (let i = 0; i < points; i++) {

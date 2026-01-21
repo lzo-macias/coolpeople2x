@@ -15,7 +15,7 @@ import MyProfile from './components/MyProfile'
 import MyBallot from './components/MyBallot'
 import Messages from './components/Messages'
 import CreateScreen from './components/CreateScreen'
-import { mockReels, mockPartyProfiles, mockParticipants } from './data/mockData'
+import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
@@ -35,6 +35,163 @@ function App() {
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
   const [userParty, setUserParty] = useState(null) // User's created party
+  const [hasOptedIn, setHasOptedIn] = useState(false) // Whether user has opted into social credit
+  const [reels, setReels] = useState([...mockReels]) // All posts in feed
+  const [userPosts, setUserPosts] = useState([]) // Current user's posts
+  const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
+  const [userStories, setUserStories] = useState([]) // User's stories (nominations)
+  const [conversations, setConversations] = useState({ ...mockConversations }) // Chat messages by conversation ID
+
+  // Ref for scrolling reels feed to top after posting
+  const reelsFeedRef = useRef(null)
+
+  // Current user info (would come from auth in real app)
+  // isParticipant = true means they can't be nominated as a candidate in races
+  const currentUser = {
+    id: 'current-user',
+    username: 'William.Hiya',
+    displayName: 'William Harrison',
+    party: userParty?.name || 'Independent',
+    avatar: 'https://i.pravatar.cc/40?img=12',
+    isParticipant: true, // Participant (not a candidate) - can target races but can't be nominated
+  }
+
+  // Handle new post creation
+  // forParty param allows passing party data directly when userParty state hasn't updated yet
+  const handlePostCreated = (postData, forParty = null) => {
+    console.log('handlePostCreated called with:', postData)
+    const timestamp = Date.now()
+    const effectiveParty = forParty || userParty
+
+    // Check if this is a nomination (should go to stories)
+    if (postData.isNomination) {
+      const newStory = {
+        id: `story-user-${timestamp}`,
+        userId: 'current-user',
+        name: currentUser.displayName,
+        image: currentUser.avatar,
+        hasNew: true,
+        party: currentUser.party,
+        videoUrl: postData.videoUrl,
+        isMirrored: postData.isMirrored || false,
+        taggedUser: postData.taggedUser || null,
+        createdAt: new Date().toISOString(),
+      }
+
+      // Add to user stories
+      setUserStories(prev => [newStory, ...prev])
+    } else {
+      // Regular post goes to feed
+      // Generate engagement scores for the sparklines at top
+      const defaultEngagementScores = [
+        {
+          id: `eng-${timestamp}-1`,
+          username: currentUser.username,
+          avatar: currentUser.avatar,
+          party: currentUser.party,
+          sparklineData: generateSparklineData('up'),
+          recentChange: null,
+          trend: 'up',
+        },
+        {
+          id: `eng-${timestamp}-2`,
+          username: 'Lzo.macias.formayor',
+          avatar: 'https://i.pravatar.cc/40?img=1',
+          party: 'Democrat',
+          sparklineData: generateSparklineData('up'),
+          recentChange: '+1',
+          trend: 'up',
+        },
+        {
+          id: `eng-${timestamp}-3`,
+          username: 'Sarah.J.Council',
+          avatar: 'https://i.pravatar.cc/40?img=5',
+          party: 'Republican',
+          sparklineData: generateSparklineData('stable'),
+          recentChange: null,
+          trend: 'stable',
+        },
+      ]
+
+      const newReel = {
+        id: `reel-${timestamp}`,
+        videoUrl: postData.videoUrl || null,
+        thumbnail: postData.videoUrl || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop',
+        user: {
+          ...currentUser,
+          party: effectiveParty?.name || currentUser.party,
+        },
+        title: postData.title || '',
+        caption: postData.caption || '',
+        engagementScores: defaultEngagementScores,
+        stats: { votes: '0', likes: '1', comments: '0', shazam: '0', shares: '0' },
+        targetRace: postData.targetRace || null,
+        createdAt: new Date().toISOString(),
+        isMirrored: postData.isMirrored || false,
+        textOverlays: postData.textOverlays || [],
+      }
+
+      // postTo is now an array for multi-select
+      const postToArray = Array.isArray(postData.postTo) ? postData.postTo : [postData.postTo || 'Your Feed']
+
+      // Add to feed if posting to feed
+      if (postToArray.includes('Your Feed')) {
+        console.log('Adding new reel to feed:', newReel)
+        setReels(prev => [newReel, ...prev])
+      }
+
+      // Add to party posts if posting to party
+      if (effectiveParty && postToArray.some(target => target.includes(effectiveParty.name) || target.includes('Party'))) {
+        console.log('Adding to party posts:', newReel)
+        setPartyPosts(prev => [newReel, ...prev])
+      }
+
+      // Add to user's posts
+      console.log('Adding to user posts:', newReel)
+      setUserPosts(prev => [newReel, ...prev])
+    }
+
+    // Handle sending to chats
+    if (postData.sendTo && postData.sendTo.length > 0) {
+      const mediaMessage = {
+        id: `msg-${timestamp}`,
+        text: postData.caption || null,
+        mediaUrl: postData.videoUrl,
+        mediaType: 'video',
+        isMirrored: postData.isMirrored || false,
+        isOwn: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }
+
+      // Find conversation IDs that match sendTo names and add message
+      setConversations(prev => {
+        const updated = { ...prev }
+        postData.sendTo.forEach(chatName => {
+          // Find the conversation ID by matching username
+          const matchingMsg = mockMessages.find(m =>
+            m.user.username === chatName ||
+            m.user.username.includes(chatName.split(' ')[0])
+          )
+          if (matchingMsg) {
+            const convId = matchingMsg.id
+            updated[convId] = [...(updated[convId] || []), mediaMessage]
+          }
+        })
+        return updated
+      })
+    }
+
+    // Close create screen and navigate to feed
+    setShowCreateScreen(false)
+    setCurrentPage(1) // Go to home/reels page
+
+    // Scroll feed to top after a short delay to ensure new post is rendered
+    setTimeout(() => {
+      if (reelsFeedRef.current) {
+        reelsFeedRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }, 100)
+  }
 
   // Navigation history stack
   const [navHistory, setNavHistory] = useState([])
@@ -144,6 +301,35 @@ function App() {
   }
 
   const handleOpenPartyProfile = (partyName) => {
+    // First check if it's the user's created party
+    if (userParty && (partyName === userParty.name || partyName === userParty.handle)) {
+      // Build party profile data from user's party with their posts
+      const userPartyProfile = {
+        name: userParty.name,
+        handle: userParty.handle,
+        color: userParty.color,
+        type: userParty.type,
+        avatar: userParty.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(userParty.name)}&background=${userParty.color.replace('#', '')}&color=fff&size=150`,
+        bio: userParty.bio || `Welcome to ${userParty.name}! A new political party making a difference.`,
+        stats: userParty.stats || {
+          members: 1,
+          followers: 0,
+          posts: partyPosts.length,
+          rating: 3.0,
+        },
+        posts: partyPosts,
+        isUserParty: true,
+      }
+      saveToHistory()
+      setShowComments(false)
+      setShowProfile(false)
+      setShowParticipantProfile(false)
+      setActiveParty(userPartyProfile)
+      setShowPartyProfile(true)
+      return
+    }
+
+    // Otherwise check mock party profiles
     const partyData = mockPartyProfiles[partyName]
     if (partyData) {
       saveToHistory()
@@ -210,11 +396,16 @@ function App() {
 
   // Handle clicking on username in reels
   const handleReelUsernameClick = (user) => {
-    // For now, treat all reel users as candidates (opted into social credit)
+    // Check if this is the current user
+    const isCurrentUser = user.username === currentUser.username || user.id === currentUser.id
+
     setActiveCandidate({
       username: user.username,
       avatar: user.avatar,
       party: user.party || 'Independent',
+      // Pass user's posts if this is the current user
+      posts: isCurrentUser ? userPosts : null,
+      isCurrentUser: isCurrentUser,
     })
     setShowProfile(true)
   }
@@ -264,11 +455,12 @@ function App() {
 
         {/* Home Page - Now Reels */}
         <div className="page">
-          <div className="reels-feed">
-            {mockReels.map((reel) => (
+          <div className="reels-feed" ref={reelsFeedRef}>
+            {reels.map((reel) => (
               <ReelCard
                 key={reel.id}
                 reel={reel}
+                isPageActive={currentPage === 1}
                 onOpenComments={() => handleOpenComments(reel)}
                 onUsernameClick={handleReelUsernameClick}
                 onPartyClick={handleReelPartyClick}
@@ -285,7 +477,12 @@ function App() {
 
         {/* Messages Page */}
         <div className="page">
-          <Messages onConversationChange={setIsInConversation} />
+          <Messages
+            onConversationChange={setIsInConversation}
+            conversations={conversations}
+            setConversations={setConversations}
+            userStories={userStories}
+          />
         </div>
 
         {/* Campaign/Ballot Page */}
@@ -299,6 +496,9 @@ function App() {
             onPartyClick={handleOpenPartyProfile}
             onOptIn={handleOptIn}
             userParty={userParty}
+            userPosts={userPosts}
+            hasOptedIn={hasOptedIn}
+            onOpenComments={handleOpenComments}
           />
         </div>
       </div>
@@ -319,9 +519,31 @@ function App() {
           <CreateScreen
             onClose={() => setShowCreateScreen(false)}
             onPartyCreated={(partyData) => {
+              // Set the user's party
               setUserParty(partyData)
-              setShowCreateScreen(false)
+
+              // If party has an intro video and post settings, create a post
+              if (partyData.introVideo && partyData.postSettings) {
+                const postToArray = Array.isArray(partyData.postSettings.postTo)
+                  ? partyData.postSettings.postTo
+                  : [partyData.postSettings.postTo || 'Your Feed']
+
+                // Create the intro post, passing partyData so it can be added to party posts
+                handlePostCreated({
+                  videoUrl: partyData.introVideo,
+                  title: `Welcome to ${partyData.name}!`,
+                  caption: partyData.bio || '',
+                  postTo: postToArray,
+                  sendTo: partyData.postSettings.sendTo || [],
+                  targetRace: partyData.postSettings.target || null,
+                  isMirrored: partyData.introVideoMirrored || false,
+                }, partyData)
+              } else {
+                setShowCreateScreen(false)
+              }
             }}
+            onPostCreated={handlePostCreated}
+            userParty={userParty}
           />
         </div>
       )}
@@ -349,6 +571,7 @@ function App() {
             onClose={handleCloseProfile}
             onPartyClick={handleOpenPartyProfile}
             onUserClick={handleOpenProfile}
+            onOpenComments={handleOpenComments}
           />
         </div>
       )}
@@ -365,6 +588,7 @@ function App() {
             <PartyProfile
               party={activeParty}
               onMemberClick={handleOpenProfile}
+              onOpenComments={handleOpenComments}
             />
           </div>
         </div>

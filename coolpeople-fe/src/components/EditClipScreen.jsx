@@ -4,6 +4,21 @@ import '../styling/EditClipScreen.css'
 
 function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays }) {
   const [showAddSound, setShowAddSound] = useState(false)
+  const videoRef = useRef(null)
+
+  // Restart video from beginning when screen mounts
+  useEffect(() => {
+    if (videoRef.current && recordedVideoUrl) {
+      videoRef.current.currentTime = 0
+      videoRef.current.play().catch(() => {})
+    }
+    // Cleanup - pause when unmounting
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause()
+      }
+    }
+  }, [])
   const [isEditingRace, setIsEditingRace] = useState(false)
   const [showUserPanel, setShowUserPanel] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState([])
@@ -512,11 +527,11 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       <div className="edit-clip-preview">
         {recordedVideoUrl ? (
           <video
+            ref={videoRef}
             src={recordedVideoUrl}
             className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
             autoPlay
             loop
-            muted
             playsInline
           />
         ) : (

@@ -3,6 +3,7 @@
   width: 100%;
   height: 100vh;
   overflow: hidden;
+  z-index: 1;
 }
 
 .reel-media {
@@ -11,6 +12,21 @@
   background-size: cover;
   background-position: center;
   background-color: var(--bg-secondary);
+  z-index: 1;
+}
+
+.reel-media-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: var(--bg-secondary);
+  z-index: 1;
+}
+
+.reel-media-video.mirrored {
+  transform: scaleX(-1);
 }
 
 .reel-overlay {
@@ -27,6 +43,7 @@
     transparent 65%,
     rgba(0, 0, 0, 0.8) 100%
   );
+  z-index: 2;
 }
 
 /* Right side actions */
@@ -34,6 +51,11 @@
   position: absolute;
   right: 12px;
   bottom: 180px;
+}
+
+/* Move actions down when no nominate button (participant posts) */
+.reel-actions-container.no-nominate {
+  bottom: 120px;
 }
 
 /* Bottom info and nominate */
@@ -253,9 +275,11 @@
   font-size: 13px;
   font-weight: 500;
   width: fit-content;
-  margin-bottom: 6px;
   border: none;
   cursor: pointer;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 6px;
   transition: background 0.2s ease;
 }
 
@@ -273,11 +297,12 @@
 /* Race Modal Slide-up */
 .race-modal-backdrop {
   position: fixed;
-  inset: 0;
-  max-width: 430px;
-  margin: 0 auto;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 200;
+  z-index: 99998;
 }
 
 .race-modal {
@@ -286,15 +311,17 @@
   left: 0;
   right: 0;
   height: 70vh;
-  max-width: 430px;
-  margin: 0 auto;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
   background: linear-gradient(180deg, #3D2A1A 0%, #2A1F0F 100%);
   border-radius: 24px 24px 0 0;
   padding: 12px 20px 32px;
-  z-index: 201;
+  z-index: 99999;
   animation: slideUp 0.3s ease-out;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 @keyframes slideUp {
@@ -556,11 +583,12 @@
 /* Nominate Modal (Race Select & Options) - White theme */
 .nominate-modal-backdrop {
   position: fixed;
-  inset: 0;
-  max-width: 430px;
-  margin: 0 auto;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 200;
+  z-index: 99996;
 }
 
 .nominate-modal {
@@ -568,13 +596,15 @@
   bottom: 0;
   left: 0;
   right: 0;
-  max-width: 430px;
-  margin: 0 auto;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
   background: #FFFFFF;
   border-radius: 24px 24px 0 0;
   padding: 12px 20px 32px;
-  z-index: 201;
+  z-index: 99997;
   animation: slideUp 0.3s ease-out;
+  box-sizing: border-box;
 }
 
 .nominate-modal-handle {

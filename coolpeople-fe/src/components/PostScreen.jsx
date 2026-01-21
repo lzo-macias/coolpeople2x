@@ -1,22 +1,42 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays }) {
+function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty }) {
   const [title, setTitle] = useState('')
+  const videoRef = useRef(null)
+
+  // Restart video from beginning when screen mounts
+  useEffect(() => {
+    if (videoRef.current && recordedVideoUrl) {
+      videoRef.current.currentTime = 0
+      videoRef.current.play().catch(() => {})
+    }
+    // Cleanup - pause when unmounting
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause()
+      }
+    }
+  }, [])
   const [caption, setCaption] = useState('')
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
-  const [selectedPostTo, setSelectedPostTo] = useState(null)
+  const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
 
   const targetRaces = isRaceMode ? [raceName] : ['Mayor Race', 'City Council', 'Governor', 'Senate']
-  const postToOptions = ['Your Feed', 'The Pink Lady']
+  // Build post to options - include user's party if they have one
+  const postToOptions = userParty ? ['Your Feed', userParty.name] : ['Your Feed']
   const sendToOptions = ['The Pink Lady', 'Mamas gaga', 'Sunday Canvassing']
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
 
   const togglePostTo = (option) => {
-    setSelectedPostTo(selectedPostTo === option ? null : option)
+    setSelectedPostTo(prev =>
+      prev.includes(option)
+        ? prev.filter(o => o !== option)
+        : [...prev, option]
+    )
   }
 
   const toggleSendTo = (option) => {
@@ -41,7 +61,7 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget })
   }
 
   return (
@@ -58,11 +78,11 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
         <div className="post-video-preview">
           {recordedVideoUrl ? (
             <video
+              ref={videoRef}
               src={recordedVideoUrl}
               className={isMirrored ? 'mirrored' : ''}
               autoPlay
               loop
-              muted
               playsInline
             />
           ) : (
@@ -169,7 +189,7 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
             {postToOptions.map(option => (
               <button
                 key={option}
-                className={`post-tag ${selectedPostTo === option ? 'active' : ''}`}
+                className={`post-tag ${selectedPostTo.includes(option) ? 'active' : ''}`}
                 onClick={() => togglePostTo(option)}
               >
                 {option}

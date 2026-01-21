@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import '../styling/CandidateProfile.css'
 import Sparkline from './Sparkline'
-import { getPartyColor } from '../data/mockData'
+import { getPartyColor, generateSparklineData } from '../data/mockData'
 import EditProfile from './EditProfile'
+import SinglePostView from './SinglePostView'
 
 // Mock data for the candidate profile
 const mockCandidate = {
@@ -287,7 +288,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
@@ -316,6 +317,65 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [respondingTo, setRespondingTo] = useState(null) // nomination being responded to
   const [responseText, setResponseText] = useState('')
   const [reviewResponses, setReviewResponses] = useState({}) // { nominationId: responseText }
+  const [showSinglePost, setShowSinglePost] = useState(false)
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+
+  // Convert posts to reel format for SinglePostView with variable engagement scores
+  const trends = ['up', 'down', 'stable']
+  const mockRaces = ['NYC Mayor 2024', 'City Council District 5', 'State Assembly']
+  const defaultPostsAsReels = (candidate.postImages || []).map((img, i) => ({
+    id: `candidate-post-${i}`,
+    thumbnail: img,
+    user: {
+      username: candidate.username,
+      avatar: candidate.avatar,
+      party: candidate.party,
+    },
+    title: '',
+    caption: '',
+    targetRace: mockRaces[i % mockRaces.length],
+    stats: { votes: '0', likes: '0', comments: '0', shazam: '0', shares: '0' },
+    engagementScores: [
+      {
+        id: `cand-eng-${i}-1`,
+        username: candidate.username,
+        avatar: candidate.avatar,
+        party: candidate.party,
+        sparklineData: generateSparklineData(trends[i % 3]),
+        recentChange: i % 2 === 0 ? '+1' : null,
+        trend: trends[i % 3],
+      },
+      {
+        id: `cand-eng-${i}-2`,
+        username: 'Lzo.macias',
+        avatar: 'https://i.pravatar.cc/40?img=1',
+        party: 'Democrat',
+        sparklineData: generateSparklineData(trends[(i + 1) % 3]),
+        recentChange: i % 3 === 0 ? '+2' : null,
+        trend: trends[(i + 1) % 3],
+      },
+      {
+        id: `cand-eng-${i}-3`,
+        username: 'Sarah.J',
+        avatar: 'https://i.pravatar.cc/40?img=5',
+        party: 'Republican',
+        sparklineData: generateSparklineData(trends[(i + 2) % 3]),
+        recentChange: null,
+        trend: trends[(i + 2) % 3],
+      },
+    ],
+  }))
+
+  // Combine dynamic posts with default posts
+  const allPosts = candidate.posts
+    ? [...candidate.posts, ...defaultPostsAsReels]
+    : defaultPostsAsReels
+
+  // Handle post click to open SinglePostView
+  const handlePostClick = (index) => {
+    setSelectedPostIndex(index)
+    setShowSinglePost(true)
+  }
   const [draggedItem, setDraggedItem] = useState(null)
   const [dragOverItem, setDragOverItem] = useState(null)
 
@@ -711,9 +771,25 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {/* Posts Tab */}
         {activeTab === 'posts' && (
           <div className="posts-grid">
-            {candidate.postImages?.map((post, index) => (
-              <div key={index} className="post-item">
-                <img src={post} alt={`Post ${index + 1}`} />
+            {allPosts.map((post, index) => (
+              <div
+                key={post.id || index}
+                className="post-item"
+                onClick={() => handlePostClick(index)}
+              >
+                {post.videoUrl ? (
+                  <video
+                    src={post.videoUrl}
+                    className={post.isMirrored ? 'mirrored' : ''}
+                    muted
+                    playsInline
+                    loop
+                    onMouseOver={(e) => e.target.play()}
+                    onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                  />
+                ) : (
+                  <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
+                )}
               </div>
             ))}
           </div>
@@ -1277,6 +1353,20 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </div>
           </div>
         </div>
+      )}
+
+      {/* Single Post View */}
+      {showSinglePost && (
+        <SinglePostView
+          posts={allPosts}
+          initialIndex={selectedPostIndex}
+          onClose={() => setShowSinglePost(false)}
+          onEndReached={() => setShowSinglePost(false)}
+          onPartyClick={onPartyClick}
+          onUsernameClick={onUserClick}
+          onOpenComments={onOpenComments}
+          profileName={candidate.username}
+        />
       )}
     </div>
   )

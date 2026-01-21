@@ -1,12 +1,17 @@
 .comments-section {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--bg-primary);
-  z-index: 100;
+  z-index: 99990;
   display: flex;
   flex-direction: column;
-  max-width: 430px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Video preview at top */
@@ -31,6 +36,20 @@
   position: relative;
   border-radius: 4px;
   margin-top: 10px;
+}
+
+.video-thumbnail-video {
+  flex: 1;
+  width: 100%;
+  max-width: 200px;
+  max-height: calc(30vh - 22px);
+  object-fit: cover;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.video-thumbnail-video.mirrored {
+  transform: scaleX(-1);
 }
 
 .cp-badge {
