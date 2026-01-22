@@ -92,32 +92,66 @@
   width: 100%;
   max-width: 440px;
   border-radius: 20px 20px 0 0;
-  padding: 12px 0 24px;
+  padding: 12px 20px 24px;
   animation: slideUp 0.3s ease;
+}
+
+.repost-menu-handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+.repost-options-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .repost-option {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 16px 24px;
+  padding: 16px 20px;
   background: none;
   border: none;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 500;
-  color: #111111;
-  transition: background 0.2s;
+  transition: all 0.15s ease;
 }
 
 .repost-option:hover {
-  background: #f5f5f5;
+  background: #F5F5F5;
 }
 
 .repost-option svg {
-  color: #111111;
+  width: 22px;
+  height: 22px;
+  color: #333333;
+  stroke-width: 1.5;
+  flex-shrink: 0;
+}
+
+.repost-option span {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.repost-option.repost svg {
   transform: rotate(90deg);
+}
+
+.repost-option.quote-active svg {
+  color: #333333;
+}
+
+.repost-option.quote-active span {
+  color: #333333;
 }
 
 .repost-btn svg {

@@ -114,27 +114,30 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
       {showRepostMenu && createPortal(
         <div className="repost-menu-overlay" onClick={() => setShowRepostMenu(false)}>
           <div className="repost-menu" onClick={(e) => e.stopPropagation()}>
-            <button className="repost-option" onClick={() => {
-              // Handle repost
-              setShowRepostMenu(false)
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M17 1l4 4-4 4" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <path d="M7 23l-4-4 4-4" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-              </svg>
-              <span>Repost</span>
-            </button>
-            <button className="repost-option" onClick={() => {
-              // Handle quote
-              setShowRepostMenu(false)
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span>Quote</span>
-            </button>
+            <div className="repost-menu-handle" />
+            <div className="repost-options-row">
+              <button className="repost-option repost" onClick={() => {
+                // Handle repost
+                setShowRepostMenu(false)
+              }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M17 1l4 4-4 4" />
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  <path d="M7 23l-4-4 4-4" />
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                </svg>
+                <span>Repost</span>
+              </button>
+              <button className="repost-option quote-active" onClick={() => {
+                // Handle quote
+                setShowRepostMenu(false)
+              }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>Quote</span>
+              </button>
+            </div>
           </div>
         </div>,
         document.body
