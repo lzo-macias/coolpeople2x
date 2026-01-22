@@ -94,6 +94,154 @@
   opacity: 0.7;
 }
 
+/* Tier Badge for opted-in users */
+.my-profile-tier-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.my-profile-tier-badge .tier-icon {
+  font-size: 14px;
+}
+
+.my-profile-tier-badge .tier-name {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  color: #CD7F32;
+}
+
+.my-profile-tier-badge .tier-points {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  color: #777777;
+}
+
+/* Candidate Profile Sections (Starter) */
+.my-profile-candidate-sections {
+  padding: 14px 19px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Starter Reviews Section */
+.starter-reviews-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.starter-section-header {
+  margin-bottom: 12px;
+}
+
+.starter-divider-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 8px;
+}
+
+.starter-divider {
+  height: 1px;
+  flex: 1;
+}
+
+.starter-divider.left {
+  background: linear-gradient(90deg, transparent 0%, #FF2A55 100%);
+}
+
+.starter-divider.right {
+  background: linear-gradient(90deg, #00F2EA 0%, transparent 100%);
+}
+
+.starter-cp-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.starter-cp-c {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #FF2A55;
+}
+
+.starter-cp-p {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #00F2EA;
+}
+
+.starter-section-label {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #FFFFFF;
+  text-align: center;
+}
+
+.starter-reviews-empty {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  color: #777777;
+  margin: 0;
+}
+
+/* Starter Icebreakers Section */
+.starter-icebreakers-section {
+  display: flex;
+  flex-direction: column;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+}
+
+.starter-icebreakers-header {
+  margin-bottom: 12px;
+}
+
+.starter-icebreakers-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #888888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.starter-add-icebreakers {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #777777;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 40px;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  transition: opacity 0.2s ease;
+}
+
+.starter-add-icebreakers:hover {
+  opacity: 0.7;
+}
+
 /* Right - Stats Grid */
 .my-profile-right {
   flex: 1;

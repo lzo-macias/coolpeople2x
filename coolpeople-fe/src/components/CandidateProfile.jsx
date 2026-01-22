@@ -7,12 +7,12 @@ import SinglePostView from './SinglePostView'
 
 // CoolPeople Tier System
 const CP_TIERS = [
-  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '🥉' },
-  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '🥈' },
-  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '🥇' },
-  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '💎' },
-  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '👑' },
-  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '🔥' },
+  { name: 'Bronze', min: 0, max: 999, color: '#a67c52', icon: '/icons/tiers/dark/bronze.svg' },
+  { name: 'Silver', min: 1000, max: 2499, color: '#b8b8b8', icon: '/icons/tiers/dark/silver.svg' },
+  { name: 'Gold', min: 2500, max: 4999, color: '#d4a000', icon: '/icons/tiers/dark/gold.svg' },
+  { name: 'Diamond', min: 5000, max: 9999, color: '#5b9bd5', icon: '/icons/tiers/dark/diamond.svg' },
+  { name: 'Challenger', min: 10000, max: 24999, color: '#9b59b6', icon: '/icons/tiers/dark/challenger.svg' },
+  { name: 'Master', min: 25000, max: Infinity, color: '#e74c3c', icon: '/icons/tiers/dark/master.svg' },
 ]
 
 const getCurrentTier = (points) => {
@@ -322,7 +322,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [] }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
@@ -342,6 +342,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
+  const [editInitialSection, setEditInitialSection] = useState(null)
   const [profileSections, setProfileSections] = useState(initialProfileSections)
   const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
   const [guessState, setGuessState] = useState({
@@ -663,13 +664,24 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">
-                  {candidate.ranking || '.3%'}
-                  <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
-                  </svg>
-                </span>
-                <span className="stat-label">ranking</span>
+                {isStarter ? (
+                  <>
+                    <span className="stat-number starter-tier">
+                      <img src="/icons/tiers/dark/bronze.svg" alt="Bronze" className="stat-tier-icon" />
+                    </span>
+                    <span className="stat-label">Bronze</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="stat-number">
+                      {candidate.ranking || '.3%'}
+                      <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
+                      </svg>
+                    </span>
+                    <span className="stat-label">ranking</span>
+                  </>
+                )}
               </div>
             </div>
             <p className="profile-bio">{candidate.bio || 'Running for Mayor. Building a better tomorrow for our community. '}</p>
@@ -752,10 +764,10 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
         {/* CoolPeople Points Card */}
         {(() => {
-          // Get race-specific data
+          // For starter profiles, use candidate's cpPoints; otherwise use race-specific data
           const currentRaceData = raceData[selectedRace] || raceData['CP']
-          const cpPoints = currentRaceData.cpPoints
-          const raceChange = currentRaceData.change
+          const cpPoints = isStarter ? candidate.cpPoints : currentRaceData.cpPoints
+          const raceChange = isStarter ? candidate.change : currentRaceData.change
           const currentTier = getCurrentTier(cpPoints)
           const nextTier = getNextTier(cpPoints)
 
@@ -782,7 +794,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                       background: `linear-gradient(135deg, ${currentTier.color}33, ${currentTier.color}22)`,
                       borderColor: `${currentTier.color}4D`
                     }}>
-                      {currentTier.icon}
+                      <img src={currentTier.icon} alt={currentTier.name} className="tier-svg-icon" />
                     </div>
                     <div className="level-info">
                       <h3 style={{ color: currentTier.color }}>{currentTier.name.toUpperCase()}</h3>
@@ -811,7 +823,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     ))}
                   </div>
                   <div className="cp-total-mini">
-                    <span className="tier-icon-mini" style={{ color: currentTier.color }}>{currentTier.icon}</span>
+                    <img src={currentTier.icon} alt={currentTier.name} className="tier-icon-mini" />
                     <span className="points-mini">{cpPoints.toLocaleString()}</span>
                     <span className="cp-label-mini">CP</span>
                     <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
@@ -1025,10 +1037,10 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <div className="progress-section">
                   <div className="progress-header">
                     <div className="current" style={{ color: currentTier.color }}>
-                      <span className="icon">{currentTier.icon}</span>
+                      <img src={currentTier.icon} alt={currentTier.name} className="progress-tier-icon" />
                       {currentTier.name}
                     </div>
-                    <div className="next">{pointsToNext.toLocaleString()} CP to {nextTier.icon} {nextTier.name}</div>
+                    <div className="next">{pointsToNext.toLocaleString()} CP to <img src={nextTier.icon} alt={nextTier.name} className="progress-tier-icon" /> {nextTier.name}</div>
                   </div>
                   <div className="progress-bar-wrap">
                     <div
@@ -1080,21 +1092,26 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 </div>
               </div>
             </div>
-            <span className="cp-section-label verified">Verified Reviews</span>
+            <span className="cp-section-label verified">reviews</span>
           </div>
 
-          {/* Rating Badge */}
-          <div className="chart-rating-badge below-verified">
-            <span className="rating-value">3.2</span>
-            <div className="rating-star-circle">
-              <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </div>
-          </div>
+          {/* Starter Profile - No Reviews Yet */}
+          {isStarter ? (
+            <p className="starter-no-reviews">0 reviews yet</p>
+          ) : (
+            <>
+              {/* Rating Badge */}
+              <div className="chart-rating-badge below-verified">
+                <span className="rating-value">3.2</span>
+                <div className="rating-star-circle">
+                  <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </div>
+              </div>
 
-          {/* Paid Nominations */}
-          {paidNominations.map((nomination, index) => (
+              {/* Paid Nominations */}
+              {paidNominations.map((nomination, index) => (
             <div key={nomination.id} className="nomination-item paid">
               <div className="nomination-header">
                 <div className="nomination-user">
@@ -1134,21 +1151,21 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </div>
           ))}
 
-          {/* Leave a Verified Review link - below paid nominations, if local */}
-          {isLocalToCandidate && (
-            <button className="leave-review-link verified">Leave a Verified Review</button>
-          )}
+              {/* Leave a Verified Review link - below paid nominations, if local */}
+              {isLocalToCandidate && (
+                <button className="leave-review-link verified">Leave a Verified Review</button>
+              )}
 
-          {/* Community Reviews Section Header */}
-          <div className="cp-section-header">
-            <div className="cp-divider-section community">
-              <div className="nomination-divider community"></div>
-            </div>
-            <span className="cp-section-label community">Community Reviews</span>
-          </div>
+              {/* Community Reviews Section Header */}
+              <div className="cp-section-header">
+                <div className="cp-divider-section community">
+                  <div className="nomination-divider community"></div>
+                </div>
+                <span className="cp-section-label community">Community Reviews</span>
+              </div>
 
-          {/* Regular Nominations */}
-          {regularNominations.map((nomination, index) => (
+              {/* Regular Nominations */}
+              {regularNominations.map((nomination, index) => (
             <div
               key={nomination.id}
               className="nomination-item clickable"
@@ -1206,11 +1223,13 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               )}
             </div>
           ))}
+            </>
+          )}
 
         </div>
 
-        {/* Leave a Review */}
-        <p className="leave-review-text">Leave a Review</p>
+        {/* Leave a Review - only show if not starter */}
+        {!isStarter && <p className="leave-review-text">Leave a Review</p>}
 
         {/* Load More Button */}
         <div className="load-more-buttons">
@@ -1234,8 +1253,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             <span className="profile-sections-title">Icebreakers</span>
           </div>
 
-          {/* Render icebreakers in drag-and-drop order */}
-          {getOrderedIcebreakers().map((icebreaker) => {
+          {/* Starter Profile - Add Icebreakers Link */}
+          {isStarter ? (
+            <button className="starter-add-icebreakers" onClick={() => {
+              setEditInitialSection('icebreakers')
+              setShowEditBio(true)
+            }}>
+              add icebreakers
+            </button>
+          ) : (
+          /* Render icebreakers in drag-and-drop order */
+          getOrderedIcebreakers().map((icebreaker) => {
             const isDragOver = dragOverItem === icebreaker.id
 
             if (icebreaker.type === 'written') {
@@ -1395,9 +1423,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             }
 
             return null
-          })}
+          })
+          )}
 
-          {/* Recent Post */}
+          {/* Recent Post - only show if not starter */}
+          {!isStarter && (
           <div className="profile-section post">
             <div className="post-header">
               <span className="post-username">{profileSections.recentPost.username}</span>
@@ -1408,6 +1438,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               <button className="post-nav-btn">›</button>
             </div>
           </div>
+          )}
         </div>
           </>
         )}
@@ -1497,6 +1528,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       {showEditBio && (
         <div className="edit-bio-overlay">
           <EditProfile
+            key={editInitialSection || 'main'}
             candidate={candidate}
             profileSections={profileSections}
             onSave={(updatedData) => {
@@ -1504,20 +1536,23 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 const newSections = { ...prev }
 
                 // Handle custom icebreakers
-                if (updatedData.customWritten) {
+                if (updatedData.customWritten !== undefined) {
                   newSections.customWritten = updatedData.customWritten
                 }
-                if (updatedData.customSliders) {
+                if (updatedData.customSliders !== undefined) {
                   newSections.customSliders = updatedData.customSliders
                 }
 
                 // Handle tags
-                if (updatedData.topicsThatEnergize?.length > 0) {
-                  newSections.topicsThatEnergize = { ...prev.topicsThatEnergize, tags: updatedData.topicsThatEnergize }
+                if (updatedData.topicsThatEnergize !== undefined) {
+                  newSections.topicsThatEnergize = {
+                    ...prev.topicsThatEnergize,
+                    tags: updatedData.topicsThatEnergize
+                  }
                 }
 
                 // Handle guess game
-                if (updatedData.guessWhichTrue?.options?.some(o => o?.trim())) {
+                if (updatedData.guessWhichTrue !== undefined) {
                   newSections.guessWhichTrue = {
                     ...prev.guessWhichTrue,
                     options: updatedData.guessWhichTrue.options,
@@ -1528,7 +1563,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 return newSections
               })
             }}
-            onClose={() => setShowEditBio(false)}
+            onClose={() => {
+              setShowEditBio(false)
+              setEditInitialSection(null)
+            }}
+            initialSection={editInitialSection}
           />
         </div>
       )}

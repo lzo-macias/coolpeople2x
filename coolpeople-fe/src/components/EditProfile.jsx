@@ -4,9 +4,16 @@ import '../styling/EditProfile.css'
 import '../styling/ReelCard.css'
 import EditBio from './EditBio'
 
-function EditProfile({ candidate, profileSections, onSave, onClose }) {
-  const [activeSection, setActiveSection] = useState(null)
+function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null }) {
+  const [activeSection, setActiveSection] = useState(initialSection)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Update activeSection when initialSection prop changes
+  useEffect(() => {
+    if (initialSection !== null) {
+      setActiveSection(initialSection)
+    }
+  }, [initialSection])
   const [showStatusWarning, setShowStatusWarning] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(null)
   const [partySearch, setPartySearch] = useState('')
@@ -875,11 +882,6 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             setActiveSection(null)
           }}
         />
-      </div>
-      <div className="icebreakers-save-footer">
-        <button className="icebreakers-save-btn" onClick={() => setActiveSection(null)}>
-          Save
-        </button>
       </div>
     </div>
   )

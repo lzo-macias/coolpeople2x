@@ -479,7 +479,7 @@ function EditBio({ profileData: passedProfileData, onSave }) {
       {/* Bottom Action Button */}
       <div className="bio-bottom-action">
         {canSend ? (
-          <button className="send-btn" onClick={() => onSave?.(profileData)}>Save</button>
+          <button className="icebreakers-save-btn" onClick={() => onSave?.(profileData)}>Save</button>
         ) : (
           <button className="skip-btn">skip</button>
         )}

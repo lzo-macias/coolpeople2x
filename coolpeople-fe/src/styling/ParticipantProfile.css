@@ -303,8 +303,8 @@
 /* Dev Edit Button */
 .participant-profile .dev-edit-btn {
   position: fixed;
-  top: 100px;
-  left: calc(50% - 265px); /* Position in dead space beside the app */
+  top: 60px;
+  right: 16px;
   background: rgba(100, 100, 100, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;

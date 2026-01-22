@@ -382,8 +382,7 @@ function App() {
   }
 
   const handleOptIn = () => {
-    // TODO: Handle opt-in to social credit system
-    console.log('User opted in to social credit')
+    setHasOptedIn(true)
     handleCloseParticipantProfile()
   }
 

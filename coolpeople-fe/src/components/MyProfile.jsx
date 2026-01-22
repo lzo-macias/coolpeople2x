@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
+import CandidateProfile from './CandidateProfile'
 import { generateSparklineData, getPartyColor } from '../data/mockData'
 import '../styling/MyProfile.css'
 
@@ -138,15 +139,69 @@ const myProfileData = {
   ],
 }
 
-function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [] }) {
+// Tier configuration for CP points
+const CP_TIERS = {
+  bronze: { name: 'Bronze', min: 0, max: 999, color: '#CD7F32' },
+  silver: { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0' },
+  gold: { name: 'Gold', min: 2500, max: 4999, color: '#FFD700' },
+  diamond: { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF' },
+  challenger: { name: 'Challenger', min: 10000, max: 24999, color: '#FF6B6B' },
+  master: { name: 'Master', min: 25000, max: Infinity, color: '#9B59B6' },
+}
+
+// Calculate starter points based on engagement (50-200 range)
+const calculateStarterPoints = (posts) => {
+  // Base points between 50-100
+  const basePoints = Math.floor(Math.random() * 50) + 50
+  // Add small bonus for number of posts (up to 100 more)
+  const postBonus = Math.min(posts.length * 10, 100)
+  return basePoints + postBonus
+}
+
+function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers }) {
   const [activeTab, setActiveTab] = useState('posts')
   const [showEditBio, setShowEditBio] = useState(false)
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [starterPoints] = useState(() => calculateStarterPoints(userPosts))
 
   // Use user's created party if available, otherwise default to Independent
   const currentParty = userParty ? userParty.name : (myProfileData.party || 'Independent')
   const partyColor = userParty ? userParty.color : '#808080' // Independent is gray
+
+  // If user has opted in, render as CandidateProfile with starter data
+  if (hasOptedIn) {
+    const starterCandidate = {
+      id: 'my-profile',
+      username: myProfileData.username,
+      avatar: myProfileData.avatar,
+      party: null, // Still Independent
+      bio: '', // No bio yet
+      nominations: '0',
+      followers: myProfileData.followers,
+      races: ['CP'], // Just CP race for social credit
+      ranking: myProfileData.ranking,
+      cpPoints: starterPoints,
+      change: `+${(Math.random() * 10).toFixed(2)}`,
+      sparklineData: Array(20).fill(0).map((_, i) => starterPoints + Math.floor(Math.random() * 20) - 10),
+      filteredSparklineData: Array(20).fill(0).map((_, i) => starterPoints + Math.floor(Math.random() * 15) - 5),
+      postImages: myProfileData.postImages,
+      isFollowing: false,
+      isFavorited: false,
+    }
+
+    return (
+      <CandidateProfile
+        candidate={starterCandidate}
+        onPartyClick={onPartyClick}
+        onOpenComments={onOpenComments}
+        userActivity={userActivity}
+        isOwnProfile={true}
+        isStarter={true}
+        onEditIcebreakers={onEditIcebreakers}
+      />
+    )
+  }
 
   // Convert default images to reel format with variable engagement scores
   const trends = ['up', 'down', 'stable']
@@ -242,6 +297,13 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
                   opt in
                 </button>
               )}
+              {hasOptedIn && (
+                <div className="my-profile-tier-badge">
+                  <span className="tier-icon" style={{ color: CP_TIERS.bronze.color }}>◆</span>
+                  <span className="tier-name">{CP_TIERS.bronze.name}</span>
+                  <span className="tier-points">{starterPoints} CP</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -278,6 +340,37 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
           </div>
         </div>
       </div>
+
+      {/* Candidate Profile Sections - only show when opted in */}
+      {hasOptedIn && (
+        <div className="my-profile-candidate-sections">
+          {/* Reviews Section */}
+          <div className="starter-reviews-section">
+            <div className="starter-section-header">
+              <div className="starter-divider-section">
+                <div className="starter-divider left"></div>
+                <div className="starter-cp-badge">
+                  <span className="starter-cp-c">C</span>
+                  <span className="starter-cp-p">P</span>
+                </div>
+                <div className="starter-divider right"></div>
+              </div>
+              <span className="starter-section-label">reviews</span>
+            </div>
+            <p className="starter-reviews-empty">0 reviews yet</p>
+          </div>
+
+          {/* Icebreakers Section */}
+          <div className="starter-icebreakers-section">
+            <div className="starter-icebreakers-header">
+              <span className="starter-icebreakers-title">ICEBREAKERS</span>
+            </div>
+            <button className="starter-add-icebreakers" onClick={onEditIcebreakers}>
+              add icebreakers
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs Section */}
       <div className="my-profile-tabs-section">

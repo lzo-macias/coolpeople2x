@@ -142,6 +142,18 @@
   vertical-align: middle;
 }
 
+/* Starter tier badge in stats */
+.stat-number.starter-tier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-number .bronze-icon {
+  font-size: 20px;
+  color: #CD7F32;
+}
+
 /* Profile Actions */
 .profile-actions {
   display: flex;
@@ -392,7 +404,24 @@
 }
 
 .cp-card .tier-icon-mini {
-  font-size: 16px;
+  width: 20px;
+  height: 20px;
+}
+
+.cp-card .tier-svg-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.cp-card .progress-tier-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+
+.stat-tier-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .cp-card .points-mini {
@@ -1061,6 +1090,35 @@
   letter-spacing: 0.5px;
 }
 
+/* Starter Profile Styles */
+.starter-no-reviews {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #777777;
+  margin: 0;
+  padding: 0 14px;
+}
+
+.starter-add-icebreakers {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #777777;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 40px;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  transition: opacity 0.2s ease;
+}
+
+.starter-add-icebreakers:hover {
+  opacity: 0.7;
+}
+
 .profile-section {
   display: flex;
   flex-direction: column;
@@ -1654,8 +1712,8 @@ video.activity-video-thumbnail.mirrored {
 /* Dev Edit Button */
 .candidate-profile .dev-edit-btn {
   position: fixed;
-  top: 100px;
-  left: calc(50% - 265px); /* Position in dead space beside the app */
+  top: 60px;
+  right: 16px;
   background: rgba(100, 100, 100, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
@@ -1684,7 +1742,22 @@ video.activity-video-thumbnail.mirrored {
   bottom: 0;
   background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
   background-attachment: fixed;
-  z-index: 200;
+  z-index: 9999;
+  max-width: 440px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+/* Portal overlay - rendered at document.body level */
+.edit-bio-overlay-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #1f1f1f 0%, #171717 50%, #0f0f0f 100%);
+  background-attachment: fixed;
+  z-index: 9000;
   max-width: 440px;
   margin: 0 auto;
   overflow-y: auto;

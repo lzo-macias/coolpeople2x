@@ -272,42 +272,35 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 16px;
-  background: #FFFFFF;
-  border-top: 1px solid #EEEEEE;
-  max-width: 396px;
+  padding: 20px 16px 32px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  max-width: 440px;
   margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  z-index: 100;
 }
 
 .send-btn,
 .skip-btn,
 .prompt-btn {
-  width: 100%;
-  padding: 16px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
+  background: none;
   border: none;
-  transition: all 0.2s ease;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 12px 32px;
 }
 
-.send-btn {
-  background: #333333;
-  color: #FFFFFF;
-}
-
-.send-btn:hover {
-  background: #444444;
-}
-
-.skip-btn {
-  background: #888888;
-  color: #FFFFFF;
-}
-
-.skip-btn:hover {
-  background: #777777;
+.icebreakers-save-btn {
+  background: none !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 12px 32px;
 }
 
 .prompt-btn {
