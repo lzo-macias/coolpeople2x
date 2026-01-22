@@ -342,7 +342,7 @@
 
 /* Race Countdown Timer */
 .race-countdown {
-  display: flex
+  display: flex;
   justify-content: center;
   align-items: flex-start;
   gap: 4px;
