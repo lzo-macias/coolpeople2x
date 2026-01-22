@@ -864,27 +864,42 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
   }
 
   // Render Icebreakers section
-  const renderIcebreakersSection = () => (
-    <div className="settings-page icebreakers-page">
-      <div className="settings-header">
-        <button className="settings-back-btn" onClick={() => setActiveSection(null)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <h1 className="settings-title">Icebreakers</h1>
+  const renderIcebreakersSection = () => {
+    // If we came directly to icebreakers (via add button), back/save should close entirely
+    const handleBack = () => {
+      if (initialSection === 'icebreakers') {
+        onClose?.()
+      } else {
+        setActiveSection(null)
+      }
+    }
+
+    return (
+      <div className="settings-page icebreakers-page">
+        <div className="settings-header">
+          <button className="settings-back-btn" onClick={handleBack}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="settings-title">Icebreakers</h1>
+        </div>
+        <div className="icebreakers-container">
+          <EditBio
+            profileData={profileSections}
+            onSave={(updatedData) => {
+              onSave?.(updatedData)
+              if (initialSection === 'icebreakers') {
+                onClose?.()
+              } else {
+                setActiveSection(null)
+              }
+            }}
+          />
+        </div>
       </div>
-      <div className="icebreakers-container">
-        <EditBio
-          profileData={profileSections}
-          onSave={(updatedData) => {
-            onSave?.(updatedData)
-            setActiveSection(null)
-          }}
-        />
-      </div>
-    </div>
-  )
+    )
+  }
 
   // Render Saved section - Grid of saved posts
   const renderSavedSection = () => (

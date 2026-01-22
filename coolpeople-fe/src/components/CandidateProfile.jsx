@@ -37,6 +37,7 @@ const mockCandidate = {
   cpPoints: 3247, // CoolPeople points - determines tier
   // Races the candidate is competing in (CP is always included for social credit users)
   races: ['CP', 'NYC Mayor 2024', 'City Council District 5'],
+  newRacesCount: 2, // Number of new races since last viewed
   isFollowing: false,
   isFavorited: false,
   sparklineData: [45, 48, 46, 52, 55, 53, 58, 62, 60, 65, 68, 70, 72, 75, 78, 80, 82, 85, 88, 90],
@@ -343,6 +344,27 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
+  // If user is blocked, show unavailable message
+  if (passedCandidate?.isBlocked) {
+    return (
+      <div className="candidate-profile blocked-profile">
+        <div className="blocked-content">
+          <div className="blocked-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M4.93 4.93l14.14 14.14" />
+            </svg>
+          </div>
+          <h2>User Unavailable</h2>
+          <p>This profile is not available</p>
+          {onClose && (
+            <button className="blocked-back-btn" onClick={onClose}>Go Back</button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const profileRef = useRef(null)
 
   // Scroll to top when candidate changes
@@ -355,6 +377,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [activeTab, setActiveTab] = useState('bio')
   const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter
   const [isFollowing, setIsFollowing] = useState(candidate.isFollowing)
+  const [isNominated, setIsNominated] = useState(false)
+  const [nominatedRaces, setNominatedRaces] = useState({}) // { raceName: true/false }
+  const [showNominateModal, setShowNominateModal] = useState(false)
+  const [hasSeenNewRaces, setHasSeenNewRaces] = useState(false)
+  const [showDotsMenu, setShowDotsMenu] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [isSilenced, setIsSilenced] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showCopiedToast, setShowCopiedToast] = useState(false)
   const [isFavorited, setIsFavorited] = useState(candidate.isFavorited)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
@@ -656,7 +687,13 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           className={`favorite-star ${isFavorited ? 'active' : ''}`}
           onClick={() => setIsFavorited(!isFavorited)}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? '#777777' : 'none'} stroke="#777777" strokeWidth="2">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? 'url(#grayGradient)' : 'none'} stroke={isFavorited ? 'none' : '#777777'} strokeWidth="2">
+            <defs>
+              <linearGradient id="grayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#888888" />
+                <stop offset="100%" stopColor="#555555" />
+              </linearGradient>
+            </defs>
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
         </button>
@@ -726,14 +763,95 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
         {/* Action Buttons */}
         <div className="profile-actions">
-          <button className="profile-action-btn messages">messages</button>
-          <button className="profile-action-btn nominate">nominate</button>
-          <button
-            className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
-            onClick={() => setIsFollowing(!isFollowing)}
-          >
-            {isFollowing ? 'following' : 'follow'}
-          </button>
+          {isOwnProfile ? (
+            <>
+              <button className="profile-action-btn share">share</button>
+              <button className="profile-action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
+            </>
+          ) : (
+            <>
+              <button className="profile-action-btn messages">messages</button>
+              <div className="nominate-btn-wrapper">
+                <button
+                  className={`profile-action-btn nominate ${isNominated ? 'nominated' : ''}`}
+                  onClick={() => {
+                    if (candidate.races && candidate.races.length > 1) {
+                      setShowNominateModal(!showNominateModal)
+                      setHasSeenNewRaces(true)
+                    } else {
+                      setIsNominated(!isNominated)
+                    }
+                  }}
+                >
+                  {isNominated ? 'nominated' : 'nominate'}
+                  {isNominated && candidate.newRacesCount > 0 && !hasSeenNewRaces && (
+                    <span className="new-races-badge">{candidate.newRacesCount}</span>
+                  )}
+                </button>
+                {showNominateModal && (
+                  <>
+                    <div className="nominate-popup-backdrop" onClick={() => setShowNominateModal(false)} />
+                    <div className="nominate-popup">
+                      {candidate.races?.map((race) => (
+                        <button
+                          key={race}
+                          className={`nominate-popup-item ${nominatedRaces[race] ? 'selected' : ''}`}
+                          onClick={() => {
+                            const newNominatedRaces = { ...nominatedRaces, [race]: !nominatedRaces[race] }
+                            setNominatedRaces(newNominatedRaces)
+                            const hasNominations = Object.values(newNominatedRaces).some(v => v)
+                            setIsNominated(hasNominations)
+                          }}
+                        >
+                          <span className="popup-race-name">{race}</span>
+                          <span className={`popup-race-check ${nominatedRaces[race] ? 'checked' : ''}`}>
+                            {nominatedRaces[race] && '✓'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
+                onClick={() => setIsFollowing(!isFollowing)}
+              >
+                {isFollowing ? 'following' : 'follow'}
+              </button>
+              <div className="dots-menu-wrapper">
+                <button className="profile-action-dots" onClick={() => setShowDotsMenu(!showDotsMenu)}>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </button>
+                {showDotsMenu && (
+                  <>
+                    <div className="dots-menu-backdrop" onClick={() => setShowDotsMenu(false)} />
+                    <div className="dots-menu-popup">
+                      <button className="dots-menu-item" onClick={() => { setShowReportModal(true); setShowDotsMenu(false); }}>
+                        <span>Report</span>
+                      </button>
+                      <button className={`dots-menu-item ${isBlocked ? 'active' : ''}`} onClick={() => { setIsBlocked(!isBlocked); setShowDotsMenu(false); }}>
+                        <span>{isBlocked ? 'Unblock' : 'Block'}</span>
+                      </button>
+                      <button className={`dots-menu-item ${isSilenced ? 'active' : ''}`} onClick={() => { setIsSilenced(!isSilenced); setShowDotsMenu(false); }}>
+                        <span>{isSilenced ? 'Unsilence' : 'Silence'}</span>
+                      </button>
+                      <button className="dots-menu-item" onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/profile/${candidate.username}`);
+                          setShowDotsMenu(false);
+                          setShowCopiedToast(true);
+                          setTimeout(() => setShowCopiedToast(false), 2000);
+                        }}>
+                        <span>Share Profile</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -1669,6 +1787,43 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         </div>
       )}
 
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="report-modal-overlay" onClick={() => setShowReportModal(false)}>
+          <div className="report-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="report-modal-header">
+              <h3>Report {candidate.username}</h3>
+              <button className="report-modal-close" onClick={() => setShowReportModal(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="report-modal-options">
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Spam</span>
+              </button>
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Harassment</span>
+              </button>
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Hate Speech</span>
+              </button>
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Misinformation</span>
+              </button>
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Impersonation</span>
+              </button>
+              <button className="report-option" onClick={() => setShowReportModal(false)}>
+                <span>Other</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Single Post View */}
       {showSinglePost && (
         <SinglePostView
@@ -1681,6 +1836,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onOpenComments={onOpenComments}
           profileName={candidate.username}
         />
+      )}
+
+      {/* Copied Toast */}
+      {showCopiedToast && (
+        <div className="copied-toast">Link copied!</div>
       )}
     </div>
   )

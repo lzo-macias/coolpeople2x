@@ -162,6 +162,24 @@
   justify-content: center;
 }
 
+.profile-action-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.profile-action-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #777777;
+}
+
 .profile-action-btn {
   flex: 1;
   height: 40px;
@@ -180,8 +198,52 @@
 }
 
 .profile-action-btn.following {
-  background: rgba(255, 255, 255, 0.1);
-  color: #888888;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 30%, #2a2a2a 50%, #1a1a1a 70%, #0a0a0a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.profile-action-btn.nominate,
+.profile-action-btn.nominated {
+  position: relative;
+}
+
+.profile-action-btn.nominated {
+  background: linear-gradient(90deg, #FF2A55, #00F2EA);
+  color: #FFFFFF;
+  border: none;
+}
+
+.new-races-badge {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  min-width: 18px;
+  height: 18px;
+  background: #FFFFFF;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: #111111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.profile-action-btn.share,
+.profile-action-btn.edit {
+  flex: 1;
+  max-width: 48%;
+}
+
+.profile-action-btn.share {
+  background: #4a4a4a;
+}
+
+.profile-action-btn.edit {
+  background: #4a4a4a;
 }
 
 .profile-info {
@@ -1998,4 +2060,289 @@ video.activity-video-thumbnail.mirrored {
 .more-comments-btn svg {
   width: 16px;
   height: 16px;
+}
+
+/* Nominate Button Wrapper & Popup */
+.nominate-btn-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.nominate-btn-wrapper .profile-action-btn {
+  width: 100%;
+}
+
+.nominate-popup-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+}
+
+.nominate-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 20px;
+  background: #0a0a0a;
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 200px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.nominate-popup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.nominate-popup-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nominate-popup-item .popup-race-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: #FFFFFF;
+}
+
+.nominate-popup-item .popup-race-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #444444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #FFFFFF;
+  transition: all 0.2s ease;
+}
+
+.nominate-popup-item .popup-race-check.checked {
+  background: linear-gradient(90deg, #FF2A55, #00F2EA);
+  border-color: transparent;
+}
+
+.nominate-popup-item.selected {
+  background: none;
+}
+
+/* Dots Menu Popup */
+.dots-menu-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dots-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+}
+
+.dots-menu-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: #0a0a0a;
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 160px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.dots-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.dots-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dots-menu-item span {
+  font-size: 14px;
+  font-weight: 400;
+  color: #FFFFFF;
+}
+
+.dots-menu-item.active span {
+  color: #FF2A55;
+}
+
+/* Report Modal */
+.report-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.report-modal {
+  background: #0a0a0a;
+  width: 90%;
+  max-width: 320px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.report-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #222222;
+}
+
+.report-modal-header h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.report-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888888;
+  padding: 4px;
+}
+
+.report-modal-close:hover {
+  color: #FFFFFF;
+}
+
+.report-modal-options {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.report-option:last-child {
+  border-bottom: none;
+}
+
+.report-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.report-option span {
+  font-size: 15px;
+  font-weight: 400;
+  color: #FFFFFF;
+}
+
+/* Blocked Profile View */
+.candidate-profile.blocked-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.blocked-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.blocked-icon {
+  color: #555555;
+  margin-bottom: 20px;
+}
+
+.blocked-content h2 {
+  font-size: 20px;
+  font-weight: 500;
+  color: #FFFFFF;
+  margin: 0 0 8px 0;
+}
+
+.blocked-content p {
+  font-size: 14px;
+  color: #777777;
+  margin: 0 0 24px 0;
+}
+
+.blocked-back-btn {
+  padding: 12px 32px;
+  background: #333333;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.blocked-back-btn:hover {
+  background: #444444;
+}
+
+/* Copied Toast */
+.copied-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FFFFFF;
+  color: #111111;
+  padding: 12px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 500;
+  animation: toastFadeIn 0.3s ease;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
