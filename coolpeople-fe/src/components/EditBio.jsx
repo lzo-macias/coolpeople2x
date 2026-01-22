@@ -240,14 +240,16 @@ function EditBio({ profileData: passedProfileData, onSave }) {
     }))
   }
 
-  // Calculate completion
+  // Calculate completion - include custom icebreakers
   const filledCount = [
     profileData.viewsOnIce !== null,
     profileData.viewsOnTransRights !== null,
-    profileData.hillToDieOn.trim() !== '',
-    profileData.topicsThatEnergize.length > 0,
-    profileData.accomplishment.trim() !== '',
-    profileData.guessWhichTrue.options.some(o => o.trim() !== '') && profileData.guessWhichTrue.correctIndex !== null,
+    profileData.hillToDieOn?.trim() !== '',
+    profileData.topicsThatEnergize?.length > 0,
+    profileData.accomplishment?.trim() !== '',
+    profileData.guessWhichTrue?.options?.some(o => o?.trim() !== '') && profileData.guessWhichTrue?.correctIndex !== null,
+    profileData.customWritten?.length > 0,
+    profileData.customSliders?.length > 0,
   ].filter(Boolean).length
 
   const canSend = filledCount >= 1
@@ -478,11 +480,9 @@ function EditBio({ profileData: passedProfileData, onSave }) {
 
       {/* Bottom Action Button */}
       <div className="bio-bottom-action">
-        {canSend ? (
-          <button className="icebreakers-save-btn" onClick={() => onSave?.(profileData)}>Save</button>
-        ) : (
-          <button className="skip-btn">skip</button>
-        )}
+        <button className="icebreakers-save-btn" onClick={() => onSave?.(profileData)}>
+          {canSend ? 'Save' : 'Save'}
+        </button>
       </div>
 
       {/* Text Input Modal (for hillToDieOn and accomplishment) */}

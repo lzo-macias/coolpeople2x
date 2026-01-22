@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import '../styling/CandidateProfile.css'
 import Sparkline from './Sparkline'
 import { getPartyColor, generateSparklineData } from '../data/mockData'
@@ -124,7 +125,7 @@ const paidNominations = [
   },
 ]
 
-// Initial profile content sections data
+// Initial profile content sections data (for established profiles)
 const initialProfileSections = {
   topicsThatEnergize: {
     title: 'Topics that energize me',
@@ -152,6 +153,22 @@ const initialProfileSections = {
     timestamp: '2 weeks ago',
     media: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop',
   },
+}
+
+// Empty profile sections for starter users who just opted in
+const emptyProfileSections = {
+  topicsThatEnergize: {
+    title: 'Topics that energize me',
+    tags: [],
+  },
+  guessWhichTrue: {
+    title: 'Guess Which One is True',
+    options: ['', '', ''],
+    correctIndex: null,
+  },
+  customWritten: [],
+  customSliders: [],
+  recentPost: null,
 }
 
 // Activity feed for Details tab - shows videos with action indicators
@@ -343,7 +360,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
   const [editInitialSection, setEditInitialSection] = useState(null)
-  const [profileSections, setProfileSections] = useState(initialProfileSections)
+  const [profileSections, setProfileSections] = useState(isStarter ? emptyProfileSections : initialProfileSections)
   const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
   const [guessState, setGuessState] = useState({
     selected: null,
@@ -436,7 +453,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   }
 
   const [icebreakersOrder, setIcebreakersOrder] = useState(() =>
-    buildIcebreakersArray(initialProfileSections).map(item => item.id)
+    buildIcebreakersArray(isStarter ? emptyProfileSections : initialProfileSections).map(item => item.id)
   )
 
   // Get ordered icebreakers based on current order
@@ -461,6 +478,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   }
 
   // Drag handlers
+  const [dropPosition, setDropPosition] = useState(null) // 'above' or 'below'
+
   const handleDragStart = (e, itemId) => {
     setDraggedItem(itemId)
     e.dataTransfer.effectAllowed = 'move'
@@ -471,17 +490,24 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     e.target.classList.remove('dragging')
     setDraggedItem(null)
     setDragOverItem(null)
+    setDropPosition(null)
   }
 
   const handleDragOver = (e, itemId) => {
     e.preventDefault()
     if (draggedItem && draggedItem !== itemId) {
       setDragOverItem(itemId)
+
+      // Determine if dropping above or below based on mouse position
+      const rect = e.currentTarget.getBoundingClientRect()
+      const midpoint = rect.top + rect.height / 2
+      setDropPosition(e.clientY < midpoint ? 'above' : 'below')
     }
   }
 
   const handleDragLeave = () => {
     setDragOverItem(null)
+    setDropPosition(null)
   }
 
   const handleDrop = (e, targetId) => {
@@ -490,17 +516,27 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
     const newOrder = [...icebreakersOrder]
     const draggedIndex = newOrder.indexOf(draggedItem)
-    const targetIndex = newOrder.indexOf(targetId)
+    let targetIndex = newOrder.indexOf(targetId)
 
     if (draggedIndex === -1 || targetIndex === -1) return
 
-    // Remove dragged item and insert at target position
+    // Remove dragged item first
     newOrder.splice(draggedIndex, 1)
+
+    // Recalculate target index after removal
+    targetIndex = newOrder.indexOf(targetId)
+
+    // Insert above or below based on drop position
+    if (dropPosition === 'below') {
+      targetIndex += 1
+    }
+
     newOrder.splice(targetIndex, 0, draggedItem)
 
     setIcebreakersOrder(newOrder)
     setDraggedItem(null)
     setDragOverItem(null)
+    setDropPosition(null)
   }
 
   const partyColor = getPartyColor(candidate.party)
@@ -1253,24 +1289,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             <span className="profile-sections-title">Icebreakers</span>
           </div>
 
-          {/* Starter Profile - Add Icebreakers Link */}
-          {isStarter ? (
-            <button className="starter-add-icebreakers" onClick={() => {
-              setEditInitialSection('icebreakers')
-              setShowEditBio(true)
-            }}>
-              add icebreakers
-            </button>
-          ) : (
-          /* Render icebreakers in drag-and-drop order */
-          getOrderedIcebreakers().map((icebreaker) => {
+          {/* Render icebreakers in drag-and-drop order */}
+          {getOrderedIcebreakers().map((icebreaker) => {
             const isDragOver = dragOverItem === icebreaker.id
 
             if (icebreaker.type === 'written') {
               return (
                 <div
                   key={icebreaker.id}
-                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  className={`profile-section ${isDragOver ? `drag-over ${dropPosition === 'above' ? 'drop-above' : 'drop-below'}` : ''}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, icebreaker.id)}
                   onDragEnd={handleDragEnd}
@@ -1301,7 +1328,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               return (
                 <div
                   key={icebreaker.id}
-                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  className={`profile-section ${isDragOver ? `drag-over ${dropPosition === 'above' ? 'drop-above' : 'drop-below'}` : ''}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, icebreaker.id)}
                   onDragEnd={handleDragEnd}
@@ -1344,7 +1371,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               return (
                 <div
                   key={icebreaker.id}
-                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  className={`profile-section ${isDragOver ? `drag-over ${dropPosition === 'above' ? 'drop-above' : 'drop-below'}` : ''}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, icebreaker.id)}
                   onDragEnd={handleDragEnd}
@@ -1379,7 +1406,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               return (
                 <div
                   key={icebreaker.id}
-                  className={`profile-section ${isDragOver ? 'drag-over' : ''}`}
+                  className={`profile-section ${isDragOver ? `drag-over ${dropPosition === 'above' ? 'drop-above' : 'drop-below'}` : ''}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, icebreaker.id)}
                   onDragEnd={handleDragEnd}
@@ -1423,7 +1450,16 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             }
 
             return null
-          })
+          })}
+
+          {/* Add Icebreakers Button - for starter profiles */}
+          {isStarter && (
+            <button className="starter-add-icebreakers" onClick={() => {
+              setEditInitialSection('icebreakers')
+              setShowEditBio(true)
+            }}>
+              add icebreakers
+            </button>
           )}
 
           {/* Recent Post - only show if not starter */}
@@ -1524,9 +1560,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         )}
       </div>
 
-      {/* Edit Profile Overlay */}
-      {showEditBio && (
-        <div className="edit-bio-overlay">
+      {/* Edit Profile Overlay - rendered via portal to avoid transform stacking context issues */}
+      {showEditBio && createPortal(
+        <div className="edit-bio-overlay-portal">
           <EditProfile
             key={editInitialSection || 'main'}
             candidate={candidate}
@@ -1569,7 +1605,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             }}
             initialSection={editInitialSection}
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Response Modal for Community Reviews */}

@@ -1130,6 +1130,7 @@
   position: relative;
   cursor: grab;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  margin-bottom: 12px;
 }
 
 .profile-section:active {
@@ -1175,7 +1176,30 @@
 .profile-section.drag-over {
   border-color: rgba(0, 242, 234, 0.6);
   background: rgba(0, 242, 234, 0.05);
-  transform: translateY(2px);
+}
+
+/* Drop indicator line - above */
+.profile-section.drag-over.drop-above::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border-radius: 2px;
+}
+
+/* Drop indicator line - below */
+.profile-section.drag-over.drop-below::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border-radius: 2px;
 }
 
 /* Post section should not be draggable */
