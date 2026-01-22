@@ -27,6 +27,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedContacts, setSelectedContacts] = useState([])
   const [createGroupExpanded, setCreateGroupExpanded] = useState(false)
+  const [showRepostMenu, setShowRepostMenu] = useState(false)
 
   const handleLike = () => {
     if (isLiked) {
@@ -58,13 +59,15 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
         <span className="follow-badge">+</span>
       </button>
 
-      {/* Vote up/down */}
-      <button className="action-btn">
+      {/* Repost */}
+      <button className="action-btn repost-btn" onClick={() => setShowRepostMenu(true)}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M12 4v8M8 8l4-4 4 4" />
-          <path d="M12 20v-8M8 16l4 4 4-4" />
+          <path d="M17 1l4 4-4 4" />
+          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+          <path d="M7 23l-4-4 4-4" />
+          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
         </svg>
-        <span className="action-count">{stats?.votes || '9,999'}</span>
+        <span className="action-count">{stats?.reposts || '9,999'}</span>
       </button>
 
       {/* Heart/Like */}
@@ -106,6 +109,36 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
           <circle cx="19" cy="12" r="2" />
         </svg>
       </button>
+
+      {/* Repost Menu */}
+      {showRepostMenu && createPortal(
+        <div className="repost-menu-overlay" onClick={() => setShowRepostMenu(false)}>
+          <div className="repost-menu" onClick={(e) => e.stopPropagation()}>
+            <button className="repost-option" onClick={() => {
+              // Handle repost
+              setShowRepostMenu(false)
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M17 1l4 4-4 4" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <path d="M7 23l-4-4 4-4" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+              <span>Repost</span>
+            </button>
+            <button className="repost-option" onClick={() => {
+              // Handle quote
+              setShowRepostMenu(false)
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Quote</span>
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Share Sheet */}
       {showShareSheet && createPortal(
