@@ -4,24 +4,20 @@ import '../styling/CandidateSelect.css'
 const mockCandidates = [
   { id: 1, name: 'Sarah Chen', party: 'Democrat', avatar: 'https://i.pravatar.cc/100?img=1', isFavorite: true },
   { id: 2, name: 'Marcus Johnson', party: 'Republican', avatar: 'https://i.pravatar.cc/100?img=2', isFavorite: true },
-  { id: 3, name: 'Elena Rodriguez', party: 'Independent', avatar: 'https://i.pravatar.cc/100?img=3', isFavorite: true },
+  { id: 3, name: 'Elena Rodriguez', party: null, avatar: 'https://i.pravatar.cc/100?img=3', isFavorite: true },
   { id: 4, name: 'James Wilson', party: 'Green', avatar: 'https://i.pravatar.cc/100?img=4', isFavorite: false },
   { id: 5, name: 'Aisha Patel', party: 'Democrat', avatar: 'https://i.pravatar.cc/100?img=5', isFavorite: false },
   { id: 6, name: 'David Kim', party: 'Republican', avatar: 'https://i.pravatar.cc/100?img=6', isFavorite: false },
-  { id: 7, name: 'Maria Santos', party: 'Independent', avatar: 'https://i.pravatar.cc/100?img=7', isFavorite: true },
+  { id: 7, name: 'Maria Santos', party: null, avatar: 'https://i.pravatar.cc/100?img=7', isFavorite: true },
   { id: 8, name: 'Robert Brown', party: 'Democrat', avatar: 'https://i.pravatar.cc/100?img=8', isFavorite: false },
   { id: 9, name: 'Lisa Chang', party: 'Green', avatar: 'https://i.pravatar.cc/100?img=9', isFavorite: false },
   { id: 10, name: 'Michael Davis', party: 'Republican', avatar: 'https://i.pravatar.cc/100?img=10', isFavorite: false },
   { id: 11, name: 'Jennifer Lee', party: 'Democrat', avatar: 'https://i.pravatar.cc/100?img=11', isFavorite: false },
-  { id: 12, name: 'Chris Taylor', party: 'Independent', avatar: 'https://i.pravatar.cc/100?img=12', isFavorite: false },
+  { id: 12, name: 'Chris Taylor', party: null, avatar: 'https://i.pravatar.cc/100?img=12', isFavorite: false },
 ]
 
-const partyColors = {
-  Democrat: '#3B82F6',
-  Republican: '#EF4444',
-  Independent: '#8B5CF6',
-  Green: '#22C55E',
-}
+// Import getPartyColor for consistent party coloring
+import { getPartyColor } from '../data/mockData'
 
 function CandidateSelect({ onClose, onSelectCandidate, selectedCandidates = [] }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -29,7 +25,7 @@ function CandidateSelect({ onClose, onSelectCandidate, selectedCandidates = [] }
   const favorites = mockCandidates.filter(c => c.isFavorite)
   const filteredCandidates = mockCandidates.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.party.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.party || 'Independent').toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const getRanking = (candidateId) => {
@@ -83,7 +79,7 @@ function CandidateSelect({ onClose, onSelectCandidate, selectedCandidates = [] }
                   <div className="favorite-avatar-container">
                     <div
                       className="favorite-avatar-ring"
-                      style={{ borderColor: partyColors[candidate.party] }}
+                      style={{ borderColor: getPartyColor(candidate.party) }}
                     >
                       <img src={candidate.avatar} alt={candidate.name} className="favorite-avatar" />
                     </div>
@@ -111,14 +107,14 @@ function CandidateSelect({ onClose, onSelectCandidate, selectedCandidates = [] }
                 <div className="candidate-avatar-container">
                   <div
                     className="candidate-avatar-ring"
-                    style={{ borderColor: partyColors[candidate.party] }}
+                    style={{ borderColor: getPartyColor(candidate.party) }}
                   >
                     <img src={candidate.avatar} alt={candidate.name} className="candidate-avatar" />
                   </div>
                   {ranking && <div className="ranking-badge">{ranking}</div>}
                 </div>
                 <span className="candidate-name">{candidate.name}</span>
-                <span className="candidate-party">{candidate.party}</span>
+                <span className="candidate-party">{candidate.party || 'Independent'}</span>
               </div>
             )
           })}

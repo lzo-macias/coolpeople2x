@@ -458,7 +458,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose }) {
             <span className="settings-row-label">Party</span>
           </div>
           <div className="settings-row-right">
-            <span className="settings-row-value">{editedCandidate.party}</span>
+            <span className="settings-row-value">{editedCandidate.party || 'Independent'}</span>
             <span
               className="party-color-dot"
               style={{ background: getPartyColor(editedCandidate.party) }}

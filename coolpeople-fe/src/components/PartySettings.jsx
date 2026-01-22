@@ -21,6 +21,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
     editPartyInfo: false,
     promoteAdmins: false,
     changeTheme: false,
+    enterRaces: true,
   })
 
   const [chatSettings, setChatSettings] = useState({
@@ -373,7 +374,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>
                 </span>
-                <span className="party-settings-row-label">Administrative</span>
+                <span className="party-settings-row-label">Admin Settings</span>
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="party-settings-chevron">
                 <polyline points="9 18 15 12 9 6" />
@@ -636,7 +637,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
     </div>
   )
 
-  // Render Administrative Section
+  // Render Admin Settings Section
   const renderAdministrativeSection = () => (
     <div className="party-settings-page">
       <div className="party-settings-header">
@@ -645,7 +646,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="party-settings-title">Administrative</h1>
+        <h1 className="party-settings-title">Admin Settings</h1>
         <div style={{ width: 36 }} />
       </div>
 
@@ -772,6 +773,24 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
           <button
             className={`party-toggle ${adminPermissions.changeTheme ? 'active' : ''}`}
             onClick={() => togglePermission('changeTheme')}
+          >
+            <span className="party-toggle-knob" />
+          </button>
+        </div>
+      </div>
+
+      <p className="party-settings-section-label">Race Participation</p>
+      <div className="party-settings-card">
+        <div className="party-settings-row no-hover">
+          <div className="party-settings-row-left">
+            <div className="party-settings-row-text">
+              <span className="party-settings-row-label">Enter Races</span>
+              <span className="party-settings-row-sublabel">Admins can enter party into races</span>
+            </div>
+          </div>
+          <button
+            className={`party-toggle ${adminPermissions.enterRaces ? 'active' : ''}`}
+            onClick={() => togglePermission('enterRaces')}
           >
             <span className="party-toggle-knob" />
           </button>

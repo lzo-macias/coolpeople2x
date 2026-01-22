@@ -36,7 +36,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           avatar: 'https://i.pravatar.cc/40?img=20',
           text: commentText,
           likes: 0,
-          party: 'Independent'
+          party: null
         }
         setCommentReplies(prev => ({
           ...prev,
@@ -57,7 +57,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           avatar: 'https://i.pravatar.cc/40?img=20',
           text: commentText,
           likes: 0,
-          party: 'Independent',
+          party: null,
           profileType: 'participant'
         }
         setUserComments([...userComments, newComment])

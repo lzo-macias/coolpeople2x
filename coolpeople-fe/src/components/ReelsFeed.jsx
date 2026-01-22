@@ -37,7 +37,7 @@ const mockReels = [
     thumbnail: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=400&h=700&fit=crop',
     user: {
       username: 'Alex.M.Progressive',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
       avatar: 'https://i.pravatar.cc/40?img=8'
     },
     candidates: [

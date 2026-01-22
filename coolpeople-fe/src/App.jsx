@@ -54,7 +54,7 @@ function App() {
         thumbnail: video.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
         videoUrl: video.videoUrl || null, // Keep video URL separate for video playback
         isMirrored: video.isMirrored || false, // Track if video should be mirrored
-        user: video.user || { username: 'unknown', avatar: 'https://i.pravatar.cc/40?img=1', party: 'Independent' },
+        user: video.user || { username: 'unknown', avatar: 'https://i.pravatar.cc/40?img=1', party: null },
         race: video.targetRace || null,
         likes: video.stats?.likes || '0',
         comments: video.stats?.comments || '0',

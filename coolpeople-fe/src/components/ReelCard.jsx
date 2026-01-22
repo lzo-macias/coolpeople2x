@@ -352,12 +352,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            {data.user.party !== 'Independent' ? (
+            {data.user.party ? (
               <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
                 {data.user.party}
               </button>
             ) : (
-              <span className="party-tag">{data.user.party}</span>
+              <span className="party-tag">Independent</span>
             )}
             <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
               @{data.user.username}
@@ -422,12 +422,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
               />
               <div className="reel-user-details">
-                {data.user.party !== 'Independent' ? (
+                {data.user.party ? (
                   <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
                     {data.user.party}
                   </button>
                 ) : (
-                  <span className="party-tag">{data.user.party}</span>
+                  <span className="party-tag">Independent</span>
                 )}
                 <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
                   {data.user.username}
@@ -561,7 +561,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 onCandidateClick={(candidate) => { pauseVideo(); onUsernameClick?.({
                   username: candidate.name,
                   avatar: candidate.avatar,
-                  party: 'Independent'
+                  party: null
                 }) }}
               />
             </div>
@@ -575,7 +575,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     onClick={() => { pauseVideo(); onUsernameClick?.({
                       username: candidate.name,
                       avatar: candidate.avatar,
-                      party: 'Independent'
+                      party: null
                     }) }}
                   >
                     <span className="race-contestant-rank">{idx + 1}</span>

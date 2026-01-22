@@ -20,6 +20,10 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [recordedVideoUrl])
   const [isEditingRace, setIsEditingRace] = useState(false)
+  const [raceType, setRaceType] = useState('user') // 'user' or 'party'
+  const [winMethod, setWinMethod] = useState('points') // 'ballot' or 'points'
+  const [selectedExistingRace, setSelectedExistingRace] = useState(null) // Track if user selected an existing race
+  const [forceNewRace, setForceNewRace] = useState(false) // Track if user clicked "new" to create new race
   const [showUserPanel, setShowUserPanel] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState([])
   const [sendMode, setSendMode] = useState('separate') // 'separate' or 'together'
@@ -288,16 +292,26 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
   const handleSelectRace = (race) => {
     onRaceNameChange(race.name)
-    // Don't close - still need deadline
+    setSelectedExistingRace(race) // Track that user selected an existing race
+    setShowRacePicker(false) // Close panel immediately - just targeting this race
   }
 
   const handleConcludeRace = () => {
-    if (raceName.trim() && raceDeadline) {
+    // For existing races, just need the name selected
+    // For new races, need name AND deadline
+    if (selectedExistingRace) {
+      setShowRacePicker(false)
+    } else if (raceName.trim() && raceDeadline) {
       setShowRacePicker(false)
     }
   }
 
-  const canConcludeRace = raceName.trim() && raceDeadline
+  // Check if user is creating a new race (no existing races match OR user clicked "new")
+  const filteredRaces = getFilteredRaces()
+  const isCreatingNewRace = raceName.trim() && (filteredRaces.length === 0 || forceNewRace)
+
+  // Can conclude if: selected existing race OR (creating new with name + deadline)
+  const canConcludeRace = selectedExistingRace || (isCreatingNewRace && raceName.trim() && raceDeadline)
 
   const openRacePicker = () => {
     setShowRacePicker(true)
@@ -968,17 +982,104 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               </button>
             </div>
 
-            <div className="race-picker-input-container">
-              <span className="race-picker-dot"></span>
-              <input
-                ref={racePickerInputRef}
-                type="text"
-                className="race-picker-input"
-                placeholder="Search or type new race name..."
-                value={raceName}
-                onChange={(e) => onRaceNameChange(e.target.value)}
-                maxLength={40}
-              />
+            <div className="race-picker-input-row">
+              <div className="race-picker-input-container">
+                <span className="race-picker-dot"></span>
+                <input
+                  ref={racePickerInputRef}
+                  type="text"
+                  className="race-picker-input"
+                  placeholder="Search or type new race name..."
+                  value={raceName}
+                  onChange={(e) => {
+                    onRaceNameChange(e.target.value)
+                    setSelectedExistingRace(null) // Clear selection when user types
+                    setForceNewRace(false) // Reset force new when user types
+                  }}
+                  maxLength={40}
+                />
+              </div>
+              {!forceNewRace && (
+                <button
+                  className="race-picker-new-btn"
+                  onClick={() => setForceNewRace(true)}
+                  disabled={!raceName.trim()}
+                >
+                  new
+                </button>
+              )}
+            </div>
+
+            {/* Only show race type and deadline when creating a NEW race */}
+            {isCreatingNewRace && (
+              <>
+            {/* Race Type Toggle - Party or User */}
+            <div className="race-type-section">
+              <span className="race-type-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Candidate Type *
+              </span>
+              <div className="race-type-toggle">
+                <button
+                  className={`race-type-btn ${raceType === 'user' ? 'active' : ''}`}
+                  onClick={() => setRaceType('user')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  User
+                </button>
+                <button
+                  className={`race-type-btn ${raceType === 'party' ? 'active' : ''}`}
+                  onClick={() => setRaceType('party')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  Party
+                </button>
+              </div>
+            </div>
+
+            {/* Win Method Toggle - Ballot or Points */}
+            <div className="race-win-section">
+              <span className="race-win-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                Win Method *
+              </span>
+              <div className="race-win-toggle">
+                <button
+                  className={`race-win-btn ${winMethod === 'points' ? 'active' : ''}`}
+                  onClick={() => setWinMethod('points')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                    <polyline points="17 6 23 6 23 12" />
+                  </svg>
+                  Points
+                </button>
+                <button
+                  className={`race-win-btn ${winMethod === 'ballot' ? 'active' : ''}`}
+                  onClick={() => setWinMethod('ballot')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 11l3 3L22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  Ballot
+                </button>
+              </div>
             </div>
 
             {/* Deadline Picker */}
@@ -1032,30 +1133,28 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 </svg>
               </div>
             </div>
+              </>
+            )}
 
-            <div className="race-picker-list">
-              {getFilteredRaces().map(race => (
-                <div
-                  key={race.id}
-                  className={`race-picker-item ${raceName === race.name ? 'selected' : ''}`}
-                  onClick={() => handleSelectRace(race)}
-                >
-                  <div className="race-picker-item-info">
-                    <span className="race-picker-item-name">{race.name}</span>
-                    <span className="race-picker-item-meta">{race.location} • {race.participants} participants</span>
+            {!forceNewRace && (
+              <div className="race-picker-list">
+                {filteredRaces.map(race => (
+                  <div
+                    key={race.id}
+                    className="race-picker-item"
+                    onClick={() => handleSelectRace(race)}
+                  >
+                    <div className="race-picker-item-info">
+                      <span className="race-picker-item-name">{race.name}</span>
+                      <span className="race-picker-item-meta">{race.location} • {race.participants} participants</span>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 18l6-6-6-6" />
-                  </svg>
-                </div>
-              ))}
-              {getFilteredRaces().length === 0 && raceName.trim() && (
-                <div className="race-picker-new">
-                  <span className="race-picker-new-label">Create new race:</span>
-                  <span className="race-picker-new-name">"{raceName}"</span>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

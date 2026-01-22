@@ -930,12 +930,14 @@
 
 .race-picker-panel {
   width: 100%;
-  max-height: 70%;
+  max-height: 90vh;
+  min-height: 60vh;
   background: #1a1a1a;
   border-radius: 20px 20px 0 0;
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
+  overflow: hidden;
 }
 
 @keyframes slideUp {
@@ -975,15 +977,52 @@
   opacity: 0.7;
 }
 
+/* Input row with new button */
+.race-picker-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+}
+
 .race-picker-input-container {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 14px 16px;
   background: rgba(255, 255, 255, 0.08);
-  margin: 16px 20px;
   border-radius: 12px;
   border: 1px dashed rgba(232, 168, 85, 0.4);
+}
+
+.race-picker-new-btn {
+  padding: 14px 20px;
+  background: linear-gradient(145deg, rgba(61, 42, 26, 0.6) 0%, rgba(42, 31, 15, 0.6) 100%);
+  border: 1px solid rgba(232, 168, 85, 0.3);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #E8A855;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: lowercase;
+}
+
+.race-picker-new-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.race-picker-new-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.race-picker-new-btn.active {
+  background: linear-gradient(145deg, rgba(61, 42, 26, 0.8) 0%, rgba(42, 31, 15, 0.8) 100%);
+  border-color: rgba(232, 168, 85, 0.5);
+  color: #E8A855;
 }
 
 .race-picker-dot {
@@ -1014,6 +1053,8 @@
   overflow-y: auto;
   padding: 0 20px 20px;
   padding-bottom: max(20px, env(safe-area-inset-bottom));
+  min-height: 100px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .race-picker-item {
@@ -1084,6 +1125,151 @@
 .race-picker-item.selected {
   background: rgba(232, 168, 85, 0.15);
   border: 1px solid rgba(232, 168, 85, 0.4);
+}
+
+.race-picker-item.selected svg {
+  color: #E8A855;
+}
+
+/* Targeting existing race confirmation */
+.race-selected-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  margin: 0 20px 12px;
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.1) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 12px;
+  font-size: 14px;
+  color: #22c55e;
+}
+
+.race-selected-confirmation svg {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+.race-selected-confirmation strong {
+  font-weight: 600;
+}
+
+/* Race Type Section - Party or User toggle */
+.race-type-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 20px 16px;
+}
+
+.race-type-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #E8A855;
+}
+
+.race-type-toggle {
+  display: flex;
+  gap: 10px;
+}
+
+.race-type-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.race-type-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.race-type-btn.active {
+  background: linear-gradient(145deg, rgba(61, 42, 26, 0.8) 0%, rgba(42, 31, 15, 0.8) 100%);
+  border-color: rgba(232, 168, 85, 0.5);
+  color: #E8A855;
+}
+
+.race-type-btn.active svg {
+  color: #E8A855;
+}
+
+.race-type-btn svg {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s;
+}
+
+/* Race Win Method Section - Ballot or Points toggle */
+.race-win-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 20px 16px;
+}
+
+.race-win-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #E8A855;
+}
+
+.race-win-toggle {
+  display: flex;
+  gap: 10px;
+}
+
+.race-win-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.race-win-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.race-win-btn.active {
+  background: linear-gradient(145deg, rgba(61, 42, 26, 0.8) 0%, rgba(42, 31, 15, 0.8) 100%);
+  border-color: rgba(232, 168, 85, 0.5);
+  color: #E8A855;
+}
+
+.race-win-btn.active svg {
+  color: #E8A855;
+}
+
+.race-win-btn svg {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s;
 }
 
 /* Race Deadline Section */

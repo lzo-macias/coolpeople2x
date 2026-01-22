@@ -194,7 +194,7 @@ const activityFeed = [
     timestamp: '1d ago',
     video: {
       thumbnail: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=700&fit=crop',
-      user: { username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Independent' },
+      user: { username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=33', party: null },
       race: 'School Board Election',
       likes: '24.1K',
       comments: '1.2K',
@@ -269,7 +269,7 @@ const activityFeed = [
     timestamp: '5d ago',
     video: {
       thumbnail: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=700&fit=crop',
-      user: { username: 'foodie.voter', avatar: 'https://i.pravatar.cc/40?img=36', party: 'Independent' },
+      user: { username: 'foodie.voter', avatar: 'https://i.pravatar.cc/40?img=36', party: null },
       race: 'City Comptroller',
       likes: '4.5K',
       comments: '189',
@@ -311,7 +311,7 @@ const regularNominations = [
     user: {
       username: 'alex.jones',
       avatar: 'https://i.pravatar.cc/40?img=55',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
     },
     text: 'Great leader with a clear vision for our community',
     rating: 4,
@@ -635,7 +635,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </div>
             <div className="profile-info">
               <h2 className="profile-username">{candidate.username}</h2>
-              {candidate.party !== 'Independent' ? (
+              {candidate.party ? (
                 <button
                   className="profile-party-btn"
                   onClick={() => onPartyClick?.(candidate.party)}
@@ -643,7 +643,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                   {candidate.party}
                 </button>
               ) : (
-                <span className="profile-party-text">{candidate.party}</span>
+                <span className="profile-party-text">Independent</span>
               )}
             </div>
           </div>
@@ -1477,7 +1477,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                             style={{ borderColor: videoPartyColor }}
                           />
                           <div className="activity-user-details">
-                            <span className="activity-party-tag">{video?.user?.party}</span>
+                            <span className="activity-party-tag">{video?.user?.party || 'Independent'}</span>
                             <span className="activity-username">@{video?.user?.username}</span>
                           </div>
                         </div>

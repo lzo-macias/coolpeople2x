@@ -1,6 +1,6 @@
-import '../styling/ScoreboardUserRow.css'
+import '../styling/ScoreboardPartyRow.css'
 import Sparkline from './Sparkline'
-import { getPartyColor, getTierFromPoints } from '../data/mockData'
+import { getTierFromPoints } from '../data/mockData'
 
 // Rank colors for top 3
 const RANK_COLORS = {
@@ -9,43 +9,42 @@ const RANK_COLORS = {
   3: '#a67c52', // bronze
 }
 
-function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand }) {
-  const isPositive = user.change >= 0
+function ScoreboardPartyRow({ party, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand }) {
+  const isPositive = party.change >= 0
   const sparklineColor = isPositive ? '#10b981' : '#ef4444'
-  const partyColor = getPartyColor(user.party)
 
   // Get tier from score (using score as CP points)
-  const tier = getTierFromPoints(user.score || 0)
+  const tier = getTierFromPoints(party.score || 0)
   const rankColor = RANK_COLORS[rank] || '#999'
 
   return (
-    <div className={`scoreboard-user-row ${showLoadMore ? 'has-load-more' : ''}`}>
+    <div className={`scoreboard-party-row ${showLoadMore ? 'has-load-more' : ''}`}>
       {/* Rank number */}
-      <div className="user-rank">
+      <div className="party-rank">
         <span className="rank-number" style={{ color: rankColor }}>{rank}</span>
       </div>
 
-      {/* Avatar with tier-based ring */}
-      <div className="user-avatar-container" onClick={() => onOpenProfile?.(user)}>
-        <div className="user-avatar-ring" style={{ borderColor: tier.color }}>
+      {/* Party Avatar with color ring */}
+      <div className="party-avatar-container" onClick={() => onOpenProfile?.(party)}>
+        <div className="party-avatar-ring" style={{ borderColor: party.color }}>
           <img
-            src={user.avatar}
-            alt={user.username}
-            className="user-avatar"
+            src={party.avatar}
+            alt={party.partyName}
+            className="party-avatar"
           />
         </div>
       </div>
 
-      {/* User info */}
-      <div className="user-info">
-        <span className="user-name">{user.username}</span>
-        <span className="user-party">{user.party || 'Independent'}</span>
+      {/* Party info */}
+      <div className="party-info">
+        <span className="party-name">{party.partyName}</span>
+        <span className="party-members">{party.members.toLocaleString()} members</span>
       </div>
 
       {/* Sparkline */}
-      <div className="user-sparkline">
+      <div className="party-sparkline">
         <Sparkline
-          data={user.sparklineData}
+          data={party.sparklineData}
           color={sparklineColor}
           width={80}
           height={24}
@@ -55,23 +54,23 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
       </div>
 
       {/* Score section - stacked vertically */}
-      <div className="user-score-section">
-        <div className="user-score-row">
+      <div className="party-score-section">
+        <div className="party-score-row">
           {tier.svgPath && (
-            <svg className="user-tier-icon" viewBox="0 0 24 24" fill={tier.color} title={tier.name}>
+            <svg className="party-tier-icon" viewBox="0 0 24 24" fill={tier.color} title={tier.name}>
               <path d={tier.svgPath} />
             </svg>
           )}
-          <span className="user-score">{user.score.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+          <span className="party-score">{party.score.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
         </div>
-        <span className={`user-change ${isPositive ? 'positive' : 'negative'}`}>
-          {isPositive ? '+' : ''}{user.change.toFixed(2)}
+        <span className={`party-change ${isPositive ? 'positive' : 'negative'}`}>
+          {isPositive ? '+' : ''}{party.change.toFixed(2)}
         </span>
         <span
-          className={`user-favorited ${user.isFavorited ? 'active' : ''}`}
-          onClick={() => onToggleFavorite?.(user.userId)}
+          className={`party-favorited ${party.isFavorited ? 'active' : ''}`}
+          onClick={() => onToggleFavorite?.(party.partyId)}
         >
-          {user.isFavorited && 'Favorited'}
+          {party.isFavorited && 'Favorited'}
           <span className="star-icon">★</span>
         </span>
       </div>
@@ -97,4 +96,4 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
   )
 }
 
-export default ScoreboardUserRow
+export default ScoreboardPartyRow

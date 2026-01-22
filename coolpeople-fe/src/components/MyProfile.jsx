@@ -102,7 +102,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
                   style={{ borderColor: videoPartyColor }}
                 />
                 <div className="activity-user-details">
-                  <span className="activity-party-tag">{video?.user?.party}</span>
+                  <span className="activity-party-tag">{video?.user?.party || 'Independent'}</span>
                   <span className="activity-username">@{video?.user?.username}</span>
                 </div>
               </div>
@@ -119,7 +119,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
 const myProfileData = {
   username: 'William.Hiya',
   avatar: 'https://i.pravatar.cc/150?img=12',
-  party: 'Independent',
+  party: null, // Independent - no party affiliation
   hasOptedIn: false,
   following: '9,999',
   followers: '1M',
@@ -145,7 +145,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
 
   // Use user's created party if available, otherwise default to Independent
-  const currentParty = userParty ? userParty.name : myProfileData.party
+  const currentParty = userParty ? userParty.name : (myProfileData.party || 'Independent')
   const partyColor = userParty ? userParty.color : '#808080' // Independent is gray
 
   // Convert default images to reel format with variable engagement scores

@@ -1,18 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
+import ScoreboardPartyRow from './ScoreboardPartyRow'
 import InviteFriends from './InviteFriends'
-import { mockScoreboard, getPartyColor } from '../data/mockData'
+import { mockScoreboard, mockPartyScoreboard, getPartyColor } from '../data/mockData'
 
 // Mock recommended users
 const recommendedUsers = [
   { id: 'rec-1', username: 'william.hiya', avatar: 'https://i.pravatar.cc/100?img=33', party: 'Democrat' },
   { id: 'rec-2', username: 'sarap', avatar: 'https://i.pravatar.cc/100?img=47', party: 'Republican' },
-  { id: 'rec-3', username: 'whatstea', avatar: 'https://i.pravatar.cc/100?img=32', party: 'Independent' },
+  { id: 'rec-3', username: 'whatstea', avatar: 'https://i.pravatar.cc/100?img=32', party: null },
   { id: 'rec-4', username: 'periodp', avatar: 'https://i.pravatar.cc/100?img=25', party: 'Green' },
   { id: 'rec-5', username: 'coolcat', avatar: 'https://i.pravatar.cc/100?img=36', party: 'Democrat' },
   { id: 'rec-6', username: 'maya.votes', avatar: 'https://i.pravatar.cc/100?img=41', party: 'Republican' },
-  { id: 'rec-7', username: 'joshforchange', avatar: 'https://i.pravatar.cc/100?img=53', party: 'Independent' },
+  { id: 'rec-7', username: 'joshforchange', avatar: 'https://i.pravatar.cc/100?img=53', party: null },
   { id: 'rec-8', username: 'lucia.2024', avatar: 'https://i.pravatar.cc/100?img=44', party: 'Democrat' },
   { id: 'rec-9', username: 'thereal.mike', avatar: 'https://i.pravatar.cc/100?img=59', party: 'Green' },
   { id: 'rec-10', username: 'votesara', avatar: 'https://i.pravatar.cc/100?img=38', party: 'Republican' },
@@ -22,11 +23,12 @@ const recommendedUsers = [
 const frontRunners = [
   { id: 'fr-2', rank: 2, label: 'Second Place', nominations: '18,000', avatar: 'https://i.pravatar.cc/100?img=11', party: 'Democrat' },
   { id: 'fr-1', rank: 1, label: 'Current Front Runner', nominations: '25,000', avatar: 'https://i.pravatar.cc/100?img=47', party: 'Republican' },
-  { id: 'fr-3', rank: 3, label: 'Third Place', nominations: '15,000', avatar: 'https://i.pravatar.cc/100?img=44', party: 'Independent' },
+  { id: 'fr-3', rank: 3, label: 'Third Place', nominations: '15,000', avatar: 'https://i.pravatar.cc/100?img=44', party: null },
 ]
 
 function Scoreboard({ onOpenProfile, isActive }) {
   const [users, setUsers] = useState(mockScoreboard)
+  const [parties, setParties] = useState(mockPartyScoreboard)
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
   const [activeSection, setActiveSection] = useState(0)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -34,6 +36,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
   const [listFilter, setListFilter] = useState('all') // 'all' or 'favorited'
   const [pendingUnfavorites, setPendingUnfavorites] = useState(new Set()) // Track recently unfavorited users
   const [isExpanded, setIsExpanded] = useState(false) // Track if section is expanded beyond 8 rows
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false) // Track if race dropdown is open
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
 
   // Close search when navigating away and clear pending unfavorites
@@ -82,11 +85,13 @@ function Scoreboard({ onOpenProfile, isActive }) {
     : []
 
   // Define sections - races I'm following
+  // isPartyRace: true means this section shows parties, not users
   const sections = [
-    { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers },
-    { id: 'mayor', label: 'Mayor', users: frontrunnerUsers },
-    { id: 'pinklady', label: 'The Pink Lady', users: nominatedUsers },
-    { id: 'baddest', label: 'Baddest Bitch', users: partyUsers },
+    { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers, isPartyRace: false },
+    { id: 'bestparty', label: 'Best Party', users: parties, isPartyRace: true },
+    { id: 'mayor', label: 'Mayor', users: frontrunnerUsers, isPartyRace: false },
+    { id: 'pinklady', label: 'The Pink Lady', users: nominatedUsers, isPartyRace: false },
+    { id: 'baddest', label: 'Baddest Bitch', users: partyUsers, isPartyRace: false },
   ]
 
   const handleSwipe = (e) => {
@@ -132,6 +137,30 @@ function Scoreboard({ onOpenProfile, isActive }) {
       u.userId === userId
         ? { ...u, isFavorited: !u.isFavorited }
         : u
+    ))
+  }
+
+  const handleTogglePartyFavorite = (partyId) => {
+    const party = parties.find(p => p.partyId === partyId)
+
+    // If we're in favorited view and unfavoriting, add to pending unfavorites
+    if (listFilter === 'favorited' && party?.isFavorited) {
+      setPendingUnfavorites(prev => new Set([...prev, partyId]))
+    }
+
+    // If we're re-favoriting a pending unfavorite, remove from pending
+    if (pendingUnfavorites.has(partyId)) {
+      setPendingUnfavorites(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(partyId)
+        return newSet
+      })
+    }
+
+    setParties(parties.map(p =>
+      p.partyId === partyId
+        ? { ...p, isFavorited: !p.isFavorited }
+        : p
     ))
   }
 
@@ -184,7 +213,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
                   {[
                     { id: 1, username: 'william.hiya', name: 'William Harrison', avatar: 'https://i.pravatar.cc/60?img=12', party: 'Democrat', followers: '25.3K' },
                     { id: 2, username: 'sarah.politics', name: 'Sarah Johnson', avatar: 'https://i.pravatar.cc/60?img=5', party: 'Republican', followers: '18.7K' },
-                    { id: 3, username: 'alex.progressive', name: 'Alex Martinez', avatar: 'https://i.pravatar.cc/60?img=3', party: 'Independent', followers: '42.1K' },
+                    { id: 3, username: 'alex.progressive', name: 'Alex Martinez', avatar: 'https://i.pravatar.cc/60?img=3', party: null, followers: '42.1K' },
                     { id: 4, username: 'lzo.macias', name: 'Lzo Macias', avatar: 'https://i.pravatar.cc/60?img=1', party: 'The Pink Lady Party', followers: '89.5K' },
                     { id: 5, username: 'mike.district4', name: 'Mike Thompson', avatar: 'https://i.pravatar.cc/60?img=8', party: 'Green', followers: '12.4K' },
                   ].map(person => (
@@ -198,7 +227,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
                       <div className="search-person-info">
                         <span className="search-person-username">{person.username}</span>
                         <span className="search-person-name">{person.name}</span>
-                        <span className="search-person-party">{person.party}</span>
+                        <span className="search-person-party">{person.party || 'Independent'}</span>
                       </div>
                       <div className="search-person-followers">{person.followers}</div>
                     </div>
@@ -235,7 +264,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
                   {[
                     { id: 1, caption: 'need a new colombian man im bored', user: 'whyfelipe', avatar: 'https://i.pravatar.cc/40?img=11', likes: '485', party: 'Democrat' },
                     { id: 2, caption: 'Clean eating for beginners', user: 'Qaim Hunt', avatar: 'https://i.pravatar.cc/40?img=12', likes: '47.8K', party: 'Republican' },
-                    { id: 3, caption: 'I love picking my baby boogers and she never le...', user: 'lrn', avatar: 'https://i.pravatar.cc/40?img=13', likes: '160.7K', party: 'Independent' },
+                    { id: 3, caption: 'I love picking my baby boogers and she never le...', user: 'lrn', avatar: 'https://i.pravatar.cc/40?img=13', likes: '160.7K', party: null },
                     { id: 4, caption: "couldn't believe my eyes", user: 'natalia', avatar: 'https://i.pravatar.cc/40?img=14', likes: '413.5K', party: 'Green' },
                     { id: 5, caption: 'POV: you finally found your people', user: 'Democratic Party', avatar: 'https://i.pravatar.cc/40?img=15', likes: '22.1K', isParty: true },
                     { id: 6, caption: 'This is what democracy looks like', user: 'CoolPeople Official', avatar: 'https://i.pravatar.cc/40?img=16', likes: '89.2K', isParty: true },
@@ -249,8 +278,8 @@ function Scoreboard({ onOpenProfile, isActive }) {
                             <img src={post.avatar} alt={post.user} className="search-grid-avatar" />
                             <div className="search-grid-user-info">
                               <span className="search-grid-username">{post.user}</span>
-                              {!post.isParty && post.party && (
-                                <span className="search-grid-party">{post.party}</span>
+                              {!post.isParty && (
+                                <span className="search-grid-party">{post.party || 'Independent'}</span>
                               )}
                             </div>
                           </div>
@@ -280,14 +309,47 @@ function Scoreboard({ onOpenProfile, isActive }) {
         <div className="section-header">
           <div className="section-header-top">
             <span className="section-title">{sections[activeSection].label}</span>
-            <div className="section-dots">
-              {sections.map((_, index) => (
-                <span
-                  key={index}
-                  className={`section-dot ${activeSection === index ? 'active' : ''}`}
-                  onClick={() => setActiveSection(index)}
-                />
-              ))}
+            <div className="section-nav">
+              <div className="section-dots">
+                {sections.slice(0, 5).map((_, index) => (
+                  <span
+                    key={index}
+                    className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                    onClick={() => setActiveSection(index)}
+                  />
+                ))}
+              </div>
+              {sections.length > 5 && (
+                <div className="section-dropdown-container">
+                  <button
+                    className={`section-dropdown-trigger ${activeSection >= 5 ? 'has-active' : ''}`}
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  {isDropdownOpen && (
+                    <>
+                      <div className="section-dropdown-backdrop" onClick={() => setIsDropdownOpen(false)} />
+                      <div className="section-dropdown">
+                        {sections.slice(5).map((section, index) => (
+                          <button
+                            key={section.id}
+                            className={`section-dropdown-item ${activeSection === index + 5 ? 'active' : ''}`}
+                            onClick={() => {
+                              setActiveSection(index + 5)
+                              setIsDropdownOpen(false)
+                            }}
+                          >
+                            {section.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="list-filter-toggle">
@@ -307,37 +369,56 @@ function Scoreboard({ onOpenProfile, isActive }) {
         </div>
         <div className="sections-content" onWheel={handleSwipe}>
           {(() => {
-            // Apply list filter (all vs favorited)
-            // When in favorited view, also include pending unfavorites (users just unfavorited but still visible)
-            const filteredUsers = listFilter === 'favorited'
-              ? sections[activeSection].users.filter(u => u.isFavorited || pendingUnfavorites.has(u.userId))
-              : sections[activeSection].users
+            const currentSection = sections[activeSection]
+            const isPartyRace = currentSection.isPartyRace
 
-            if (filteredUsers.length === 0) {
+            // Apply list filter (all vs favorited)
+            // When in favorited view, also include pending unfavorites
+            const idField = isPartyRace ? 'partyId' : 'userId'
+            const filteredItems = listFilter === 'favorited'
+              ? currentSection.users.filter(item => item.isFavorited || pendingUnfavorites.has(item[idField]))
+              : currentSection.users
+
+            if (filteredItems.length === 0) {
               return (
                 <div className="section-empty">
-                  {listFilter === 'favorited' ? 'No favorited users' : 'No users in this section'}
+                  {listFilter === 'favorited'
+                    ? `No favorited ${isPartyRace ? 'parties' : 'users'}`
+                    : `No ${isPartyRace ? 'parties' : 'users'} in this section`}
                 </div>
               )
             }
 
             const MAX_VISIBLE = 8
-            const hasMore = filteredUsers.length > MAX_VISIBLE
-            const visibleUsers = isExpanded ? filteredUsers : filteredUsers.slice(0, MAX_VISIBLE)
+            const hasMore = filteredItems.length > MAX_VISIBLE
+            const visibleItems = isExpanded ? filteredItems : filteredItems.slice(0, MAX_VISIBLE)
 
             return (
               <>
-                {visibleUsers.map((user, index) => (
-                  <ScoreboardUserRow
-                    key={user.userId}
-                    user={user}
-                    rank={index + 1}
-                    onToggleFavorite={handleToggleFavorite}
-                    onOpenProfile={onOpenProfile}
-                    showLoadMore={hasMore && index === visibleUsers.length - 1}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => setIsExpanded(!isExpanded)}
-                  />
+                {visibleItems.map((item, index) => (
+                  isPartyRace ? (
+                    <ScoreboardPartyRow
+                      key={item.partyId}
+                      party={item}
+                      rank={index + 1}
+                      onToggleFavorite={handleTogglePartyFavorite}
+                      onOpenProfile={onOpenProfile}
+                      showLoadMore={hasMore && index === visibleItems.length - 1}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => setIsExpanded(!isExpanded)}
+                    />
+                  ) : (
+                    <ScoreboardUserRow
+                      key={item.userId}
+                      user={item}
+                      rank={index + 1}
+                      onToggleFavorite={handleToggleFavorite}
+                      onOpenProfile={onOpenProfile}
+                      showLoadMore={hasMore && index === visibleItems.length - 1}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => setIsExpanded(!isExpanded)}
+                    />
+                  )
                 ))}
               </>
             )

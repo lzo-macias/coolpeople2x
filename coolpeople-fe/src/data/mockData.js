@@ -63,15 +63,20 @@ export const getTierFromPoints = (points) => {
 export const PARTY_COLORS = {
   'Democrat': '#0015BC',
   'Republican': '#E81B23',
-  'Independent': '#808080',
   'Green': '#17AA5C',
   'Libertarian': '#FED105',
   'The Pink Lady Party': '#e91e8c',
   'Progressive': '#9333ea',
 }
 
-// Helper to get party color
-export const getPartyColor = (party) => PARTY_COLORS[party] || '#00d4d4'
+// Color for independent users (no party affiliation)
+export const INDEPENDENT_COLOR = '#808080'
+
+// Helper to get party color - returns gray for null/undefined (independent)
+export const getPartyColor = (party) => {
+  if (!party) return INDEPENDENT_COLOR
+  return PARTY_COLORS[party] || '#00d4d4'
+}
 
 // Helper to generate sparkline data (jagged stock chart pattern)
 export const generateSparklineData = (trend = 'up', points = 20) => {
@@ -120,7 +125,7 @@ export const mockUsers = [
     username: 'Mike.T.District4',
     displayName: 'Mike Thompson',
     avatar: 'https://i.pravatar.cc/100?img=8',
-    party: 'Independent',
+    party: null, // Independent - no party affiliation
     socialCredit: 6500,
     isVerified: false,
   },
@@ -250,7 +255,7 @@ export const mockReels = [
         id: 'eng-5',
         username: 'Mike.T.District4',
         avatar: 'https://i.pravatar.cc/40?img=8',
-        party: 'Independent',
+        party: null, // Independent - no party affiliation
         sparklineData: generateSparklineData('stable'),
         recentChange: null,
         trend: 'stable',
@@ -283,7 +288,7 @@ export const mockReels = [
       id: 'user-5',
       username: 'Alex.M.Progressive',
       displayName: 'Alex Martinez',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
       avatar: 'https://i.pravatar.cc/40?img=3',
     },
     title: 'Progress for Everyone',
@@ -334,7 +339,7 @@ export const mockNominationStories = [
   { id: 'story-1', userId: 'user-1', name: 'Lzo Macias', image: 'https://i.pravatar.cc/100?img=1', hasNew: true, party: 'Democrat' },
   { id: 'story-2', userId: 'user-2', name: 'William H', image: 'https://i.pravatar.cc/100?img=12', hasNew: true, party: 'Democrat' },
   { id: 'story-3', userId: 'user-3', name: 'Sarah J', image: 'https://i.pravatar.cc/100?img=5', hasNew: false, party: 'Republican' },
-  { id: 'story-4', userId: 'user-4', name: 'Mike T', image: 'https://i.pravatar.cc/100?img=8', hasNew: true, party: 'Independent' },
+  { id: 'story-4', userId: 'user-4', name: 'Mike T', image: 'https://i.pravatar.cc/100?img=8', hasNew: true, party: null },
   { id: 'story-5', userId: 'user-5', name: 'Alex M', image: 'https://i.pravatar.cc/100?img=3', hasNew: false, party: 'Green' },
 ]
 
@@ -347,14 +352,13 @@ export const mockContacts = [
   { id: 'contact-5', phone: '917-829-3866', image: null, name: 'Unknown' },
 ]
 
-// Parties
+// Parties (note: "Independent" is not a party - it means no party affiliation)
 export const mockParties = [
   { id: 'party-1', name: 'Democrat', color: '#0015BC', members: 15420 },
   { id: 'party-2', name: 'Republican', color: '#E81B23', members: 14280 },
-  { id: 'party-3', name: 'Independent', color: '#808080', members: 8950 },
-  { id: 'party-4', name: 'Green', color: '#17AA5C', members: 3200 },
-  { id: 'party-5', name: 'Libertarian', color: '#FED105', members: 2100 },
-  { id: 'party-6', name: 'The Pink Lady Party', color: '#e91e8c', members: 9999 },
+  { id: 'party-3', name: 'Green', color: '#17AA5C', members: 3200 },
+  { id: 'party-4', name: 'Libertarian', color: '#FED105', members: 2100 },
+  { id: 'party-5', name: 'The Pink Lady Party', color: '#e91e8c', members: 9999 },
 ]
 
 // Party Profiles (detailed data for party profile pages)
@@ -394,18 +398,6 @@ export const mockPartyProfiles = {
     change: '+120.30',
     sparklineData: [42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80],
     bio: 'Preserving liberty, freedom, and traditional values.',
-  },
-  'Independent': {
-    id: 'party-3',
-    name: 'Independent',
-    fullName: 'Independent',
-    avatar: 'https://i.pravatar.cc/150?img=25',
-    color: '#808080',
-    members: '8,950',
-    followers: '800K',
-    change: '+45.20',
-    sparklineData: [35, 38, 40, 42, 45, 48, 50, 52, 55, 58, 60, 62, 65, 68, 70, 72, 74, 76, 78, 80],
-    bio: 'Independent thinking for independent voters.',
   },
   'Green': {
     id: 'party-4',
@@ -549,7 +541,7 @@ export const mockScoreboard = [
     userId: 'user-5',
     username: 'Alex.M.Progressive',
     avatar: 'https://i.pravatar.cc/60?img=3',
-    party: 'Independent',
+    party: null, // Independent - no party affiliation
     score: 2850,
     change: 42.30,
     isFavorited: false,
@@ -609,12 +601,76 @@ export const mockScoreboard = [
     userId: 'user-10',
     username: 'Morgan.L.Change',
     avatar: 'https://i.pravatar.cc/60?img=20',
-    party: 'Independent',
+    party: null, // Independent - no party affiliation
     score: 420,
     change: 8.75,
     isFavorited: false,
     sparklineData: generateSparklineData('up', 15),
     chartData: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+  },
+]
+
+// Party Scoreboard data (for party races like "Best Party")
+export const mockPartyScoreboard = [
+  {
+    rank: 1,
+    partyId: 'party-6',
+    partyName: 'The Pink Lady Party',
+    color: '#e91e8c',
+    avatar: 'https://i.pravatar.cc/60?img=23',
+    members: 9999,
+    score: 8750,
+    change: 245.50,
+    isFavorited: true,
+    sparklineData: generateSparklineData('up', 15),
+  },
+  {
+    rank: 2,
+    partyId: 'party-1',
+    partyName: 'Democrat',
+    color: '#0015BC',
+    avatar: 'https://i.pravatar.cc/60?img=20',
+    members: 15420,
+    score: 7200,
+    change: -120.30,
+    isFavorited: true,
+    sparklineData: generateSparklineData('down', 15),
+  },
+  {
+    rank: 3,
+    partyId: 'party-2',
+    partyName: 'Republican',
+    color: '#E81B23',
+    avatar: 'https://i.pravatar.cc/60?img=22',
+    members: 14280,
+    score: 6500,
+    change: 89.20,
+    isFavorited: false,
+    sparklineData: generateSparklineData('up', 15),
+  },
+  {
+    rank: 4,
+    partyId: 'party-3',
+    partyName: 'Green',
+    color: '#17AA5C',
+    avatar: 'https://i.pravatar.cc/60?img=30',
+    members: 3200,
+    score: 2800,
+    change: 56.40,
+    isFavorited: false,
+    sparklineData: generateSparklineData('up', 15),
+  },
+  {
+    rank: 5,
+    partyId: 'party-4',
+    partyName: 'Libertarian',
+    color: '#FED105',
+    avatar: 'https://i.pravatar.cc/60?img=35',
+    members: 2100,
+    score: 1500,
+    change: -18.90,
+    isFavorited: false,
+    sparklineData: generateSparklineData('down', 15),
   },
 ]
 
@@ -753,7 +809,7 @@ export const mockMessages = [
     user: {
       username: 'Lorem.ipsum',
       avatar: 'https://i.pravatar.cc/60?img=24',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
     },
     lastMessage: 'All fat pum pum lady',
     timestamp: '15m',
@@ -779,7 +835,7 @@ export const mockMessages = [
     user: {
       username: 'Lorem.ipsum',
       avatar: 'https://i.pravatar.cc/60?img=26',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
     },
     lastMessage: 'All fat pum pum lady',
     timestamp: '2h',
@@ -792,7 +848,7 @@ export const mockMessages = [
     user: {
       username: 'Boy.that.runs.for.office',
       avatar: 'https://i.pravatar.cc/60?img=27',
-      party: 'Independent',
+      party: null, // Independent - no party affiliation
     },
     lastMessage: 'BOY YOU ARE CRAZY',
     timestamp: '3h',

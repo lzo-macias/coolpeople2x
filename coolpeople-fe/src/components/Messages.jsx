@@ -46,7 +46,7 @@ const mockStories = [
     username: 'Sarah',
     avatar: 'https://i.pravatar.cc/150?img=4',
     hasUnread: false,
-    party: 'Independent',
+    party: null,
     stories: [
       { id: 's7', image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=600&h=1000&fit=crop', timestamp: '3h ago' },
     ]
@@ -83,7 +83,7 @@ const mockActivityNotifications = {
   comments: [
     { id: 'c1', user: { username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: 'Democrat' }, content: 'commented: "This is amazing!"', timestamp: '5m ago', postImage: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=100&h=100&fit=crop' },
     { id: 'c2', user: { username: 'Jake.M', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Republican' }, content: 'replied to your comment', timestamp: '30m ago' },
-    { id: 'c3', user: { username: 'Sarah', avatar: 'https://i.pravatar.cc/40?img=4', party: 'Independent' }, content: 'commented: "Great work!"', timestamp: '2h ago', postImage: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=100&h=100&fit=crop' },
+    { id: 'c3', user: { username: 'Sarah', avatar: 'https://i.pravatar.cc/40?img=4', party: null }, content: 'commented: "Great work!"', timestamp: '2h ago', postImage: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=100&h=100&fit=crop' },
   ],
   reviews: [
     { id: 'r1', user: { username: 'Marcus', avatar: 'https://i.pravatar.cc/40?img=5', party: 'The Pink Lady Party' }, content: 'left you a 5-star review', timestamp: '1h ago', rating: 5 },
@@ -540,7 +540,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 </div>
                 <div className="compose-user-info">
                   <span className="compose-user-name">{user.username}</span>
-                  <span className="compose-user-party">{user.party}</span>
+                  <span className="compose-user-party">{user.party || 'Independent'}</span>
                 </div>
                 <div className={`compose-user-check ${isSelected ? 'checked' : ''}`}>
                   {isSelected && (

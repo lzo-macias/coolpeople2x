@@ -5,7 +5,7 @@ import { getPartyColor } from '../data/mockData'
 // Mock replies for comments
 const mockReplies = [
   { id: 'r1', username: 'Alex.V', avatar: 'https://i.pravatar.cc/40?img=11', text: 'Totally agree with this!', likes: 5, party: 'Democrat' },
-  { id: 'r2', username: 'Jordan.K', avatar: 'https://i.pravatar.cc/40?img=12', text: 'Great point, well said.', likes: 3, party: 'Independent' },
+  { id: 'r2', username: 'Jordan.K', avatar: 'https://i.pravatar.cc/40?img=12', text: 'Great point, well said.', likes: 3, party: null },
   { id: 'r3', username: 'Sam.Politics', avatar: 'https://i.pravatar.cc/40?img=13', text: 'This is the kind of discourse we need.', likes: 8, party: 'The Pink Lady Party' },
 ]
 
@@ -68,7 +68,7 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
           <button className="comment-username-btn" onClick={handleUsernameClick}>
             {comment.username}
           </button>
-          {comment.party && comment.party !== 'Independent' && (
+          {comment.party && (
             <button
               className="comment-party-btn"
               onClick={handlePartyClick}
