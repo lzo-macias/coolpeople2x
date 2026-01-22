@@ -31,14 +31,29 @@ function Scoreboard({ onOpenProfile, isActive }) {
   const [activeSection, setActiveSection] = useState(0)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchFilter, setSearchFilter] = useState(null)
+  const [listFilter, setListFilter] = useState('all') // 'all' or 'favorited'
+  const [pendingUnfavorites, setPendingUnfavorites] = useState(new Set()) // Track recently unfavorited users
+  const [isExpanded, setIsExpanded] = useState(false) // Track if section is expanded beyond 8 rows
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
 
-  // Close search when navigating away
+  // Close search when navigating away and clear pending unfavorites
   useEffect(() => {
     if (!isActive) {
       setIsSearchOpen(false)
+      setPendingUnfavorites(new Set())
     }
   }, [isActive])
+
+  // Clear pending unfavorites and collapse when section changes
+  useEffect(() => {
+    setPendingUnfavorites(new Set())
+    setIsExpanded(false)
+  }, [activeSection])
+
+  // Clear pending unfavorites when switching between All/Favorited
+  useEffect(() => {
+    setPendingUnfavorites(new Set())
+  }, [listFilter])
 
   // Mock current user's party (null if not in a party)
   const currentUserParty = 'Democrat'
@@ -68,7 +83,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
 
   // Define sections - races I'm following
   const sections = [
-    { id: 'coolpeople', label: 'CoolPeople', users: favoritedUsers },
+    { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers },
     { id: 'mayor', label: 'Mayor', users: frontrunnerUsers },
     { id: 'pinklady', label: 'The Pink Lady', users: nominatedUsers },
     { id: 'baddest', label: 'Baddest Bitch', users: partyUsers },
@@ -97,10 +112,26 @@ function Scoreboard({ onOpenProfile, isActive }) {
   }
 
   const handleToggleFavorite = (userId) => {
-    setUsers(users.map(user =>
-      user.userId === userId
-        ? { ...user, isFavorited: !user.isFavorited }
-        : user
+    const user = users.find(u => u.userId === userId)
+
+    // If we're in favorited view and unfavoriting, add to pending unfavorites
+    if (listFilter === 'favorited' && user?.isFavorited) {
+      setPendingUnfavorites(prev => new Set([...prev, userId]))
+    }
+
+    // If we're re-favoriting a pending unfavorite, remove from pending
+    if (pendingUnfavorites.has(userId)) {
+      setPendingUnfavorites(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(userId)
+        return newSet
+      })
+    }
+
+    setUsers(users.map(u =>
+      u.userId === userId
+        ? { ...u, isFavorited: !u.isFavorited }
+        : u
     ))
   }
 
@@ -115,11 +146,18 @@ function Scoreboard({ onOpenProfile, isActive }) {
               <input type="text" placeholder="Search..." className="search-bar-input" autoFocus onClick={(e) => e.stopPropagation()} />
             )}
           </div>
-          {isSearchOpen && (
+          {isSearchOpen ? (
             <button className="search-cancel" onClick={() => setIsSearchOpen(false)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
+            </button>
+          ) : (
+            <button
+              className="view-toggle"
+              onClick={() => setViewMode(viewMode === 'global' ? 'local' : 'global')}
+            >
+              switch to {viewMode === 'global' ? 'local' : 'global'}
             </button>
           )}
         </div>
@@ -233,45 +271,77 @@ function Scoreboard({ onOpenProfile, isActive }) {
 
       {/* Header */}
       <div className="scoreboard-header">
-        <div className="scoreboard-header-left">
-          <h1 className="scoreboard-title">Scoreboard</h1>
-          <p className="scoreboard-date">{dateString}</p>
-        </div>
-        <button
-          className="view-toggle"
-          onClick={() => setViewMode(viewMode === 'global' ? 'local' : 'global')}
-        >
-          switch to {viewMode === 'global' ? 'local' : 'global'}
-        </button>
+        <h1 className="scoreboard-title">Scoreboard</h1>
+        <p className="scoreboard-date">{dateString}</p>
       </div>
 
       {/* Users sections with horizontal swipe */}
       <div className="users-sections-container">
         <div className="section-header">
-          <span className="section-title">{sections[activeSection].label}</span>
-          <div className="section-dots">
-            {sections.map((_, index) => (
-              <span
-                key={index}
-                className={`section-dot ${activeSection === index ? 'active' : ''}`}
-                onClick={() => setActiveSection(index)}
-              />
-            ))}
+          <div className="section-header-top">
+            <span className="section-title">{sections[activeSection].label}</span>
+            <div className="section-dots">
+              {sections.map((_, index) => (
+                <span
+                  key={index}
+                  className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                  onClick={() => setActiveSection(index)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="list-filter-toggle">
+            <button
+              className={`filter-btn ${listFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setListFilter('all')}
+            >
+              All
+            </button>
+            <button
+              className={`filter-btn ${listFilter === 'favorited' ? 'active' : ''}`}
+              onClick={() => setListFilter('favorited')}
+            >
+              Favorited
+            </button>
           </div>
         </div>
         <div className="sections-content" onWheel={handleSwipe}>
-          {sections[activeSection].users.length > 0 ? (
-            sections[activeSection].users.map(user => (
-              <ScoreboardUserRow
-                key={user.userId}
-                user={user}
-                onToggleFavorite={handleToggleFavorite}
-                onOpenProfile={onOpenProfile}
-              />
-            ))
-          ) : (
-            <div className="section-empty">No users in this section</div>
-          )}
+          {(() => {
+            // Apply list filter (all vs favorited)
+            // When in favorited view, also include pending unfavorites (users just unfavorited but still visible)
+            const filteredUsers = listFilter === 'favorited'
+              ? sections[activeSection].users.filter(u => u.isFavorited || pendingUnfavorites.has(u.userId))
+              : sections[activeSection].users
+
+            if (filteredUsers.length === 0) {
+              return (
+                <div className="section-empty">
+                  {listFilter === 'favorited' ? 'No favorited users' : 'No users in this section'}
+                </div>
+              )
+            }
+
+            const MAX_VISIBLE = 8
+            const hasMore = filteredUsers.length > MAX_VISIBLE
+            const visibleUsers = isExpanded ? filteredUsers : filteredUsers.slice(0, MAX_VISIBLE)
+
+            return (
+              <>
+                {visibleUsers.map((user, index) => (
+                  <ScoreboardUserRow
+                    key={user.userId}
+                    user={user}
+                    rank={index + 1}
+                    onToggleFavorite={handleToggleFavorite}
+                    onOpenProfile={onOpenProfile}
+                    showLoadMore={hasMore && index === visibleUsers.length - 1}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => setIsExpanded(!isExpanded)}
+                  />
+                ))}
+              </>
+            )
+          })()}
         </div>
       </div>
 

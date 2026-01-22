@@ -1,0 +1,127 @@
+.scoreboard-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Rank number */
+.user-rank {
+  flex-shrink: 0;
+  width: 28px;
+}
+
+.rank-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+}
+
+.user-avatar-container {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.user-avatar-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  padding: 2px;
+}
+
+.user-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #222;
+}
+
+.user-party {
+  font-size: 11px;
+  color: #888;
+}
+
+.user-sparkline {
+  flex-shrink: 0;
+  width: 70px;
+}
+
+.user-score-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 80px;
+}
+
+.user-score-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-tier-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.user-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #222;
+}
+
+.user-change {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.user-change.positive {
+  background: #22c55e;
+  color: white;
+}
+
+.user-change.negative {
+  background: #ef4444;
+  color: white;
+}
+
+.user-favorited {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  color: #888;
+  cursor: pointer;
+}
+
+.user-favorited.active {
+  color: #222;
+}
+
+.user-favorited .star-icon {
+  color: #fbbf24;
+  font-size: 11px;
+}
+
+.user-favorited:not(.active) .star-icon {
+  color: #ccc;
+}

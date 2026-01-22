@@ -1,6 +1,64 @@
 // Mock data for CoolPeople app
 // This will be replaced with real API calls to backend
 
+// CoolPeople Tier System
+// SVG icons for each tier (viewBox="0 0 24 24")
+export const CP_TIERS = [
+  {
+    name: 'Bronze',
+    min: 0,
+    max: 999,
+    color: '#a67c52',
+    // Bullseye/target icon
+    svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-12c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z'
+  },
+  {
+    name: 'Silver',
+    min: 1000,
+    max: 2499,
+    color: '#8a8a8a',
+    // Star outline
+    svgPath: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z M12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28z'
+  },
+  {
+    name: 'Gold',
+    min: 2500,
+    max: 4999,
+    color: '#d4a000',
+    // Medal/person icon
+    svgPath: 'M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0 4l-4 8h8l-4-8z'
+  },
+  {
+    name: 'Diamond',
+    min: 5000,
+    max: 9999,
+    color: '#5b9bd5',
+    // Diamond shape
+    svgPath: 'M12 2L2 9l10 13 10-13-10-7zm0 3.5L18.5 9 12 18.5 5.5 9 12 5.5z'
+  },
+  {
+    name: 'Challenger',
+    min: 10000,
+    max: 24999,
+    color: '#9B59B6',
+    // Star with inner star
+    svgPath: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z M12 14.4l-2.26 1.36.6-2.57-2-1.73 2.63-.23L12 9.1l1.02 2.13 2.63.23-2 1.73.6 2.57z'
+  },
+  {
+    name: 'Master',
+    min: 25000,
+    max: Infinity,
+    color: '#ef4444',
+    // Person with star (trophy stance)
+    svgPath: 'M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 14l-4.8 2.6.9-5.3-3.8-3.7 5.3-.8L12 2zM12 17v5M8 22h8'
+  },
+]
+
+// Get tier from CP points
+export const getTierFromPoints = (points) => {
+  return CP_TIERS.find(tier => points >= tier.min && points <= tier.max) || CP_TIERS[0]
+}
+
 // Party colors - each party has a unique color used for user borders app-wide
 export const PARTY_COLORS = {
   'Democrat': '#0015BC',
@@ -444,8 +502,8 @@ export const mockScoreboard = [
     username: 'Lzo.macias.formayor',
     avatar: 'https://i.pravatar.cc/60?img=1',
     party: 'The Pink Lady Party',
-    score: 48134.89,
-    change: 301.26,
+    score: 8750,
+    change: 187.50,
     isFavorited: true,
     sparklineData: generateSparklineData('up', 15),
     chartData: [1.2, 1.4, 1.5, 1.8, 2.1, 2.3, 2.5, 2.7, 2.8, 3.0, 3.2],
@@ -456,8 +514,8 @@ export const mockScoreboard = [
     username: 'mamasforpresident',
     avatar: 'https://i.pravatar.cc/60?img=12',
     party: 'The Pink Lady Party',
-    score: 48134.89,
-    change: -301.26,
+    score: 6200,
+    change: -92.30,
     isFavorited: true,
     sparklineData: generateSparklineData('down', 15),
     chartData: [1.0, 1.2, 1.4, 1.6, 1.9, 2.1, 2.3, 2.4, 2.6, 2.8, 2.9],
@@ -468,8 +526,8 @@ export const mockScoreboard = [
     username: 'lynnforroyalty',
     avatar: 'https://i.pravatar.cc/60?img=5',
     party: 'The Pink Lady Party',
-    score: 48134.89,
-    change: 301.26,
+    score: 4500,
+    change: 25.20,
     isFavorited: true,
     sparklineData: generateSparklineData('up', 15),
     chartData: [0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.7],
@@ -480,8 +538,8 @@ export const mockScoreboard = [
     username: 'Sarah.J.Council',
     avatar: 'https://i.pravatar.cc/60?img=8',
     party: 'Republican',
-    score: 35420.50,
-    change: -120.45,
+    score: 3247,
+    change: -87.50,
     isFavorited: false,
     sparklineData: generateSparklineData('down', 15),
     chartData: [0.9, 1.0, 1.2, 1.3, 1.5, 1.6, 1.8, 1.9, 2.1, 2.3, 2.5],
@@ -492,8 +550,8 @@ export const mockScoreboard = [
     username: 'Alex.M.Progressive',
     avatar: 'https://i.pravatar.cc/60?img=3',
     party: 'Independent',
-    score: 28750.00,
-    change: 89.32,
+    score: 2850,
+    change: 42.30,
     isFavorited: false,
     sparklineData: generateSparklineData('up', 15),
     chartData: [0.6, 0.8, 0.9, 1.1, 1.3, 1.4, 1.6, 1.7, 1.9, 2.1, 2.2],
@@ -504,7 +562,7 @@ export const mockScoreboard = [
     username: 'Mike.T.District4',
     avatar: 'https://i.pravatar.cc/60?img=7',
     party: 'Democrat',
-    score: 22100.75,
+    score: 1850,
     change: 45.20,
     isFavorited: false,
     sparklineData: generateSparklineData('stable', 15),
@@ -516,7 +574,7 @@ export const mockScoreboard = [
     username: 'Jordan.P.Green',
     avatar: 'https://i.pravatar.cc/60?img=14',
     party: 'Green',
-    score: 18500.00,
+    score: 1200,
     change: 32.10,
     isFavorited: false,
     sparklineData: generateSparklineData('up', 15),
@@ -528,7 +586,7 @@ export const mockScoreboard = [
     username: 'Casey.R.Future',
     avatar: 'https://i.pravatar.cc/60?img=16',
     party: 'Libertarian',
-    score: 15200.00,
+    score: 890,
     change: -15.50,
     isFavorited: false,
     sparklineData: generateSparklineData('down', 15),
@@ -540,7 +598,7 @@ export const mockScoreboard = [
     username: 'Taylor.M.Voice',
     avatar: 'https://i.pravatar.cc/60?img=18',
     party: 'Democrat',
-    score: 12800.00,
+    score: 650,
     change: 22.30,
     isFavorited: false,
     sparklineData: generateSparklineData('stable', 15),
@@ -552,7 +610,7 @@ export const mockScoreboard = [
     username: 'Morgan.L.Change',
     avatar: 'https://i.pravatar.cc/60?img=20',
     party: 'Independent',
-    score: 10500.00,
+    score: 420,
     change: 8.75,
     isFavorited: false,
     sparklineData: generateSparklineData('up', 15),
