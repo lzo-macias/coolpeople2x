@@ -2,9 +2,44 @@ import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
+
+  // Selfie overlay visibility (for drafts - can be deleted/restored)
+  const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
+
+  // Reset selfie overlay visibility when video URL changes (new draft loaded)
+  useEffect(() => {
+    setShowSelfieOverlay(true)
+    setUndoStack([])
+  }, [recordedVideoUrl])
+
+  // Undo history for reversible actions
+  const [undoStack, setUndoStack] = useState([])
+
+  const pushUndo = (action) => {
+    setUndoStack(prev => [...prev, action])
+  }
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return
+    const lastAction = undoStack[undoStack.length - 1]
+
+    // Restore based on action type
+    if (lastAction.type === 'deleteSelfie') {
+      setShowSelfieOverlay(true)
+    } else if (lastAction.type === 'deleteText') {
+      setTextOverlays(prev => [...prev, lastAction.data])
+    }
+
+    setUndoStack(prev => prev.slice(0, -1))
+  }
+
+  const handleDeleteSelfie = () => {
+    pushUndo({ type: 'deleteSelfie' })
+    setShowSelfieOverlay(false)
+  }
 
   // Restart video from beginning when screen mounts or video URL changes
   useEffect(() => {
@@ -169,7 +204,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     deadline.setHours(deadline.getHours() + hours)
     onRaceDeadlineChange(deadline.toISOString().slice(0, 16))
     // Auto-close if race name is already set
-    if (raceName.trim()) {
+    if (raceName?.trim()) {
       setShowRacePicker(false)
     }
   }
@@ -283,7 +318,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   }
 
   const getFilteredRaces = () => {
-    if (!raceName.trim()) return existingRaces
+    if (!raceName || !raceName.trim()) return existingRaces
     const query = raceName.toLowerCase()
     return existingRaces.filter(race =>
       race.name.toLowerCase().includes(query)
@@ -301,17 +336,17 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     // For new races, need name AND deadline
     if (selectedExistingRace) {
       setShowRacePicker(false)
-    } else if (raceName.trim() && raceDeadline) {
+    } else if (raceName?.trim() && raceDeadline) {
       setShowRacePicker(false)
     }
   }
 
   // Check if user is creating a new race (no existing races match OR user clicked "new")
   const filteredRaces = getFilteredRaces()
-  const isCreatingNewRace = raceName.trim() && (filteredRaces.length === 0 || forceNewRace)
+  const isCreatingNewRace = raceName?.trim() && (filteredRaces.length === 0 || forceNewRace)
 
   // Can conclude if: selected existing race OR (creating new with name + deadline)
-  const canConcludeRace = selectedExistingRace || (isCreatingNewRace && raceName.trim() && raceDeadline)
+  const canConcludeRace = selectedExistingRace || (isCreatingNewRace && raceName?.trim() && raceDeadline)
 
   const openRacePicker = () => {
     setShowRacePicker(true)
@@ -556,13 +591,67 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [draggingTextId])
 
-  const canProceed = !isRaceMode || (raceName.trim().length > 0 && raceDeadline)
+  const canProceed = !isRaceMode || (raceName?.trim()?.length > 0 && raceDeadline)
+
+  // Debug logging for quote nomination rendering
+  console.log('EditClipScreen render:', {
+    hasQuotedReel: !!quotedReel,
+    hasRecordedVideoUrl: !!recordedVideoUrl,
+    recordedVideoUrlLength: recordedVideoUrl?.length,
+    showSelfieOverlay,
+    isFromDraft
+  })
 
   return (
     <div className="edit-clip-screen">
       {/* Video Preview */}
       <div className="edit-clip-preview">
-        {recordedVideoUrl ? (
+        {quotedReel ? (
+          /* Quote Nomination Mode: Main reel + selfie overlay - no user badge */
+          <>
+            {quotedReel.videoUrl ? (
+              <video
+                src={quotedReel.videoUrl}
+                className="edit-clip-video quoted-main"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            ) : quotedReel.thumbnail ? (
+              <div
+                className="edit-clip-video quoted-main"
+                style={{
+                  backgroundImage: `url(${quotedReel.thumbnail})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  width: '100%',
+                  height: '100%'
+                }}
+              />
+            ) : null}
+            {recordedVideoUrl && showSelfieOverlay && (
+              <div className="edit-clip-selfie-overlay">
+                {isFromDraft && (
+                  <button className="selfie-overlay-delete" onClick={handleDeleteSelfie}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                <video
+                  ref={videoRef}
+                  src={recordedVideoUrl}
+                  className="edit-clip-selfie-video"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              </div>
+            )}
+          </>
+        ) : recordedVideoUrl ? (
           <video
             ref={videoRef}
             src={recordedVideoUrl}
@@ -639,6 +728,16 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               <line x1="12" y1="4" x2="12" y2="20" />
             </svg>
           </button>
+
+          {/* Undo Button - only shown when there's something to undo */}
+          {undoStack.length > 0 && (
+            <button className="edit-clip-side-btn undo-btn" onClick={handleUndo}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 7v6h6" />
+                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 13" />
+              </svg>
+            </button>
+          )}
 
           {/* Mode Switch Buttons - Race and Party only */}
           {currentMode !== 'race' && onModeChange && (
@@ -720,7 +819,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       )}
 
       {/* Text Overlays - draggable */}
-      {textOverlays.map(textItem => (
+      {textOverlays?.map(textItem => (
         <div
           key={textItem.id}
           id={`text-overlay-${textItem.id}`}
@@ -863,7 +962,11 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               </svg>
               <span>drafts</span>
             </button>
-            <button className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`} disabled={!canProceed}>
+            <button
+              className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`}
+              disabled={!canProceed}
+              onClick={() => onCompleteToScoreboard?.()}
+            >
               <img
                 src="https://i.pravatar.cc/40?img=3"
                 alt="Profile"
@@ -1003,7 +1106,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 <button
                   className="race-picker-new-btn"
                   onClick={() => setForceNewRace(true)}
-                  disabled={!raceName.trim()}
+                  disabled={!raceName?.trim()}
                 >
                   new
                 </button>

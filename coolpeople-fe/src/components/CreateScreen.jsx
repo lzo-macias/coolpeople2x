@@ -58,7 +58,24 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
   const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
-  const [drafts, setDrafts] = useState([]) // Saved drafts
+  const [drafts, setDrafts] = useState(() => {
+    // Load drafts from localStorage on init
+    try {
+      const saved = localStorage.getItem('coolpeople-drafts')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  // Save drafts to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('coolpeople-drafts', JSON.stringify(drafts))
+    } catch (e) {
+      console.error('Failed to save drafts:', e)
+    }
+  }, [drafts])
 
   // Mock recent media from phone (in real app, this would come from device)
   const mockRecentMedia = [
@@ -132,15 +149,39 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     return newDraft
   }
 
+  // State for loaded quote nomination draft
+  const [loadedQuotedReel, setLoadedQuotedReel] = useState(null)
+  const [isLoadedFromDraft, setIsLoadedFromDraft] = useState(false)
+
   // Load draft into editor
   const loadDraft = (draft) => {
-    setRecordedVideoUrl(draft.videoUrl)
+    // For quote nominations, use selfieVideoUrl if available, otherwise videoUrl
+    const videoToLoad = draft.isQuoteNomination
+      ? (draft.selfieVideoUrl || draft.videoUrl)
+      : draft.videoUrl
+
+    console.log('Loading draft:', {
+      isQuoteNomination: draft.isQuoteNomination,
+      hasSelfieVideoUrl: !!draft.selfieVideoUrl,
+      hasVideoUrl: !!draft.videoUrl,
+      hasQuotedReel: !!draft.quotedReel,
+      videoLength: videoToLoad?.length
+    })
+
+    setRecordedVideoUrl(videoToLoad)
     setRecordedWithFrontCamera(draft.isMirrored || false)
     if (draft.mode) setSelectedMode(draft.mode)
     if (draft.raceName) setRaceName(draft.raceName)
     if (draft.raceDeadline) setRaceDeadline(draft.raceDeadline)
     if (draft.taggedUser) setSelectedTag(draft.taggedUser)
     if (draft.textOverlays) setTextOverlays(draft.textOverlays)
+    // Handle quote nomination drafts
+    if (draft.isQuoteNomination && draft.quotedReel) {
+      setLoadedQuotedReel(draft.quotedReel)
+    } else {
+      setLoadedQuotedReel(null)
+    }
+    setIsLoadedFromDraft(true)
     setShowMediaPanel(false)
     setShowClipConfirm(false)
     setShowEditClipScreen(true)
@@ -348,6 +389,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setTextOverlays([])
     setShowClipConfirm(false)
     setShowTagFlow(false)
+    setLoadedQuotedReel(null)
+    setIsLoadedFromDraft(false)
 
     // Re-attach camera stream
     setTimeout(() => {
@@ -990,10 +1033,35 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                   drafts.map(draft => (
                     <div
                       key={draft.id}
-                      className="media-grid-item draft-item"
+                      className={`media-grid-item draft-item ${draft.isQuoteNomination ? 'quote-draft' : ''}`}
                       onClick={() => loadDraft(draft)}
                     >
-                      <img src={draft.thumbnail} alt="" />
+                      {/* Main thumbnail - quoted reel for quote nominations */}
+                      <img src={draft.isQuoteNomination && draft.quotedReel?.thumbnail ? draft.quotedReel.thumbnail : draft.thumbnail} alt="" />
+
+                      {/* Selfie overlay for quote nomination drafts */}
+                      {draft.isQuoteNomination && (draft.selfieVideoUrl || draft.videoUrl) && (
+                        <div className="draft-selfie-overlay">
+                          <video src={draft.selfieVideoUrl || draft.videoUrl} autoPlay loop muted playsInline />
+                        </div>
+                      )}
+
+                      {/* Tag overlay for nominate mode */}
+                      {draft.taggedUser && (
+                        <div className="draft-tag-overlay">
+                          <span className="draft-tag-at">@</span>
+                          <span className="draft-tag-name">{draft.taggedUser.username || draft.taggedUser.name}</span>
+                        </div>
+                      )}
+
+                      {/* Race pill overlay */}
+                      {draft.mode === 'race' && draft.raceName && (
+                        <div className="draft-race-pill">
+                          <span className="draft-race-dot"></span>
+                          <span>{draft.raceName}</span>
+                        </div>
+                      )}
+
                       <div className="media-item-video-icon">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
                           <polygon points="5 3 19 12 5 21 5 3" />
@@ -1011,7 +1079,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                         </svg>
                       </button>
                       <div className="draft-mode-badge">
-                        {draft.mode === 'race' ? 'Race' : draft.mode === 'nominate' ? 'Nominate' : draft.mode === 'party' ? 'Party' : 'Post'}
+                        {draft.isQuoteNomination ? 'Quote' : draft.mode === 'race' ? 'Race' : draft.mode === 'nominate' ? 'Nominate' : draft.mode === 'party' ? 'Party' : 'Post'}
                       </div>
                     </div>
                   ))
@@ -1099,6 +1167,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           }}
           currentMode={selectedMode}
           onModeChange={setSelectedMode}
+          quotedReel={loadedQuotedReel}
+          isFromDraft={isLoadedFromDraft}
         />
       )}
 
@@ -1118,6 +1188,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           getContactDisplayName={getContactDisplayName}
           textOverlays={textOverlays}
           userParty={userParty}
+          isQuoteNomination={!!loadedQuotedReel}
+          quotedReel={loadedQuotedReel}
         />
       )}
 
@@ -1131,8 +1203,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         />
       )}
 
-      {/* Selfie Cam - Rendered last to appear on top of all screens (hidden during tag flow and post screen) */}
-      {selectedMode === 'nominate' && showSelfieCam && recordedVideoUrl && !showTagFlow && !showPostScreen && (
+      {/* Selfie Cam - Rendered last to appear on top of all screens (hidden during tag flow, post screen, and edit clip screen) */}
+      {selectedMode === 'nominate' && showSelfieCam && recordedVideoUrl && !showTagFlow && !showPostScreen && !showEditClipScreen && (
         <div className={`create-selfie-cam ${isRecording ? 'recording' : ''}`}>
           <button className="selfie-cam-remove" onClick={() => setShowSelfieCam(false)}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

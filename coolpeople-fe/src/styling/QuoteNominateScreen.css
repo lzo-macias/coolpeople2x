@@ -9,519 +9,270 @@
   margin-right: auto;
   background: #000;
   z-index: 99995;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Clean Reel Preview */
-.quote-reel-preview {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-.quote-reel-media {
+/* Main Reel Video Container */
+.quote-reel-container {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: center;
-  filter: brightness(0.7);
 }
 
-.quote-reel-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  padding: 20px;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.6) 0%,
-    transparent 40%
-  );
-}
-
-.quote-reel-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.quote-user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid #fff;
+.quote-reel-video {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-.quote-username {
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+.quote-reel-thumbnail {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
 }
 
-/* Front-facing Camera Frame - Top LEFT */
-.quote-camera-frame {
+/* Selfie Camera - Mirrored */
+.selfie-cam-container {
   position: absolute;
   top: 80px;
   left: 16px;
-  width: 100px;
-  height: 140px;
+  width: 120px;
+  height: 160px;
   border-radius: 16px;
   overflow: hidden;
-  border: 3px solid #fff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  transition: border-color 0.3s ease;
-}
-
-.quote-camera-frame.recording {
-  border-color: #ff4757;
-  animation: pulse-border 1s ease-in-out infinite;
-}
-
-@keyframes pulse-border {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 71, 87, 0); }
-}
-
-/* X button to remove selfie cam */
-.quote-camera-remove {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-  transition: background 0.2s;
-}
-
-.quote-camera-remove:hover {
-  background: rgba(0, 0, 0, 0.8);
-}
-
-.quote-camera-preview {
-  width: 100%;
-  height: 100%;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
   background: #1a1a1a;
 }
 
-.quote-camera-image {
+.selfie-cam-container.recording {
+  border-color: #ff4757;
+  box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.3), 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.selfie-cam-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scaleX(-1); /* Mirror the video */
 }
 
-.quote-camera-recording-indicator {
+.selfie-recording-dot {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 10px;
-  height: 10px;
+  top: 12px;
+  right: 12px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #ff4757;
-  animation: blink 1s ease-in-out infinite;
+  animation: pulse-dot 1s ease-in-out infinite;
 }
 
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
 }
 
-/* Top Controls */
-.quote-top-controls {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  z-index: 10;
-}
-
+/* Close Button */
 .quote-close-btn {
-  width: 40px;
-  height: 40px;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
   border: none;
   color: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
+  z-index: 10;
 }
 
 .quote-close-btn:hover {
   background: rgba(0, 0, 0, 0.7);
-}
-
-.quote-race-badge {
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-pink));
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-}
-
-/* Bottom Controls */
-.quote-bottom-controls {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px 20px 40px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
-}
-
-.quote-record-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin-bottom: 12px;
-}
-
-.quote-record-btn {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
-  border: 4px solid #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.quote-record-btn:hover {
   transform: scale(1.05);
 }
 
-.quote-record-btn:active,
-.quote-record-btn.recording {
-  transform: scale(0.9);
-  box-shadow: 0 0 0 6px rgba(255, 71, 87, 0.5);
-  background: #ff4757;
+/* Quote Record Button Container */
+.quote-record-container {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+}
+
+/* Quote Record Button - Matches create-nominate-btn exactly */
+.quote-record-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.quote-record-btn.active {
+  width: 85px;
+  height: 85px;
+  border: 2px solid;
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.3),
+    inset 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.quote-record-btn:active {
+  transform: scale(0.95);
 }
 
 .quote-record-inner {
-  color: #fff;
-}
-
-.quote-clip-actions {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.quote-clip-btn {
-  width: 56px;
-  height: 56px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  border: none;
-  cursor: pointer;
+  background: linear-gradient(
+    145deg,
+    #FFFFFF 0%,
+    #F8F8F8 20%,
+    #EEEEEE 40%,
+    #FFFFFF 50%,
+    #F8F8F8 60%,
+    #EEEEEE 80%,
+    #E5E5E5 100%
+  );
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 3px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  transition: all 0.2s;
 }
 
-.quote-clip-btn:hover {
-  transform: scale(1.1);
+.quote-record-btn.active .quote-record-inner {
+  width: 75px;
+  height: 75px;
 }
 
-.quote-clip-btn.delete {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.quote-clip-btn.confirm {
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
-  color: #fff;
-}
-
-.quote-hint {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  text-align: center;
-  margin: 0;
-}
-
-/* ===================== */
-/* TAG FLOW OVERLAY      */
-/* ===================== */
-
-.tag-flow-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  flex-direction: column;
-  z-index: 20;
-}
-
-/* 50% opacity black line in middle */
-.tag-divider-line {
-  position: absolute;
-  top: 50%;
-  left: 20px;
-  right: 20px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translateY(-50%);
-}
-
-/* Selected Tag Display - Gradient Text */
-.selected-tag-display {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -80px);
-  display: flex;
-  align-items: baseline;
-  font-size: 32px;
-  font-weight: 700;
-}
-
-.selected-tag-display .tag-at {
-  color: #00F2EA;
-}
-
-.selected-tag-display .tag-name {
-  background: linear-gradient(90deg, #00F2EA 0%, #FF2A55 100%);
+.quote-record-btn .nominate-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 500;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-transform: capitalize;
+  transition: font-size 0.2s;
 }
 
-/* Tag Input Container */
-.tag-input-container {
-  position: absolute;
-  top: 29%;
-  left: 20px;
-  right: 20px;
-  transform: translateY(20px);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.quote-record-btn.active .nominate-text {
+  font-size: 12px;
 }
 
-.tag-input-at {
-  font-size: 18px;
-  font-weight: 600;
-  color: #00F2EA;
+/* Recording State */
+@keyframes recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 42, 85, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(255, 42, 85, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 42, 85, 0);
+  }
 }
 
-.tag-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 18px;
-  color: #fff;
-  font-family: inherit;
+.quote-record-btn.recording {
+  animation: recording-pulse 1s ease-out infinite;
 }
 
-.tag-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+.quote-record-btn.recording .quote-record-inner {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
 }
 
-/* Source Toggle */
-.tag-source-toggle {
-  position: absolute;
-  top: 29%;
-  left: 20px;
-  right: 20px;
-  transform: translateY(90px);
-  display: flex;
-  gap: 12px;
+.quote-record-btn.recording .nominate-text {
+  -webkit-text-fill-color: #fff;
+  background: none;
 }
 
-.tag-source-btn {
-  flex: 1;
-  padding: 12px;
-  border-radius: 25px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+/* Hint text */
+.quote-record-hint {
   font-size: 14px;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.tag-source-btn.active {
-  background: linear-gradient(90deg, #00F2EA, #FF2A55);
-  border-color: transparent;
-  color: #fff;
+/* Confirm Mode - Horizontal layout with inline actions */
+.quote-record-container.confirm-mode {
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
 }
 
-/* Users/Contacts Slider */
-.tag-users-slider {
-  position: absolute;
-  bottom: 120px;
-  left: 0;
-  right: 0;
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 0 20px;
-}
-
-.tag-user-item {
+/* Inline Actions - shown after recording */
+.quote-inline-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
 }
 
-.tag-user-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.tag-user-item.selected {
-  background: rgba(0, 242, 234, 0.2);
-  border: 1px solid rgba(0, 242, 234, 0.4);
-}
-
-.tag-user-avatar {
+.quote-action-btn {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  object-fit: cover;
-}
-
-.tag-contact-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.tag-user-name {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 500;
-  color: #fff;
-}
-
-.tag-user-handle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.tag-contact-name-input {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(0, 242, 234, 0.5);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: #fff;
-  outline: none;
-}
-
-.tag-edit-name-btn {
-  padding: 6px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
-.tag-edit-name-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+.quote-action-btn.delete {
+  background: rgba(119, 119, 119, 0.9);
   color: #fff;
 }
 
-.tag-invite-badge {
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+.quote-action-btn.delete:active {
+  transform: scale(0.9);
+  background: rgba(90, 90, 90, 0.9);
+}
+
+.quote-action-btn.draft {
+  background: rgba(119, 119, 119, 0.9);
   color: #fff;
-  font-size: 11px;
-  font-weight: 600;
 }
 
-/* Tag Flow Actions */
-.tag-flow-actions {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 12px;
-  padding: 20px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+.quote-action-btn.draft:active {
+  transform: scale(0.9);
+  background: rgba(90, 90, 90, 0.9);
 }
 
-.tag-skip-btn {
-  flex: 1;
-  padding: 16px;
-  border-radius: 25px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: transparent;
+.quote-action-btn.confirm {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
   color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 242, 234, 0.3), 0 4px 12px rgba(255, 42, 85, 0.3);
 }
 
-.tag-skip-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.tag-confirm-btn {
-  flex: 1;
-  padding: 16px;
-  border-radius: 25px;
-  border: none;
-  background: linear-gradient(90deg, #00F2EA, #FF2A55);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tag-confirm-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tag-confirm-btn:not(:disabled):hover {
-  transform: scale(1.02);
+.quote-action-btn.confirm:active {
+  transform: scale(0.9);
 }

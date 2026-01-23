@@ -1,81 +1,135 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
 import '../styling/QuoteNominateScreen.css'
 
-// Mock platform users
-const mockPlatformUsers = [
-  { id: 1, username: 'angelrivas', name: 'Angel Rivas', avatar: 'https://i.pravatar.cc/100?img=1', isOnPlatform: true },
-  { id: 2, username: 'maya.creates', name: 'Maya Johnson', avatar: 'https://i.pravatar.cc/100?img=5', isOnPlatform: true },
-  { id: 3, username: 'jordan_photo', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=8', isOnPlatform: true },
-  { id: 4, username: 'alex.design', name: 'Alex Chen', avatar: 'https://i.pravatar.cc/100?img=11', isOnPlatform: true },
-  { id: 5, username: 'sam_music', name: 'Sam Williams', avatar: 'https://i.pravatar.cc/100?img=15', isOnPlatform: true },
-  { id: 6, username: 'taylor.art', name: 'Taylor Brown', avatar: 'https://i.pravatar.cc/100?img=20', isOnPlatform: true },
-]
-
-// Mock phone contacts
-const mockContacts = [
-  { id: 101, phone: '+1 (555) 123-4567', name: 'Mom', isOnPlatform: false },
-  { id: 102, phone: '+1 (555) 234-5678', name: 'David Martinez', isOnPlatform: false },
-  { id: 103, phone: '+1 (555) 345-6789', name: null, isOnPlatform: false }, // Unsaved contact
-  { id: 104, phone: '+1 (555) 456-7890', name: 'Sarah K', isOnPlatform: false },
-  { id: 105, phone: '+1 (555) 567-8901', name: null, isOnPlatform: false }, // Unsaved contact
-  { id: 106, phone: '+1 (555) 678-9012', name: 'Work - John', isOnPlatform: false },
-]
-
 function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
   const [isRecording, setIsRecording] = useState(false)
-  const [showClipConfirm, setShowClipConfirm] = useState(false)
+  const [hasRecorded, setHasRecorded] = useState(false)
+  const [recordedBlob, setRecordedBlob] = useState(null)
+  const [recordedUrl, setRecordedUrl] = useState(null)
+  const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // For persistent storage
+  const [isBase64Ready, setIsBase64Ready] = useState(false) // Track if base64 conversion is complete
+
+  // Flow states - skip clip-inline-actions and tag-flow, go straight to edit
   const [showEditClipScreen, setShowEditClipScreen] = useState(false)
   const [showPostScreen, setShowPostScreen] = useState(false)
   const [selectedSound, setSelectedSound] = useState(null)
+  const [currentMode, setCurrentMode] = useState('nominate') // 'nominate', 'race', or 'party'
+  const [raceName, setRaceName] = useState('')
+  const [raceDeadline, setRaceDeadline] = useState(null)
+  const [textOverlays, setTextOverlays] = useState([])
 
-  // Selfie cam state
-  const [showSelfieCam, setShowSelfieCam] = useState(true)
+  // Camera refs
+  const videoRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const streamRef = useRef(null)
+  const chunksRef = useRef([])
 
-  // Tag flow state
-  const [showTagFlow, setShowTagFlow] = useState(false)
-  const [tagQuery, setTagQuery] = useState('')
-  const [tagSource, setTagSource] = useState('platform') // 'platform' or 'contacts'
-  const [selectedTag, setSelectedTag] = useState(null)
-  const [editingContactName, setEditingContactName] = useState(null)
-  const [customContactNames, setCustomContactNames] = useState({})
+  // Main reel video ref
+  const reelVideoRef = useRef(null)
+
+  // Recorded selfie ref for playback
+  const recordedSelfieRef = useRef(null)
+
+  // Initialize selfie camera
+  useEffect(() => {
+    const initCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: true
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+      } catch (err) {
+        console.log('Camera access denied or unavailable:', err)
+      }
+    }
+
+    initCamera()
+
+    // Cleanup on unmount
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
+
+  // Force play recorded selfie video when it's ready
+  useEffect(() => {
+    if (hasRecorded && recordedUrl && recordedSelfieRef.current) {
+      const video = recordedSelfieRef.current
+      video.load()
+      video.play().catch(() => {})
+    }
+  }, [hasRecorded, recordedUrl])
+
 
   const handleRecordStart = () => {
+    if (!streamRef.current) return
+
     setIsRecording(true)
+    chunksRef.current = []
+
+    const mediaRecorder = new MediaRecorder(streamRef.current)
+    mediaRecorderRef.current = mediaRecorder
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunksRef.current.push(e.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+      const url = URL.createObjectURL(blob)
+      setRecordedBlob(blob)
+      setRecordedUrl(url)
+      setHasRecorded(true)
+      setIsBase64Ready(false) // Reset while converting
+
+      // Convert blob to base64 for persistent storage in drafts
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setRecordedVideoBase64(reader.result)
+        setIsBase64Ready(true)
+        console.log('Base64 conversion complete, length:', reader.result?.length)
+      }
+      reader.readAsDataURL(blob)
+    }
+
+    mediaRecorder.start()
   }
 
   const handleRecordEnd = () => {
-    if (isRecording) {
+    if (isRecording && mediaRecorderRef.current) {
       setIsRecording(false)
-      setShowClipConfirm(true)
+      mediaRecorderRef.current.stop()
     }
   }
 
-  const handleConfirmClip = () => {
-    setShowClipConfirm(false)
-    setShowTagFlow(true) // Show tag flow instead of edit clip screen
-  }
-
   const handleDeleteClip = () => {
-    setShowClipConfirm(false)
+    if (recordedUrl) {
+      URL.revokeObjectURL(recordedUrl)
+    }
+    setRecordedBlob(null)
+    setRecordedUrl(null)
+    setHasRecorded(false)
   }
 
-  const handleSelectTag = (user) => {
-    setSelectedTag(user)
-    setTagQuery('')
-  }
-
-  const handleConfirmTag = () => {
-    setShowTagFlow(false)
+  const handleConfirmClip = () => {
     setShowEditClipScreen(true)
   }
 
-  const handleSkipTag = () => {
-    setSelectedTag(null)
-    setShowTagFlow(false)
-    setShowEditClipScreen(true)
+  const handleSaveDraft = () => {
+    // TODO: Implement draft saving
+    console.log('Saving draft...')
+    handleDeleteClip()
   }
 
   const handleNextFromEditClip = () => {
@@ -84,271 +138,234 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
   }
 
   const handlePost = (postData) => {
-    console.log('Quote Nomination Posted:', { ...postData, race: selectedRace, quotedUser: reel.user, taggedUser: selectedTag })
+    console.log('Quote Nomination Posted:', {
+      ...postData,
+      race: selectedRace,
+      quotedUser: reel.user,
+      quotedReel: reel
+    })
     setShowPostScreen(false)
+    // Return to the reel we quoted
     onComplete?.()
   }
 
-  const handleSaveContactName = (contactId, newName) => {
-    setCustomContactNames(prev => ({ ...prev, [contactId]: newName }))
-    setEditingContactName(null)
+  // If showing EditClipScreen or PostScreen, render those instead
+  if (showEditClipScreen) {
+    return createPortal(
+      <EditClipScreen
+        onClose={() => {
+          setShowEditClipScreen(false)
+          setHasRecorded(false)
+          setRecordedBlob(null)
+          setRecordedUrl(null)
+        }}
+        onNext={handleNextFromEditClip}
+        selectedSound={selectedSound}
+        onSelectSound={setSelectedSound}
+        recordedVideoUrl={recordedUrl}
+        quotedReel={reel}
+        isNominateMode={currentMode === 'nominate'}
+        isRaceMode={currentMode === 'race'}
+        taggedUser={reel.user}
+        isMirrored={true}
+        currentMode={currentMode}
+        onModeChange={setCurrentMode}
+        raceName={raceName}
+        onRaceNameChange={setRaceName}
+        raceDeadline={raceDeadline}
+        onRaceDeadlineChange={setRaceDeadline}
+        textOverlays={textOverlays}
+        setTextOverlays={setTextOverlays}
+        onCompleteToScoreboard={() => {
+          setShowEditClipScreen(false)
+          onComplete?.()
+        }}
+        onSaveDraft={() => {
+          // Save draft to localStorage
+          try {
+            // Check if base64 is ready
+            if (!isBase64Ready && !recordedVideoBase64) {
+              console.warn('Base64 conversion not complete yet, using blob URL (will not persist)')
+            }
+
+            const existingDrafts = JSON.parse(localStorage.getItem('coolpeople-drafts') || '[]')
+            // Use base64 data for persistent storage (blob URLs become invalid after session)
+            // Explicitly save selfie video separately from quoted reel
+            const selfieVideo = recordedVideoBase64 || recordedUrl
+
+            // Validate we have proper data
+            const isBase64 = selfieVideo?.startsWith('data:')
+            console.log('Saving quote nomination draft:', {
+              isBase64Ready,
+              isBase64Video: isBase64,
+              hasSelfie: !!selfieVideo,
+              hasQuotedReel: !!reel,
+              selfieLength: selfieVideo?.length,
+              quotedReelVideo: !!reel?.videoUrl,
+              quotedReelThumb: !!reel?.thumbnail
+            })
+
+            if (!isBase64) {
+              console.error('WARNING: Saving blob URL instead of base64. Draft selfie will not persist!')
+            }
+
+            const newDraft = {
+              id: `draft-${Date.now()}`,
+              type: 'video',
+              videoUrl: selfieVideo,
+              selfieVideoUrl: selfieVideo, // Explicit field for selfie video
+              thumbnail: reel.thumbnail,
+              isMirrored: true,
+              timestamp: Date.now(),
+              mode: currentMode,
+              raceName: raceName || null,
+              raceDeadline: raceDeadline || null,
+              taggedUser: reel.user || null,
+              textOverlays: [...textOverlays],
+              quotedReel: reel,
+              isQuoteNomination: true,
+              hasSelfieOverlay: true // Track that this draft has a selfie
+            }
+            localStorage.setItem('coolpeople-drafts', JSON.stringify([newDraft, ...existingDrafts]))
+          } catch (e) {
+            console.error('Failed to save draft:', e)
+          }
+          setShowEditClipScreen(false)
+          // Don't call onComplete - just close and return to reel with nominate still available
+          onClose?.()
+        }}
+      />,
+      document.body
+    )
   }
 
-  // Filter users based on search query and source
-  const getFilteredUsers = () => {
-    const query = tagQuery.toLowerCase()
-    if (tagSource === 'platform') {
-      return mockPlatformUsers.filter(user =>
-        user.username.toLowerCase().includes(query) ||
-        user.name.toLowerCase().includes(query)
-      )
-    } else {
-      return mockContacts.filter(contact => {
-        const displayName = customContactNames[contact.id] || contact.name || contact.phone
-        return displayName.toLowerCase().includes(query)
-      })
-    }
-  }
-
-  const filteredUsers = getFilteredUsers()
-
-  // Get display name for contact
-  const getContactDisplayName = (contact) => {
-    return customContactNames[contact.id] || contact.name || contact.phone
+  if (showPostScreen) {
+    return createPortal(
+      <PostScreen
+        onClose={() => {
+          setShowPostScreen(false)
+          setShowEditClipScreen(true)
+        }}
+        onPost={handlePost}
+        isQuoteNomination={true}
+        isNominateMode={currentMode === 'nominate'}
+        isRaceMode={currentMode === 'race'}
+        quotedUser={reel.user}
+        selectedRace={selectedRace}
+        quotedReel={reel}
+        recordedVideoUrl={recordedUrl}
+        isMirrored={true}
+        taggedUser={reel.user}
+        textOverlays={textOverlays}
+        raceName={raceName}
+        raceDeadline={raceDeadline}
+      />,
+      document.body
+    )
   }
 
   return createPortal(
     <div className="quote-nominate-screen">
-      {/* Clean Reel Preview (no UI elements) */}
-      <div className="quote-reel-preview">
-        <div
-          className="quote-reel-media"
-          style={{ backgroundImage: `url(${reel.thumbnail})` }}
-        />
-        <div className="quote-reel-overlay">
-          {/* Quoted user info - minimal */}
-          <div className="quote-reel-user">
-            <img src={reel.user.avatar} alt={reel.user.username} className="quote-user-avatar" />
-            <span className="quote-username">@{reel.user.username}</span>
-          </div>
-        </div>
+      {/* Main Reel Video Loop */}
+      <div className="quote-reel-container">
+        {reel.videoUrl ? (
+          <video
+            ref={reelVideoRef}
+            src={reel.videoUrl}
+            className="quote-reel-video"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <div
+            className="quote-reel-thumbnail"
+            style={{ backgroundImage: `url(${reel.thumbnail})` }}
+          />
+        )}
       </div>
 
-      {/* Front-facing Camera Frame - Top Left with X to remove */}
-      {showSelfieCam && (
-        <div className={`quote-camera-frame ${isRecording ? 'recording' : ''}`}>
-          <button className="quote-camera-remove" onClick={() => setShowSelfieCam(false)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-          <div className="quote-camera-preview">
-            <img
-              src="https://i.pravatar.cc/200?img=33"
-              alt="Your camera"
-              className="quote-camera-image"
-            />
-          </div>
-          {isRecording && <div className="quote-camera-recording-indicator" />}
-        </div>
-      )}
+      {/* Selfie Camera - Mirrored */}
+      <div className={`selfie-cam-container ${isRecording ? 'recording' : ''}`}>
+        {hasRecorded && recordedUrl ? (
+          <video
+            key="recorded-selfie"
+            ref={recordedSelfieRef}
+            className="selfie-cam-video"
+            src={recordedUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onCanPlay={(e) => e.target.play()}
+            onLoadedMetadata={(e) => e.target.play()}
+          />
+        ) : (
+          <video
+            key="live-selfie"
+            ref={videoRef}
+            className="selfie-cam-video"
+            autoPlay
+            muted
+            playsInline
+          />
+        )}
+        {isRecording && <div className="selfie-recording-dot" />}
+      </div>
 
-      {/* Top Controls */}
-      <div className="quote-top-controls">
-        <button className="quote-close-btn" onClick={onClose}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+      {/* Close Button */}
+      <button className="quote-close-btn" onClick={onClose}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* Create Nominate Button with Inline Actions */}
+      <div className={`quote-record-container ${hasRecorded ? 'confirm-mode' : ''}`}>
+        <button
+          className={`quote-record-btn active ${isRecording ? 'recording' : ''}`}
+          onMouseDown={!hasRecorded ? handleRecordStart : undefined}
+          onMouseUp={!hasRecorded ? handleRecordEnd : undefined}
+          onMouseLeave={!hasRecorded ? handleRecordEnd : undefined}
+          onTouchStart={!hasRecorded ? handleRecordStart : undefined}
+          onTouchEnd={!hasRecorded ? handleRecordEnd : undefined}
+        >
+          <div className="quote-record-inner">
+            <span className="nominate-text">Nominate</span>
+          </div>
         </button>
-        <div className="quote-race-badge">
-          <span>Nominating to {selectedRace?.name}</span>
-        </div>
+
+        {/* Inline Actions - shown after recording */}
+        {hasRecorded && (
+          <div className="quote-inline-actions">
+            <button className="quote-action-btn delete" onClick={handleDeleteClip}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <button className="quote-action-btn draft" onClick={handleSaveDraft}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </button>
+            <button className="quote-action-btn confirm" onClick={handleConfirmClip}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {!hasRecorded && (
+          <span className="quote-record-hint">
+            {isRecording ? 'Recording...' : 'Hold to record'}
+          </span>
+        )}
       </div>
 
-      {/* Bottom Controls - Recording */}
-      {!showTagFlow && (
-        <div className="quote-bottom-controls">
-          {/* Record Button Row */}
-          <div className={`quote-record-row ${showClipConfirm ? 'confirm-mode' : ''}`}>
-            {!showClipConfirm && (
-              <button
-                className={`quote-record-btn ${isRecording ? 'recording' : ''}`}
-                onMouseDown={handleRecordStart}
-                onMouseUp={handleRecordEnd}
-                onMouseLeave={handleRecordEnd}
-                onTouchStart={handleRecordStart}
-                onTouchEnd={handleRecordEnd}
-              >
-                <div className="quote-record-inner">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                  </svg>
-                </div>
-              </button>
-            )}
-
-            {/* Clip Confirm Actions */}
-            {showClipConfirm && (
-              <div className="quote-clip-actions">
-                <button className="quote-clip-btn delete" onClick={handleDeleteClip}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-                <button className="quote-clip-btn confirm" onClick={handleConfirmClip}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                </button>
-              </div>
-            )}
-          </div>
-
-          <p className="quote-hint">Hold to record your nomination message</p>
-        </div>
-      )}
-
-      {/* Tag Flow Overlay */}
-      {showTagFlow && (
-        <div className="tag-flow-overlay">
-          {/* 50% opacity black line */}
-          <div className="tag-divider-line" />
-
-          {/* Selected Tag Display */}
-          {selectedTag && (
-            <div className="selected-tag-display">
-              <span className="tag-at">@</span>
-              <span className="tag-name">{selectedTag.username || getContactDisplayName(selectedTag)}</span>
-            </div>
-          )}
-
-          {/* Tag Input */}
-          <div className="tag-input-container">
-            <span className="tag-input-at">@</span>
-            <input
-              type="text"
-              className="tag-input"
-              placeholder="search to tag someone"
-              value={tagQuery}
-              onChange={(e) => setTagQuery(e.target.value)}
-              autoFocus
-            />
-          </div>
-
-          {/* Source Toggle */}
-          <div className="tag-source-toggle">
-            <button
-              className={`tag-source-btn ${tagSource === 'platform' ? 'active' : ''}`}
-              onClick={() => setTagSource('platform')}
-            >
-              On Platform
-            </button>
-            <button
-              className={`tag-source-btn ${tagSource === 'contacts' ? 'active' : ''}`}
-              onClick={() => setTagSource('contacts')}
-            >
-              Contacts
-            </button>
-          </div>
-
-          {/* Users/Contacts Slider */}
-          <div className="tag-users-slider">
-            {filteredUsers.map(user => (
-              <div
-                key={user.id}
-                className={`tag-user-item ${selectedTag?.id === user.id ? 'selected' : ''}`}
-                onClick={() => handleSelectTag(user)}
-              >
-                {tagSource === 'platform' ? (
-                  <>
-                    <img src={user.avatar} alt={user.name} className="tag-user-avatar" />
-                    <span className="tag-user-name">{user.name}</span>
-                    <span className="tag-user-handle">@{user.username}</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="tag-contact-avatar">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                    {editingContactName === user.id ? (
-                      <input
-                        type="text"
-                        className="tag-contact-name-input"
-                        placeholder="Enter name"
-                        defaultValue={customContactNames[user.id] || user.name || ''}
-                        autoFocus
-                        onBlur={(e) => handleSaveContactName(user.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSaveContactName(user.id, e.target.value)
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <>
-                        <span className="tag-user-name">{getContactDisplayName(user)}</span>
-                        {!user.name && !customContactNames[user.id] && (
-                          <button
-                            className="tag-edit-name-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditingContactName(user.id)
-                            }}
-                          >
-                            Add name
-                          </button>
-                        )}
-                        {!user.isOnPlatform && (
-                          <span className="tag-invite-badge">Invite</span>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Tag Actions */}
-          <div className="tag-flow-actions">
-            <button className="tag-skip-btn" onClick={handleSkipTag}>
-              Skip
-            </button>
-            <button
-              className="tag-confirm-btn"
-              onClick={handleConfirmTag}
-              disabled={!selectedTag}
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Clip Screen */}
-      {showEditClipScreen && (
-        <EditClipScreen
-          onClose={() => setShowEditClipScreen(false)}
-          onNext={handleNextFromEditClip}
-          selectedSound={selectedSound}
-          onSelectSound={setSelectedSound}
-        />
-      )}
-
-      {/* Post Screen */}
-      {showPostScreen && (
-        <PostScreen
-          onClose={() => setShowPostScreen(false)}
-          onPost={handlePost}
-          isQuoteNomination={true}
-          quotedUser={reel.user}
-          selectedRace={selectedRace}
-        />
-      )}
     </div>,
     document.body
   )

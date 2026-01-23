@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty }) {
+function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, isQuoteNomination, quotedReel }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
@@ -76,7 +76,35 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
       <div className="post-content">
         {/* Video Preview */}
         <div className="post-video-preview">
-          {recordedVideoUrl ? (
+          {isQuoteNomination && quotedReel ? (
+            /* Quote Nomination Mode: Quoted reel as main + selfie overlay */
+            <>
+              {quotedReel.videoUrl ? (
+                <video
+                  ref={videoRef}
+                  src={quotedReel.videoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              ) : quotedReel.thumbnail ? (
+                <img src={quotedReel.thumbnail} alt="Quoted reel" />
+              ) : null}
+              {recordedVideoUrl && (
+                <div className="post-selfie-cam">
+                  <video
+                    src={recordedVideoUrl}
+                    className={isMirrored ? 'mirrored' : ''}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                </div>
+              )}
+            </>
+          ) : recordedVideoUrl ? (
             <video
               ref={videoRef}
               src={recordedVideoUrl}
@@ -92,8 +120,8 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
             />
           )}
 
-          {/* Selfie Cam inside preview - for nominate mode */}
-          {isNominateMode && showSelfieCam && recordedVideoUrl && (
+          {/* Selfie Cam inside preview - for nominate mode (non-quote) */}
+          {isNominateMode && !isQuoteNomination && showSelfieCam && recordedVideoUrl && (
             <div className="post-selfie-cam">
               <video
                 src={recordedVideoUrl}
