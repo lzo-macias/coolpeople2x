@@ -606,51 +606,27 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     <div className="edit-clip-screen">
       {/* Video Preview */}
       <div className="edit-clip-preview">
-        {quotedReel ? (
-          /* Quote Nomination Mode: Main reel + selfie overlay - no user badge */
-          <>
-            {quotedReel.videoUrl ? (
-              <video
-                src={quotedReel.videoUrl}
-                className="edit-clip-video quoted-main"
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            ) : quotedReel.thumbnail ? (
-              <div
-                className="edit-clip-video quoted-main"
-                style={{
-                  backgroundImage: `url(${quotedReel.thumbnail})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  width: '100%',
-                  height: '100%'
-                }}
-              />
-            ) : null}
-            {recordedVideoUrl && showSelfieOverlay && (
-              <div className="edit-clip-selfie-overlay">
-                {isFromDraft && (
-                  <button className="selfie-overlay-delete" onClick={handleDeleteSelfie}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-                <video
-                  ref={videoRef}
-                  src={recordedVideoUrl}
-                  className="edit-clip-selfie-video"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                />
-              </div>
-            )}
-          </>
+        {/* Main Video */}
+        {quotedReel?.videoUrl ? (
+          <video
+            src={quotedReel.videoUrl}
+            className="edit-clip-video quoted-main"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : quotedReel?.thumbnail ? (
+          <div
+            className="edit-clip-video quoted-main"
+            style={{
+              backgroundImage: `url(${quotedReel.thumbnail})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              width: '100%',
+              height: '100%'
+            }}
+          />
         ) : recordedVideoUrl ? (
           <video
             ref={videoRef}
@@ -667,6 +643,27 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop"
             alt="Clip preview"
           />
+        )}
+
+        {/* Selfie Overlay - shows in nominate mode or when there's a quoted reel */}
+        {(isNominateMode || quotedReel) && recordedVideoUrl && showSelfieOverlay && (
+          <div className="edit-clip-selfie-overlay">
+            {isFromDraft && (
+              <button className="selfie-overlay-delete" onClick={handleDeleteSelfie}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            <video
+              src={recordedVideoUrl}
+              className="edit-clip-selfie-video"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          </div>
         )}
       </div>
 

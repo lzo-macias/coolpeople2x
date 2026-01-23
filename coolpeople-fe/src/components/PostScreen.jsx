@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, isQuoteNomination, quotedReel }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, isQuoteNomination, quotedReel }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
@@ -62,6 +62,77 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
 
   const handlePost = () => {
     onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget })
+  }
+
+  const handleSaveDraft = () => {
+    try {
+      let existingDrafts = JSON.parse(localStorage.getItem('coolpeople-drafts') || '[]')
+
+      // Determine mode
+      let mode = 'post'
+      if (isRaceMode) mode = 'race'
+      else if (isNominateMode) mode = 'nominate'
+
+      // Use base64 for persistent storage, fallback to URL
+      const persistentVideoUrl = recordedVideoBase64 || recordedVideoUrl
+
+      const newDraft = {
+        id: `draft-${Date.now()}`,
+        type: 'video',
+        videoUrl: persistentVideoUrl,
+        selfieVideoUrl: persistentVideoUrl,
+        thumbnail: quotedReel?.thumbnail || null, // Don't duplicate video as thumbnail
+        isMirrored: isMirrored || false,
+        timestamp: Date.now(),
+        mode,
+        // Race info
+        raceName: raceName || null,
+        raceDeadline: raceDeadline || null,
+        // Nominate info
+        taggedUser: taggedUser || null,
+        isNominateMode: isNominateMode || false,
+        // Quote nomination info
+        isQuoteNomination: isQuoteNomination || false,
+        quotedReel: quotedReel || null,
+        hasSelfieOverlay: isQuoteNomination || isNominateMode,
+        // Text overlays
+        textOverlays: textOverlays ? [...textOverlays] : [],
+        // Post details
+        title: title || '',
+        caption: caption || '',
+        postTo: selectedPostTo,
+        sendTo: selectedSendTo,
+        location: selectedLocation,
+        shareTo: selectedSocials,
+        targetRace: selectedTarget
+      }
+
+      // Try to save, if quota exceeded, remove oldest drafts and retry
+      const saveDraft = (draftsToSave) => {
+        try {
+          localStorage.setItem('coolpeople-drafts', JSON.stringify(draftsToSave))
+          return true
+        } catch (e) {
+          if (e.name === 'QuotaExceededError' && draftsToSave.length > 1) {
+            // Remove oldest draft and retry
+            console.log('Storage full, removing oldest draft...')
+            draftsToSave.pop()
+            return saveDraft(draftsToSave)
+          }
+          throw e
+        }
+      }
+
+      const draftsToSave = [newDraft, ...existingDrafts]
+      saveDraft(draftsToSave)
+      console.log('Draft saved from PostScreen')
+
+      // Close and reset to camera
+      onDraftSaved?.()
+    } catch (e) {
+      console.error('Failed to save draft:', e)
+      alert('Storage is full. Please delete some drafts and try again.')
+    }
   }
 
   return (
@@ -290,7 +361,7 @@ function PostScreen({ onClose, onPost, isRaceMode, isNominateMode, raceName, rac
 
       {/* Bottom Actions */}
       <div className="post-bottom-actions">
-        <button className="post-drafts-btn">
+        <button className="post-drafts-btn" onClick={handleSaveDraft}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />

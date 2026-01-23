@@ -58,24 +58,74 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
   const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
+  // Filter out drafts older than 30 days
+  const filterExpiredDrafts = (draftsArray) => {
+    const thirtyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 30
+    return draftsArray.filter(d => d.timestamp > thirtyDaysAgo)
+  }
+
   const [drafts, setDrafts] = useState(() => {
-    // Load drafts from localStorage on init
     try {
       const saved = localStorage.getItem('coolpeople-drafts')
-      return saved ? JSON.parse(saved) : []
+      if (!saved) return []
+      const parsed = JSON.parse(saved)
+      const filtered = filterExpiredDrafts(parsed)
+      // Save back if any were removed
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem('coolpeople-drafts', JSON.stringify(filtered))
+      }
+      return filtered
     } catch {
       return []
     }
   })
 
+  // Reload drafts from localStorage (used when returning from PostScreen)
+  const reloadDraftsFromStorage = () => {
+    try {
+      const saved = localStorage.getItem('coolpeople-drafts')
+      if (!saved) {
+        setDrafts([])
+        return
+      }
+      const parsed = JSON.parse(saved)
+      const filtered = filterExpiredDrafts(parsed)
+      // Save back if any were removed
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem('coolpeople-drafts', JSON.stringify(filtered))
+      }
+      setDrafts(filtered)
+    } catch {
+      // Keep current state if parse fails
+    }
+  }
+
   // Save drafts to localStorage when they change
   useEffect(() => {
-    try {
-      localStorage.setItem('coolpeople-drafts', JSON.stringify(drafts))
-    } catch (e) {
-      console.error('Failed to save drafts:', e)
+    const saveDraftsToStorage = (draftsToSave) => {
+      try {
+        localStorage.setItem('coolpeople-drafts', JSON.stringify(draftsToSave))
+        return true
+      } catch (e) {
+        if (e.name === 'QuotaExceededError' && draftsToSave.length > 1) {
+          console.log('Storage full, removing oldest draft...')
+          return saveDraftsToStorage(draftsToSave.slice(0, -1))
+        }
+        console.error('Failed to save drafts:', e)
+        return false
+      }
     }
+    saveDraftsToStorage(drafts)
   }, [drafts])
+
+  // Clear all drafts - call window.clearDrafts() in browser console
+  useEffect(() => {
+    window.clearDrafts = () => {
+      localStorage.removeItem('coolpeople-drafts')
+      setDrafts([])
+      console.log('All drafts cleared!')
+    }
+  }, [])
 
   // Mock recent media from phone (in real app, this would come from device)
   const mockRecentMedia = [
@@ -413,14 +463,49 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         videoRef.current.pause()
       } else {
         // Resume and restart when returning to this screen
-        videoRef.current.currentTime = 0
-        videoRef.current.play().catch(() => {})
+        // Use timeout to ensure video element is ready after screen transition
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0
+            videoRef.current.play().catch(() => {})
+          }
+        }, 50)
       }
     }
   }, [showEditClipScreen, showPostScreen, showPartyCreationFlow, recordedVideoUrl])
 
   const handleClosePostScreen = () => {
     setShowPostScreen(false)
+    // Reload drafts in case PostScreen saved any
+    reloadDraftsFromStorage()
+  }
+
+  // Called when draft is saved from PostScreen - resets to camera mode
+  const handleDraftSavedFromPostScreen = () => {
+    setShowPostScreen(false)
+
+    // Clear recorded video and reset to camera
+    if (recordedVideoUrl) {
+      URL.revokeObjectURL(recordedVideoUrl)
+      setRecordedVideoUrl(null)
+    }
+    setRecordedVideoBase64(null)
+
+    // Reset mode-specific state
+    setSelectedTag(null)
+    setTextOverlays([])
+    setLoadedQuotedReel(null)
+    setIsLoadedFromDraft(false)
+
+    // Reload drafts from storage
+    reloadDraftsFromStorage()
+
+    // Re-attach camera stream
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+    }, 50)
   }
 
   const handlePost = (postData) => {
@@ -1009,38 +1094,74 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             {/* Media Grid */}
             <div className="media-panel-grid">
               {mediaPanelTab === 'recents' ? (
-                getRecentsWithDrafts().map(item => (
-                  <div
-                    key={item.id}
-                    className="media-grid-item"
-                    onClick={() => item.isDraft ? loadDraft(item) : loadRecentMedia(item)}
-                  >
-                    <img src={item.thumbnail} alt="" />
-                    {item.type === 'video' && (
-                      <div className="media-item-video-icon">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </div>
-                    )}
-                    {item.isDraft && (
-                      <div className="media-item-draft-badge">draft</div>
-                    )}
-                  </div>
-                ))
+                getRecentsWithDrafts().map(item => {
+                  // Determine what to show as main content
+                  const mainThumbnail = item.isDraft && item.isQuoteNomination && item.quotedReel?.thumbnail
+                    ? item.quotedReel.thumbnail
+                    : item.thumbnail
+                  const mainVideo = item.isDraft ? item.videoUrl : null
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`media-grid-item ${item.isDraft && (item.isQuoteNomination || item.mode === 'nominate') ? 'draft-item' : ''}`}
+                      onClick={() => item.isDraft ? loadDraft(item) : loadRecentMedia(item)}
+                    >
+                      {/* Main content - thumbnail or video fallback */}
+                      {mainThumbnail ? (
+                        <img src={mainThumbnail} alt="" className={item.isMirrored ? 'mirrored' : ''} />
+                      ) : mainVideo ? (
+                        <video src={mainVideo} autoPlay loop muted playsInline className={`media-grid-video ${item.isMirrored ? 'mirrored' : ''}`} />
+                      ) : (
+                        <div className="media-grid-placeholder" />
+                      )}
+
+                      {/* Selfie overlay for nominate mode drafts in recents */}
+                      {item.isDraft && (item.isQuoteNomination || item.mode === 'nominate') && (item.selfieVideoUrl || item.videoUrl) && (
+                        <div className="draft-selfie-overlay">
+                          <video src={item.selfieVideoUrl || item.videoUrl} autoPlay loop muted playsInline />
+                        </div>
+                      )}
+
+                      {item.type === 'video' && (
+                        <div className="media-item-video-icon">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </div>
+                      )}
+                      {item.isDraft && (
+                        <div className="media-item-draft-badge">draft</div>
+                      )}
+                    </div>
+                  )
+                })
               ) : (
                 drafts.length > 0 ? (
-                  drafts.map(draft => (
-                    <div
-                      key={draft.id}
-                      className={`media-grid-item draft-item ${draft.isQuoteNomination ? 'quote-draft' : ''}`}
-                      onClick={() => loadDraft(draft)}
-                    >
-                      {/* Main thumbnail - quoted reel for quote nominations */}
-                      <img src={draft.isQuoteNomination && draft.quotedReel?.thumbnail ? draft.quotedReel.thumbnail : draft.thumbnail} alt="" />
+                  drafts.map(draft => {
+                    // Determine what to show as main content
+                    const mainThumbnail = draft.isQuoteNomination && draft.quotedReel?.thumbnail
+                      ? draft.quotedReel.thumbnail
+                      : draft.thumbnail
+                    const mainVideo = draft.videoUrl
 
-                      {/* Selfie overlay for quote nomination drafts */}
-                      {draft.isQuoteNomination && (draft.selfieVideoUrl || draft.videoUrl) && (
+                    return (
+                      <div
+                        key={draft.id}
+                        className={`media-grid-item draft-item ${draft.isQuoteNomination ? 'quote-draft' : ''}`}
+                        onClick={() => loadDraft(draft)}
+                      >
+                        {/* Main content - thumbnail or video fallback */}
+                        {mainThumbnail ? (
+                          <img src={mainThumbnail} alt="" className={draft.isMirrored ? 'mirrored' : ''} />
+                        ) : mainVideo ? (
+                          <video src={mainVideo} autoPlay loop muted playsInline className={`media-grid-video ${draft.isMirrored ? 'mirrored' : ''}`} />
+                        ) : (
+                          <div className="media-grid-placeholder" />
+                        )}
+
+                      {/* Selfie overlay for nominate mode drafts (including quote nominations) */}
+                      {(draft.isQuoteNomination || draft.mode === 'nominate') && (draft.selfieVideoUrl || draft.videoUrl) && (
                         <div className="draft-selfie-overlay">
                           <video src={draft.selfieVideoUrl || draft.videoUrl} autoPlay loop muted playsInline />
                         </div>
@@ -1078,11 +1199,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                           <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
                       </button>
-                      <div className="draft-mode-badge">
+                      <div className={`draft-mode-badge ${draft.mode === 'race' ? 'race' : draft.mode === 'nominate' ? 'nominate' : draft.mode === 'party' ? 'party' : ''}`}>
                         {draft.isQuoteNomination ? 'Quote' : draft.mode === 'race' ? 'Race' : draft.mode === 'nominate' ? 'Nominate' : draft.mode === 'party' ? 'Party' : 'Post'}
                       </div>
-                    </div>
-                  ))
+                      </div>
+                    )
+                  })
                 ) : (
                   <div className="media-panel-empty">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -1177,11 +1299,13 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         <PostScreen
           onClose={handleClosePostScreen}
           onPost={handlePost}
+          onDraftSaved={handleDraftSavedFromPostScreen}
           isRaceMode={selectedMode === 'race'}
           isNominateMode={selectedMode === 'nominate'}
           raceName={raceName}
           raceDeadline={raceDeadline}
           recordedVideoUrl={recordedVideoUrl}
+          recordedVideoBase64={recordedVideoBase64}
           isMirrored={recordedWithFrontCamera}
           showSelfieCam={showSelfieCam}
           taggedUser={selectedTag}

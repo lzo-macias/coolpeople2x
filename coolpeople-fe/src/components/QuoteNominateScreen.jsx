@@ -151,6 +151,12 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
 
   // If showing EditClipScreen or PostScreen, render those instead
   if (showEditClipScreen) {
+    console.log('QuoteNominateScreen -> EditClipScreen props:', {
+      hasReel: !!reel,
+      reelVideoUrl: reel?.videoUrl,
+      reelThumbnail: reel?.thumbnail,
+      recordedUrl: !!recordedUrl
+    })
     return createPortal(
       <EditClipScreen
         onClose={() => {

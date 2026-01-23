@@ -45,7 +45,7 @@
   background-position: center;
 }
 
-/* Selfie overlay in quote mode */
+/* Selfie overlay in nominate/quote mode */
 .edit-clip-selfie-overlay {
   position: absolute;
   top: 80px;
@@ -57,7 +57,7 @@
   border: 3px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   z-index: 15;
-  background: #1a1a1a; /* Fallback background if video doesn't load */
+  background: #1a1a1a;
 }
 
 .edit-clip-selfie-video {
