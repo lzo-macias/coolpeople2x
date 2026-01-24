@@ -1728,3 +1728,362 @@
 .party-profile .stat-modal-row.race-row.won {
   background: rgba(16, 185, 129, 0.1);
 }
+
+/* Paywall Modal */
+.party-profile .paywall-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.party-profile .paywall-modal {
+  background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
+  border-radius: 16px;
+  padding: 32px 24px;
+  max-width: 300px;
+  text-align: center;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.party-profile .paywall-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.party-profile .paywall-close:hover {
+  color: #fff;
+}
+
+.party-profile .paywall-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.party-profile .paywall-title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.party-profile .paywall-text {
+  color: #999;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.party-profile .paywall-btn {
+  background: linear-gradient(135deg, #FF2A55, #00d4d4);
+  border: none;
+  border-radius: 24px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 32px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.party-profile .paywall-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Review Modal */
+.party-profile .review-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.party-profile .review-modal {
+  background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
+  border-radius: 16px;
+  padding: 24px;
+  width: 90%;
+  max-width: 340px;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.party-profile .review-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.party-profile .review-modal-close:hover {
+  color: #fff;
+}
+
+.party-profile .review-modal-title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.party-profile .review-modal-rating {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.party-profile .review-star {
+  font-size: 32px;
+  color: #333;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.party-profile .review-star:hover {
+  transform: scale(1.1);
+}
+
+.party-profile .review-star.filled {
+  color: #FFD700;
+}
+
+.party-profile .review-modal-textarea {
+  width: 100%;
+  height: 120px;
+  background: #0a0a0a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 14px;
+  color: #fff;
+  font-size: 14px;
+  resize: none;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.party-profile .review-modal-textarea::placeholder {
+  color: #666;
+}
+
+.party-profile .review-modal-textarea:focus {
+  outline: none;
+  border-color: #555;
+}
+
+.party-profile .review-modal-submit {
+  width: 100%;
+  background: linear-gradient(135deg, #333, #222);
+  border: 1px solid #444;
+  border-radius: 24px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.party-profile .review-modal-submit:hover {
+  background: linear-gradient(135deg, #444, #333);
+  border-color: #555;
+}
+
+/* Response Modal */
+.party-profile .response-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.party-profile .response-modal {
+  background: #1a1a1a;
+  width: 100%;
+  max-width: 440px;
+  max-height: 80vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.party-profile .response-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #333333;
+}
+
+.party-profile .response-modal-header h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.party-profile .response-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888888;
+  padding: 4px;
+}
+
+.party-profile .response-close-btn:hover {
+  color: #FFFFFF;
+}
+
+.party-profile .response-post-btn {
+  background: #00B4D8;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.party-profile .response-post-btn:disabled {
+  background: #333333;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+.party-profile .response-original-review {
+  padding: 16px;
+  border-bottom: 1px solid #333333;
+}
+
+.party-profile .response-review-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.party-profile .response-reviewer-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-profile .response-reviewer-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.party-profile .response-review-time {
+  font-size: 12px;
+  color: #888888;
+  margin-left: auto;
+}
+
+.party-profile .response-review-text {
+  font-size: 14px;
+  color: #CCCCCC;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.party-profile .response-review-rating {
+  display: flex;
+  gap: 2px;
+}
+
+.party-profile .response-input-container {
+  padding: 16px;
+  flex: 1;
+}
+
+.party-profile .response-textarea {
+  width: 100%;
+  min-height: 120px;
+  background: #2a2a2a;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  color: #FFFFFF;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.party-profile .response-textarea::placeholder {
+  color: #666666;
+}
+
+/* Clickable member item */
+.party-profile .member-item.clickable {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.party-profile .member-item.clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Response displayed under review */
+.party-profile .member-response {
+  margin-top: 10px;
+  margin-left: 40px;
+}
+
+.party-profile .member-response .response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.party-profile .member-response .response-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.party-profile .member-response .response-author {
+  font-size: 13px;
+  font-weight: 400;
+  color: #FFFFFF;
+  opacity: 0.8;
+}
+
+.party-profile .member-response .response-text {
+  font-size: 14px;
+  color: #FFFFFF;
+  margin: 0;
+}

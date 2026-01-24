@@ -423,6 +423,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [showFollowingModal, setShowFollowingModal] = useState(false)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [showRacesModal, setShowRacesModal] = useState(false)
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewRating, setReviewRating] = useState(0)
+  const [communityReviews, setCommunityReviews] = useState(regularNominations)
 
   // Mock data for stat modals
   const mockFollowing = [
@@ -1393,7 +1398,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
               {/* Leave a Verified Review link - below paid nominations, if local */}
               {isLocalToCandidate && (
-                <button className="leave-review-link verified">Leave a Verified Review</button>
+                <button className="leave-review-link verified" onClick={() => setShowPaywall(true)}>Leave a Verified Review</button>
               )}
 
               {/* Community Reviews Section Header */}
@@ -1405,7 +1410,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               </div>
 
               {/* Regular Nominations */}
-              {regularNominations.map((nomination, index) => (
+              {communityReviews.map((nomination, index) => (
             <div
               key={nomination.id}
               className="nomination-item clickable"
@@ -1469,7 +1474,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         </div>
 
         {/* Leave a Review - only show if not starter */}
-        {!isStarter && <p className="leave-review-text">Leave a Review</p>}
+        {!isStarter && <p className="leave-review-text" onClick={() => setShowReviewModal(true)} style={{ cursor: 'pointer' }}>Leave a Review</p>}
 
         {/* Load More Button */}
         <div className="load-more-buttons">
@@ -2072,6 +2077,74 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paywall Modal */}
+      {showPaywall && (
+        <div className="paywall-overlay" onClick={() => setShowPaywall(false)}>
+          <div className="paywall-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="paywall-close" onClick={() => setShowPaywall(false)}>×</button>
+            <div className="paywall-icon">🔒</div>
+            <h3 className="paywall-title">Verified Reviews</h3>
+            <p className="paywall-text">
+              Leaving verified reviews is a premium feature. Upgrade to share your verified experience with this candidate.
+            </p>
+            <button className="paywall-btn">Upgrade Now</button>
+          </div>
+        </div>
+      )}
+
+      {/* Leave a Review Modal */}
+      {showReviewModal && (
+        <div className="review-modal-overlay" onClick={() => setShowReviewModal(false)}>
+          <div className="review-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="review-modal-close" onClick={() => setShowReviewModal(false)}>×</button>
+            <h3 className="review-modal-title">Leave a Review</h3>
+            <div className="review-modal-rating">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span
+                  key={star}
+                  className={`review-star ${reviewRating >= star ? 'filled' : ''}`}
+                  onClick={() => setReviewRating(star)}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+            <textarea
+              className="review-modal-textarea"
+              placeholder="Share your experience..."
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+            />
+            <button
+              className="review-modal-submit"
+              onClick={() => {
+                if (reviewText.trim() && reviewRating > 0) {
+                  const newReview = {
+                    id: `nom-${Date.now()}`,
+                    user: {
+                      username: 'You',
+                      avatar: 'https://i.pravatar.cc/40?img=68',
+                      party: null,
+                    },
+                    text: reviewText,
+                    rating: reviewRating,
+                    timestamp: 'Just now',
+                    media: null,
+                    isPaid: false,
+                  }
+                  setCommunityReviews([newReview, ...communityReviews])
+                }
+                setShowReviewModal(false)
+                setReviewText('')
+                setReviewRating(0)
+              }}
+            >
+              Submit Review
+            </button>
           </div>
         </div>
       )}

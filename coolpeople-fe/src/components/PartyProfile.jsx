@@ -167,7 +167,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
 
   // Get party testimonials (empty for new parties)
   const partyVerifiedTestimonials = party.testimonials?.cpVerified || (isNewParty ? [] : paidMemberTestimonials)
-  const partyCommunityTestimonials = party.testimonials?.community || (isNewParty ? [] : regularMemberTestimonials)
+  const initialCommunityTestimonials = party.testimonials?.community || (isNewParty ? [] : regularMemberTestimonials)
 
   // Build race data from party - for new parties, only Best Party with baseline stats
   const partyRaceData = isNewParty ? {
@@ -194,6 +194,14 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [showRacesModal, setShowRacesModal] = useState(false)
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewRating, setReviewRating] = useState(0)
+  const [communityTestimonials, setCommunityTestimonials] = useState(initialCommunityTestimonials)
+  const [respondingTo, setRespondingTo] = useState(null)
+  const [responseText, setResponseText] = useState('')
+  const [reviewResponses, setReviewResponses] = useState({})
 
   // Mock data for stat modals
   const mockPartyMembers = [
@@ -1037,12 +1045,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           )}
 
           {/* Leave a Verified Review link - always gradient for verified section */}
-          <button className="leave-review-link verified">
+          <button className="leave-review-link verified" onClick={() => setShowPaywall(true)}>
             Leave a Verified Review
           </button>
 
           {/* Community Members Section Header - hide for new parties with no reviews */}
-          {partyCommunityTestimonials.length > 0 && (
+          {communityTestimonials.length > 0 && (
             <>
           <div className="cp-section-header">
             <div className="cp-divider-section community">
@@ -1058,11 +1066,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           </div>
 
           {/* Regular Member Testimonials */}
-          {partyCommunityTestimonials.map((testimonial) => (
+          {communityTestimonials.map((testimonial) => (
             <div
               key={testimonial.id}
-              className="member-item"
-              onClick={() => onMemberClick?.(testimonial.user)}
+              className="member-item clickable"
+              onClick={() => setRespondingTo(testimonial)}
             >
               <div className="member-header">
                 <div className="member-user">
@@ -1097,14 +1105,27 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   {renderStars(testimonial.rating)}
                 </div>
               )}
+
+              {/* Display response if exists */}
+              {reviewResponses[testimonial.id] && (
+                <>
+                  <div className="member-response">
+                    <div className="response-header">
+                      <img src={party.avatar} alt={party.name} className="response-avatar" />
+                      <span className="response-author">{party.name}</span>
+                    </div>
+                    <p className="response-text">{reviewResponses[testimonial.id]}</p>
+                  </div>
+                </>
+              )}
             </div>
           ))}
           </>
           )}
 
           {/* Leave a Review - for community reviews */}
-          {partyCommunityTestimonials.length > 0 && (
-            <p className="leave-review-text">Leave a Review</p>
+          {communityTestimonials.length > 0 && (
+            <p className="leave-review-text" onClick={() => setShowReviewModal(true)} style={{ cursor: 'pointer' }}>Leave a Review</p>
           )}
         </div>
 
@@ -1473,6 +1494,133 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paywall Modal */}
+      {showPaywall && (
+        <div className="paywall-overlay" onClick={() => setShowPaywall(false)}>
+          <div className="paywall-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="paywall-close" onClick={() => setShowPaywall(false)}>×</button>
+            <div className="paywall-icon">🔒</div>
+            <h3 className="paywall-title">Verified Reviews</h3>
+            <p className="paywall-text">
+              Leaving verified reviews is a premium feature. Upgrade to share your verified experience with this party.
+            </p>
+            <button className="paywall-btn">Upgrade Now</button>
+          </div>
+        </div>
+      )}
+
+      {/* Leave a Review Modal */}
+      {showReviewModal && (
+        <div className="review-modal-overlay" onClick={() => setShowReviewModal(false)}>
+          <div className="review-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="review-modal-close" onClick={() => setShowReviewModal(false)}>×</button>
+            <h3 className="review-modal-title">Leave a Review</h3>
+            <div className="review-modal-rating">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span
+                  key={star}
+                  className={`review-star ${reviewRating >= star ? 'filled' : ''}`}
+                  onClick={() => setReviewRating(star)}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+            <textarea
+              className="review-modal-textarea"
+              placeholder="Share your experience..."
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+            />
+            <button
+              className="review-modal-submit"
+              onClick={() => {
+                if (reviewText.trim() && reviewRating > 0) {
+                  const newReview = {
+                    id: `member-${Date.now()}`,
+                    user: {
+                      username: 'You',
+                      avatar: 'https://i.pravatar.cc/40?img=68',
+                      party: null,
+                    },
+                    text: reviewText,
+                    rating: reviewRating,
+                    timestamp: 'Just now',
+                    media: null,
+                  }
+                  setCommunityTestimonials([newReview, ...communityTestimonials])
+                }
+                setShowReviewModal(false)
+                setReviewText('')
+                setReviewRating(0)
+              }}
+            >
+              Submit Review
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Response Modal for Community Reviews */}
+      {respondingTo && (
+        <div className="response-modal-overlay" onClick={() => { setRespondingTo(null); setResponseText(''); }}>
+          <div className="response-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="response-modal-header">
+              <button className="response-close-btn" onClick={() => { setRespondingTo(null); setResponseText(''); }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+              <h3>Respond to Review</h3>
+              <button
+                className="response-post-btn"
+                disabled={!responseText.trim()}
+                onClick={() => {
+                  setReviewResponses(prev => ({
+                    ...prev,
+                    [respondingTo.id]: responseText
+                  }))
+                  setRespondingTo(null)
+                  setResponseText('')
+                }}
+              >
+                Post
+              </button>
+            </div>
+
+            {/* Original Review */}
+            <div className="response-original-review">
+              <div className="response-review-header">
+                <img
+                  src={respondingTo.user.avatar}
+                  alt={respondingTo.user.username}
+                  className="response-reviewer-avatar"
+                />
+                <span className="response-reviewer-name">{respondingTo.user.username}</span>
+                <span className="response-review-time">{respondingTo.timestamp}</span>
+              </div>
+              {respondingTo.text && (
+                <p className="response-review-text">{respondingTo.text}</p>
+              )}
+              <div className="response-review-rating">
+                {renderStars(respondingTo.rating)}
+              </div>
+            </div>
+
+            {/* Response Input */}
+            <div className="response-input-container">
+              <textarea
+                className="response-textarea"
+                placeholder="Write your response..."
+                value={responseText}
+                onChange={(e) => setResponseText(e.target.value)}
+                autoFocus
+              />
             </div>
           </div>
         </div>
