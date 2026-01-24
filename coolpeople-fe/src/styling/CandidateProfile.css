@@ -106,6 +106,10 @@
   font-size: 17px;
   font-weight: 400;
   line-height: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #FFFFFF;
 }
 
@@ -195,6 +199,28 @@
 
 .profile-action-btn:hover {
   background: #5a5a5a;
+}
+
+.profile-action-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-action-icon svg {
+  color: #888888;
+  transition: color 0.2s ease;
+}
+
+.profile-action-icon:hover svg {
+  color: #FFFFFF;
 }
 
 .profile-action-btn.following {
@@ -482,8 +508,8 @@
 }
 
 .stat-tier-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .cp-card .points-mini {
