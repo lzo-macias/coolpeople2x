@@ -63,7 +63,7 @@ const availableTags = [
   'Tech', 'Entrepreneurship', 'Finance', 'Networking'
 ]
 
-function EditBio({ profileData: passedProfileData, onSave }) {
+function EditBio({ profileData: passedProfileData, onSave, initialSection = null }) {
   // Convert passed profileData (from CandidateProfile format) to EditBio format
   const getInitialData = (data) => ({
     viewsOnIce: data?.viewsOnIce?.score ?? null,

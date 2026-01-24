@@ -5,12 +5,12 @@ import EditBio from './EditBio'
 
 // CoolPeople Tier System
 const CP_TIERS = [
-  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '🥉' },
-  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '🥈' },
-  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '🥇' },
-  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '💎' },
-  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '👑' },
-  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '🔥' },
+  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '/icons/tiers/dark/bronze.svg' },
+  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '/icons/tiers/dark/silver.svg' },
+  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '/icons/tiers/dark/gold.svg' },
+  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '/icons/tiers/dark/diamond.svg' },
+  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '/icons/tiers/dark/master.svg' },
+  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '/icons/tiers/dark/challenger.svg' },
 ]
 
 const getCurrentTier = (points) => {
@@ -251,7 +251,7 @@ function ParticipantProfile({
                           background: `linear-gradient(135deg, ${currentTier.color}33, ${currentTier.color}22)`,
                           borderColor: `${currentTier.color}4D`
                         }}>
-                          {currentTier.icon}
+                          <img src={currentTier.icon} alt={currentTier.name} className="tier-svg-icon" />
                         </div>
                         <div className="level-info">
                           <h3 style={{ color: currentTier.color }}>{currentTier.name.toUpperCase()}</h3>
@@ -280,7 +280,7 @@ function ParticipantProfile({
                         ))}
                       </div>
                       <div className="cp-total-mini">
-                        <span className="tier-icon-mini" style={{ color: currentTier.color }}>{currentTier.icon}</span>
+                        <img src={currentTier.icon} alt={currentTier.name} className="tier-icon-mini" />
                         <span className="points-mini">{cpPoints.toLocaleString()}</span>
                         <span className="cp-label-mini">CP</span>
                         <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
@@ -488,10 +488,10 @@ function ParticipantProfile({
                     <div className="progress-section">
                       <div className="progress-header">
                         <div className="current" style={{ color: currentTier.color }}>
-                          <span className="icon">{currentTier.icon}</span>
+                          <img src={currentTier.icon} alt={currentTier.name} className="progress-tier-icon" />
                           {currentTier.name}
                         </div>
-                        <div className="next">{pointsToNext.toLocaleString()} CP to {nextTier.icon} {nextTier.name}</div>
+                        <div className="next">{pointsToNext.toLocaleString()} CP to <img src={nextTier.icon} alt={nextTier.name} className="progress-tier-icon" /> {nextTier.name}</div>
                       </div>
                       <div className="progress-bar-wrap">
                         <div

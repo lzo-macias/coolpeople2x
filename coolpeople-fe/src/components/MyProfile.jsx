@@ -141,12 +141,12 @@ const myProfileData = {
 
 // Tier configuration for CP points
 const CP_TIERS = {
-  bronze: { name: 'Bronze', min: 0, max: 999, color: '#CD7F32' },
-  silver: { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0' },
-  gold: { name: 'Gold', min: 2500, max: 4999, color: '#FFD700' },
-  diamond: { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF' },
-  challenger: { name: 'Challenger', min: 10000, max: 24999, color: '#FF6B6B' },
-  master: { name: 'Master', min: 25000, max: Infinity, color: '#9B59B6' },
+  bronze: { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '/icons/tiers/dark/bronze.svg' },
+  silver: { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '/icons/tiers/dark/silver.svg' },
+  gold: { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '/icons/tiers/dark/gold.svg' },
+  diamond: { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '/icons/tiers/dark/diamond.svg' },
+  challenger: { name: 'Challenger', min: 10000, max: 24999, color: '#FF6B6B', icon: '/icons/tiers/dark/challenger.svg' },
+  master: { name: 'Master', min: 25000, max: Infinity, color: '#9B59B6', icon: '/icons/tiers/dark/master.svg' },
 }
 
 // Calculate starter points based on engagement (50-200 range)
@@ -299,7 +299,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
               )}
               {hasOptedIn && (
                 <div className="my-profile-tier-badge">
-                  <span className="tier-icon" style={{ color: CP_TIERS.bronze.color }}>◆</span>
+                  <img src={CP_TIERS.bronze.icon} alt={CP_TIERS.bronze.name} className="tier-icon" />
                   <span className="tier-name">{CP_TIERS.bronze.name}</span>
                   <span className="tier-points">{starterPoints} CP</span>
                 </div>

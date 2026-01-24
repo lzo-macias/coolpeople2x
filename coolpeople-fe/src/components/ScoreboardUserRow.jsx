@@ -57,10 +57,8 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
       {/* Score section - stacked vertically */}
       <div className="user-score-section">
         <div className="user-score-row">
-          {tier.svgPath && (
-            <svg className="user-tier-icon" viewBox="0 0 24 24" fill={tier.color} title={tier.name}>
-              <path d={tier.svgPath} />
-            </svg>
+          {tier.icon && (
+            <img src={tier.icon} alt={tier.name} className="user-tier-icon" />
           )}
           <span className="user-score">{user.score.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
         </div>

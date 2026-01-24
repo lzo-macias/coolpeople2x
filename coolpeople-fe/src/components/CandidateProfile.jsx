@@ -124,6 +124,20 @@ const paidNominations = [
     isPaid: true,
     tag: 'humour',
   },
+  {
+    id: 'nom-4',
+    user: {
+      username: 'alex.jones',
+      avatar: 'https://i.pravatar.cc/40?img=52',
+      party: 'Independent',
+    },
+    text: 'Great candidate, always shows up for the community events',
+    rating: 5,
+    timestamp: '3 days ago',
+    media: null,
+    isPaid: true,
+    tag: 'leadership',
+  },
 ]
 
 // Initial profile content sections data (for established profiles)
@@ -404,7 +418,40 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [selectedPeriod, setSelectedPeriod] = useState('1M')
+  const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
   const [cpCardExpanded, setCpCardExpanded] = useState(false)
+  const [showFollowingModal, setShowFollowingModal] = useState(false)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [showRacesModal, setShowRacesModal] = useState(false)
+
+  // Mock data for stat modals
+  const mockFollowing = [
+    { id: 'fol-u1', username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: 'Democrat' },
+    { id: 'fol-u2', username: 'hi.its.mario', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Republican' },
+    { id: 'fol-u3', username: 'lolo.macias', avatar: 'https://i.pravatar.cc/40?img=44', party: 'The Pink Lady' },
+    { id: 'fol-u4', username: 'alex.jones', avatar: 'https://i.pravatar.cc/40?img=52', party: null },
+    { id: 'fol-u5', username: 'maya.2024', avatar: 'https://i.pravatar.cc/40?img=55', party: 'Democrat' },
+  ]
+
+  const mockFollowers = [
+    { id: 'fol-1', username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=60', party: null, isFollowing: true },
+    { id: 'fol-2', username: 'community.voice', avatar: 'https://i.pravatar.cc/40?img=61', party: 'Democrat', isFollowing: false },
+    { id: 'fol-3', username: 'alex.votes', avatar: 'https://i.pravatar.cc/40?img=62', party: 'Republican', isFollowing: true },
+    { id: 'fol-4', username: 'pinklady.official', avatar: 'https://i.pravatar.cc/40?img=47', party: 'The Pink Lady', isFollowing: false },
+    { id: 'fol-5', username: 'foodie.voter', avatar: 'https://i.pravatar.cc/40?img=36', party: null, isFollowing: false },
+    { id: 'fol-6', username: 'nyc.politics', avatar: 'https://i.pravatar.cc/40?img=38', party: 'Democrat', isFollowing: true },
+  ]
+
+  const mockUserRaces = [
+    { id: 'race-won-1', name: 'Brooklyn District 5 Primary', position: 1, percentile: null, isWon: true, isRunning: true, isFollowing: false },
+    { id: 'race-1', name: 'NYC Mayor 2024', position: 3, percentile: '2.1%', isWon: false, isRunning: true, isFollowing: false, color: '#FF2A55' },
+    { id: 'race-2', name: 'City Council District 5', position: 7, percentile: '5.3%', isWon: false, isRunning: true, isFollowing: false, color: '#00F2EA' },
+    { id: 'race-3', name: 'State Assembly', position: 12, percentile: '8.7%', isWon: false, isRunning: true, isFollowing: false, color: '#FFB800' },
+    { id: 'race-4', name: 'Public Advocate', position: null, percentile: null, isWon: false, isRunning: false, isFollowing: true },
+    { id: 'race-5', name: 'Borough President', position: null, percentile: null, isWon: false, isRunning: false, isFollowing: true },
+  ]
+
+  const [followersState, setFollowersState] = useState(mockFollowers)
 
   // Convert posts to reel format for SinglePostView with variable engagement scores
   const trends = ['up', 'down', 'stable']
@@ -724,15 +771,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
           <div className="profile-right">
             <div className="profile-stats-grid">
-              <div className="stat-item">
-                <span className="stat-number">{candidate.nominations}</span>
-                <span className="stat-label">Nominations</span>
+              <div className="stat-item clickable" onClick={() => setShowFollowingModal(true)}>
+                <span className="stat-number">1M</span>
+                <span className="stat-label">Following</span>
               </div>
-              <div className="stat-item">
+              <div className="stat-item clickable" onClick={() => setShowFollowersModal(true)}>
                 <span className="stat-number">{candidate.followers}</span>
                 <span className="stat-label">Followers</span>
               </div>
-              <div className="stat-item">
+              <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
                 <span className="stat-number">{candidate.races?.length || '8'}</span>
                 <span className="stat-label">Races</span>
               </div>
@@ -1246,7 +1293,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 </div>
               </div>
             </div>
-            <span className="cp-section-label verified">reviews</span>
+            <span className="cp-section-label verified">VERIFIED REVIEWS</span>
           </div>
 
           {/* Starter Profile - No Reviews Yet */}
@@ -1265,7 +1312,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               </div>
 
               {/* Paid Nominations */}
-              {paidNominations.map((nomination, index) => (
+              {(showAllVerifiedReviews ? paidNominations : paidNominations.slice(0, 3)).map((nomination, index) => (
             <div key={nomination.id} className="nomination-item paid">
               <div className="nomination-header">
                 <div className="nomination-user">
@@ -1304,6 +1351,45 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               )}
             </div>
           ))}
+
+              {/* Load More / Load Less Verified Reviews */}
+              {paidNominations.length > 3 && (
+                <div
+                  className="load-more-buttons verified-reviews"
+                  onClick={() => setShowAllVerifiedReviews(!showAllVerifiedReviews)}
+                >
+                  <button className="load-more-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      {showAllVerifiedReviews ? (
+                        <>
+                          <polyline points="18 18 12 12 6 18"></polyline>
+                          <polyline points="18 12 12 6 6 12"></polyline>
+                        </>
+                      ) : (
+                        <>
+                          <polyline points="6 6 12 12 18 6"></polyline>
+                          <polyline points="6 12 12 18 18 12"></polyline>
+                        </>
+                      )}
+                    </svg>
+                  </button>
+                  <button className="load-more-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      {showAllVerifiedReviews ? (
+                        <>
+                          <polyline points="18 18 12 12 6 18"></polyline>
+                          <polyline points="18 12 12 6 6 12"></polyline>
+                        </>
+                      ) : (
+                        <>
+                          <polyline points="6 6 12 12 18 6"></polyline>
+                          <polyline points="6 12 12 18 18 12"></polyline>
+                        </>
+                      )}
+                    </svg>
+                  </button>
+                </div>
+              )}
 
               {/* Leave a Verified Review link - below paid nominations, if local */}
               {isLocalToCandidate && (
@@ -1836,6 +1922,158 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onOpenComments={onOpenComments}
           profileName={candidate.username}
         />
+      )}
+
+      {/* Following Modal */}
+      {showFollowingModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowFollowingModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Following</h3>
+              <button className="stat-modal-close" onClick={() => setShowFollowingModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {mockFollowing.map((user) => (
+                <div
+                  key={user.id}
+                  className="stat-modal-row clickable"
+                  onClick={() => { setShowFollowingModal(false); onUserClick?.(user); }}
+                >
+                  <div className="stat-row-user">
+                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(user.party) }}>
+                      <img src={user.avatar} alt={user.username} className="stat-row-avatar" />
+                    </div>
+                    <div className="stat-row-info">
+                      <span className="stat-row-username">{user.username}</span>
+                      <span className="stat-row-meta">{user.party || 'Independent'}</span>
+                    </div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Followers Modal */}
+      {showFollowersModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowFollowersModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Followers</h3>
+              <button className="stat-modal-close" onClick={() => setShowFollowersModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {followersState.map((follower) => (
+                <div key={follower.id} className="stat-modal-row">
+                  <div
+                    className="stat-row-user clickable"
+                    onClick={() => { setShowFollowersModal(false); onUserClick?.(follower); }}
+                  >
+                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(follower.party) }}>
+                      <img src={follower.avatar} alt={follower.username} className="stat-row-avatar" />
+                    </div>
+                    <span className="stat-row-username">{follower.username}</span>
+                  </div>
+                  <button
+                    className={`stat-row-follow-btn ${follower.isFollowing ? 'following' : ''}`}
+                    onClick={() => {
+                      setFollowersState(prev => prev.map(f =>
+                        f.id === follower.id ? { ...f, isFollowing: !f.isFollowing } : f
+                      ))
+                    }}
+                  >
+                    {follower.isFollowing ? 'following' : 'follow'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Races Modal */}
+      {showRacesModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowRacesModal(false)}>
+          <div className="stat-modal races" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Races</h3>
+              <button className="stat-modal-close" onClick={() => setShowRacesModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {/* Won Races - at the top, green */}
+              {mockUserRaces.filter(r => r.isWon).map((race) => (
+                <div key={race.id} className="stat-modal-row race-row won">
+                  <div className="race-row-info">
+                    <div className="race-row-indicator won"></div>
+                    <span className="race-row-name">{race.name}</span>
+                  </div>
+                  <span className="race-row-position won">Winner</span>
+                </div>
+              ))}
+
+              {/* Running Races - color coded */}
+              {mockUserRaces.filter(r => r.isRunning && !r.isWon).map((race) => (
+                <div
+                  key={race.id}
+                  className="stat-modal-row race-row clickable"
+                  onClick={() => { setShowRacesModal(false); /* TODO: navigate to race */ }}
+                >
+                  <div className="race-row-info">
+                    <div className="race-row-indicator" style={{ backgroundColor: race.color }}></div>
+                    <span className="race-row-name">{race.name}</span>
+                  </div>
+                  <div className="race-row-stats">
+                    <span className="race-row-position">#{race.position}</span>
+                    {race.percentile && <span className="race-row-percentile">{race.percentile}</span>}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </div>
+                </div>
+              ))}
+
+              {/* Following Races - only for own profile */}
+              {isOwnProfile && mockUserRaces.filter(r => r.isFollowing && !r.isRunning).length > 0 && (
+                <>
+                  <div className="race-section-divider">
+                    <span>Following</span>
+                  </div>
+                  {mockUserRaces.filter(r => r.isFollowing && !r.isRunning).map((race) => (
+                    <div
+                      key={race.id}
+                      className="stat-modal-row race-row clickable"
+                      onClick={() => { setShowRacesModal(false); /* TODO: navigate to race */ }}
+                    >
+                      <div className="race-row-info">
+                        <div className="race-row-indicator following"></div>
+                        <span className="race-row-name">{race.name}</span>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Copied Toast */}

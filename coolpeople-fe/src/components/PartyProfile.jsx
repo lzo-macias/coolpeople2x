@@ -6,12 +6,12 @@ import SinglePostView from './SinglePostView'
 
 // CoolPeople Tier System
 const CP_TIERS = [
-  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '🥉' },
-  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '🥈' },
-  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '🥇' },
-  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '💎' },
-  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '👑' },
-  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '🔥' },
+  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '/icons/tiers/dark/bronze.svg' },
+  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '/icons/tiers/dark/silver.svg' },
+  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '/icons/tiers/dark/gold.svg' },
+  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '/icons/tiers/dark/diamond.svg' },
+  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '/icons/tiers/dark/master.svg' },
+  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '/icons/tiers/dark/challenger.svg' },
 ]
 
 const getCurrentTier = (points) => {
@@ -103,6 +103,20 @@ const paidMemberTestimonials = [
     isPaid: true,
     tag: 'humour',
   },
+  {
+    id: 'member-paid-4',
+    user: {
+      username: 'alex.jones',
+      avatar: 'https://i.pravatar.cc/40?img=52',
+      party: 'The Pink Lady',
+    },
+    text: 'This party really cares about the community and shows up when it matters',
+    rating: 5,
+    timestamp: '3 days ago',
+    media: null,
+    isPaid: true,
+    tag: 'leadership',
+  },
 ]
 
 // Regular member testimonials (community reviews)
@@ -137,9 +151,32 @@ const regularMemberTestimonials = [
   },
 ]
 
-function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
+function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false }) {
   // Merge passed party with defaults for missing properties
   const party = { ...mockParty, ...passedParty }
+
+  // Check if this is a new party (just created)
+  // Detect new party by flag, by having baseline stats, or by being a user party without established data
+  const isNewParty = party.isNewParty ||
+    (party.stats && party.stats.members === 1 && party.stats.followers === 0) ||
+    (party.testimonials && party.testimonials.cpVerified?.length === 0 && party.testimonials.community?.length === 0) ||
+    (party.isUserParty && !party.raceData) // User's own party without race data is new
+
+  // Get CP points from party stats (for new parties) or use legacy cpPoints
+  const partyCpPoints = party.stats?.cpPoints ?? party.cpPoints ?? 100
+
+  // Get party testimonials (empty for new parties)
+  const partyVerifiedTestimonials = party.testimonials?.cpVerified || (isNewParty ? [] : paidMemberTestimonials)
+  const partyCommunityTestimonials = party.testimonials?.community || (isNewParty ? [] : regularMemberTestimonials)
+
+  // Build race data from party - for new parties, only Best Party with baseline stats
+  const partyRaceData = isNewParty ? {
+    'Best Party': {
+      cpPoints: partyCpPoints,
+      change: party.stats?.change || '+0.00',
+      tier: 'Bronze'
+    }
+  } : (party.raceData || raceData)
 
   const [activeTab, setActiveTab] = useState('bio')
   const [selectedRace, setSelectedRace] = useState('Best Party') // currently selected race filter
@@ -148,10 +185,40 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
   const [hasJoined, setHasJoined] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showEditBio, setShowEditBio] = useState(false)
+  const [editInitialSection, setEditInitialSection] = useState(null)
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [selectedPeriod, setSelectedPeriod] = useState('1M')
   const [cpCardExpanded, setCpCardExpanded] = useState(false)
+  const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [showRacesModal, setShowRacesModal] = useState(false)
+
+  // Mock data for stat modals
+  const mockPartyMembers = [
+    { id: 'mem-1', username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: party.name, role: 'Admin', joinedAt: '2 months ago' },
+    { id: 'mem-2', username: 'hi.its.mario', avatar: 'https://i.pravatar.cc/40?img=33', party: party.name, role: 'Moderator', joinedAt: '1 month ago' },
+    { id: 'mem-3', username: 'lolo.macias', avatar: 'https://i.pravatar.cc/40?img=44', party: party.name, role: 'Member', joinedAt: '3 weeks ago' },
+    { id: 'mem-4', username: 'alex.jones', avatar: 'https://i.pravatar.cc/40?img=52', party: party.name, role: 'Member', joinedAt: '2 weeks ago' },
+    { id: 'mem-5', username: 'maya.2024', avatar: 'https://i.pravatar.cc/40?img=55', party: party.name, role: 'Member', joinedAt: '1 week ago' },
+  ]
+
+  const mockPartyFollowers = [
+    { id: 'pfol-1', username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=60', party: null, isFollowing: true },
+    { id: 'pfol-2', username: 'community.voice', avatar: 'https://i.pravatar.cc/40?img=61', party: 'Democrat', isFollowing: false },
+    { id: 'pfol-3', username: 'alex.votes', avatar: 'https://i.pravatar.cc/40?img=62', party: 'Republican', isFollowing: true },
+    { id: 'pfol-4', username: 'nyc.politics', avatar: 'https://i.pravatar.cc/40?img=38', party: 'Democrat', isFollowing: false },
+  ]
+
+  const [partyFollowersState, setPartyFollowersState] = useState(mockPartyFollowers)
+
+  const mockPartyRaces = [
+    { id: 'prace-won-1', name: 'Best Party Brooklyn 2023', position: 1, percentile: null, isWon: true, isRunning: true, isFollowing: false },
+    { id: 'prace-1', name: 'Best Party', position: 2, percentile: '1.5%', isWon: false, isRunning: true, isFollowing: false, color: '#FF2A55' },
+    { id: 'prace-2', name: 'Best in Brooklyn', position: 5, percentile: '3.2%', isWon: false, isRunning: true, isFollowing: false, color: '#00F2EA' },
+    { id: 'prace-3', name: 'Best in Queens', position: 8, percentile: '6.1%', isWon: false, isRunning: true, isFollowing: false, color: '#FFB800' },
+  ]
 
   // Get all posts for this party (either passed or empty)
   const allPosts = party.posts || []
@@ -162,8 +229,20 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
     setShowSinglePost(true)
   }
 
-  // Profile sections state for icebreakers (with mock data)
-  const [profileSections, setProfileSections] = useState({
+  // Profile sections state for icebreakers
+  // New parties start with empty icebreakers, established parties have content
+  const defaultIcebreakers = isNewParty ? {
+    viewsOnIce: null,
+    viewsOnTransRights: null,
+    viewsOnHealthcare: null,
+    viewsOnGunControl: null,
+    hillToDieOn: null,
+    topicsThatEnergize: { title: 'Topics that energize us', tags: [] },
+    accomplishment: null,
+    guessWhichTrue: { title: 'Guess Which One is True', options: ['', '', ''], correctIndex: null },
+    customWritten: [],
+    customSliders: [],
+  } : {
     viewsOnIce: null,
     viewsOnTransRights: null,
     viewsOnHealthcare: null,
@@ -185,7 +264,9 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
       { prompt: 'My views on healthcare', value: 9 },
       { prompt: 'My views on gun control', value: 2 },
     ],
-  })
+  }
+
+  const [profileSections, setProfileSections] = useState(party.icebreakers || defaultIcebreakers)
 
   const [draggedItem, setDraggedItem] = useState(null)
   const [dragOverItem, setDragOverItem] = useState(null)
@@ -391,13 +472,23 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
 
           <div className="profile-right">
             <div className="profile-stats-grid">
-              <div className="stat-item">
-                <span className="stat-number">{party.members}</span>
+              <div className="stat-item clickable" onClick={() => setShowMembersModal(true)}>
+                <span className="stat-number">{isNewParty ? (party.stats?.members || 1) : party.members}</span>
                 <span className="stat-label">Members</span>
               </div>
-              <div className="stat-item">
-                <span className="stat-number">{party.followers}</span>
+              <div className="stat-item clickable" onClick={() => setShowFollowersModal(true)}>
+                <span className="stat-number">{isNewParty ? (party.stats?.followers || 0) : party.followers}</span>
                 <span className="stat-label">Followers</span>
+              </div>
+              <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
+                <span className="stat-number">{mockPartyRaces.filter(r => r.isRunning).length}</span>
+                <span className="stat-label">Races</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">
+                  <img src={getCurrentTier(partyCpPoints).icon} alt={getCurrentTier(partyCpPoints).name} className="stat-tier-icon" />
+                </span>
+                <span className="stat-label">{getCurrentTier(partyCpPoints).name}</span>
               </div>
             </div>
             <p className="profile-bio">{party.bio || ''}</p>
@@ -406,24 +497,50 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
 
         {/* Action Buttons */}
         <div className="profile-actions">
-          <button className="profile-action-btn join" onClick={() => setHasJoined(!hasJoined)}>
-            {hasJoined ? 'joined' : 'join'}
-          </button>
-          {/* <button className="profile-action-btn message">message</button> */}
-          <button
-            className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
-            onClick={() => setIsFollowing(!isFollowing)}
-          >
-            {isFollowing ? 'following' : 'follow'}
-          </button>
-          <button className="profile-action-icon invite">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="9" cy="7" r="4" />
-              <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-              <line x1="19" y1="8" x2="19" y2="14" />
-              <line x1="16" y1="11" x2="22" y2="11" />
-            </svg>
-          </button>
+          {isOwnParty ? (
+            // Owner with edit permissions
+            <>
+              <button className="profile-action-btn share">share</button>
+              <button className="profile-action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
+              <button className="profile-action-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </button>
+            </>
+          ) : hasJoined ? (
+            // Member without edit permissions
+            <>
+              <button className="profile-action-btn promotion">ask for promotion</button>
+              <button className="profile-action-btn share">share</button>
+              <button className="profile-action-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </button>
+            </>
+          ) : (
+            // Not a member
+            <>
+              <button className="profile-action-btn join" onClick={() => setHasJoined(true)}>
+                join
+              </button>
+              <button
+                className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
+                onClick={() => setIsFollowing(!isFollowing)}
+              >
+                {isFollowing ? 'following' : 'follow'}
+              </button>
+              <button className="profile-action-icon invite">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                  <line x1="19" y1="8" x2="19" y2="14" />
+                  <line x1="16" y1="11" x2="22" y2="11" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -495,8 +612,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
 
         {/* CoolPeople Points Card */}
         {(() => {
-          // Get race-specific data
-          const currentRaceData = raceData[selectedRace] || raceData['Best Party']
+          // Get race-specific data - use party data for new parties
+          const currentRaceData = partyRaceData[selectedRace] || partyRaceData['Best Party']
           const cpPoints = currentRaceData.cpPoints
           const raceChange = currentRaceData.change
           const currentTier = getCurrentTier(cpPoints)
@@ -525,7 +642,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
                       background: `linear-gradient(135deg, ${currentTier.color}33, ${currentTier.color}22)`,
                       borderColor: `${currentTier.color}4D`
                     }}>
-                      {currentTier.icon}
+                      <img src={currentTier.icon} alt={currentTier.name} className="tier-svg-icon" />
                     </div>
                     <div className="level-info">
                       <h3 style={{ color: currentTier.color }}>{currentTier.name.toUpperCase()}</h3>
@@ -554,7 +671,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
                     ))}
                   </div>
                   <div className="cp-total-mini">
-                    <span className="tier-icon-mini" style={{ color: currentTier.color }}>{currentTier.icon}</span>
+                    <img src={currentTier.icon} alt={currentTier.name} className="tier-icon-mini" />
                     <span className="points-mini">{cpPoints.toLocaleString()}</span>
                     <span className="cp-label-mini">CP</span>
                     <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
@@ -762,10 +879,10 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
                 <div className="progress-section">
                   <div className="progress-header">
                     <div className="current" style={{ color: currentTier.color }}>
-                      <span className="icon">{currentTier.icon}</span>
+                      <img src={currentTier.icon} alt={currentTier.name} className="progress-tier-icon" />
                       {currentTier.name}
                     </div>
-                    <div className="next">{pointsToNext.toLocaleString()} CP to {nextTier.icon} {nextTier.name}</div>
+                    <div className="next">{pointsToNext.toLocaleString()} CP to <img src={nextTier.icon} alt={nextTier.name} className="progress-tier-icon" /> {nextTier.name}</div>
                   </div>
                   <div className="progress-bar-wrap">
                     <div
@@ -817,20 +934,27 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
                 </div>
               </div>
             </div>
-            <span className="cp-section-label verified">Verified Members</span>
+            <span className="cp-section-label verified">VERIFIED REVIEWS</span>
           </div>
 
-          <div className="chart-rating-badge below-verified">
-            <span className="rating-value">3.2</span>
-            <div className="rating-star-circle">
-              <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
+          {partyVerifiedTestimonials.length > 0 && (
+            <div className="chart-rating-badge below-verified">
+              <span className="rating-value">3.2</span>
+              <div className="rating-star-circle">
+                <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Paid Member Testimonials */}
-          {paidMemberTestimonials.map((testimonial) => (
+          {/* Testimonials - or empty state for new parties */}
+          {partyVerifiedTestimonials.length === 0 && (
+            <div className="empty-reviews-state">
+              <span className="empty-reviews-text">0 reviews yet</span>
+            </div>
+          )}
+          {partyVerifiedTestimonials.length > 0 && (showAllVerifiedReviews ? partyVerifiedTestimonials : partyVerifiedTestimonials.slice(0, 3)).map((testimonial) => (
             <div
               key={testimonial.id}
               className="member-item paid"
@@ -873,16 +997,68 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
             </div>
           ))}
 
-          {/* Community Members Section Header */}
+          {/* Load More / Load Less Verified Reviews */}
+          {partyVerifiedTestimonials.length > 3 && (
+            <div
+              className="load-more-buttons verified-reviews"
+              onClick={() => setShowAllVerifiedReviews(!showAllVerifiedReviews)}
+            >
+              <button className="load-more-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  {showAllVerifiedReviews ? (
+                    <>
+                      <polyline points="18 18 12 12 6 18"></polyline>
+                      <polyline points="18 12 12 6 6 12"></polyline>
+                    </>
+                  ) : (
+                    <>
+                      <polyline points="6 6 12 12 18 6"></polyline>
+                      <polyline points="6 12 12 18 18 12"></polyline>
+                    </>
+                  )}
+                </svg>
+              </button>
+              <button className="load-more-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  {showAllVerifiedReviews ? (
+                    <>
+                      <polyline points="18 18 12 12 6 18"></polyline>
+                      <polyline points="18 12 12 6 6 12"></polyline>
+                    </>
+                  ) : (
+                    <>
+                      <polyline points="6 6 12 12 18 6"></polyline>
+                      <polyline points="6 12 12 18 18 12"></polyline>
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Leave a Verified Review link - always gradient for verified section */}
+          <button className="leave-review-link verified">
+            Leave a Verified Review
+          </button>
+
+          {/* Community Members Section Header - hide for new parties with no reviews */}
+          {partyCommunityTestimonials.length > 0 && (
+            <>
           <div className="cp-section-header">
             <div className="cp-divider-section community">
               <div className="member-divider community"></div>
+              <div className="cp-badge community">
+                <div className="cp-badge-circle">
+                  <span className="cp-badge-c">C</span>
+                  <span className="cp-badge-p">P</span>
+                </div>
+              </div>
             </div>
-            <span className="cp-section-label community">Community Members</span>
+            <span className="cp-section-label community">Community Reviews</span>
           </div>
 
           {/* Regular Member Testimonials */}
-          {regularMemberTestimonials.map((testimonial) => (
+          {partyCommunityTestimonials.map((testimonial) => (
             <div
               key={testimonial.id}
               className="member-item"
@@ -923,6 +1099,13 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
               )}
             </div>
           ))}
+          </>
+          )}
+
+          {/* Leave a Review - for community reviews */}
+          {partyCommunityTestimonials.length > 0 && (
+            <p className="leave-review-text">Leave a Review</p>
+          )}
         </div>
 
         {/* Load More Button */}
@@ -942,10 +1125,24 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
         </div>
 
         {/* Profile Sections / Icebreakers */}
-        {getOrderedIcebreakers().length > 0 && (
+        {(getOrderedIcebreakers().length > 0 || isOwnParty) && (
           <div className="profile-sections">
             <div className="profile-sections-header">
               <span className="profile-sections-title">Icebreakers</span>
+              {isOwnParty && getOrderedIcebreakers().length > 0 && (
+                <button
+                  className="icebreakers-edit-btn"
+                  onClick={() => {
+                    setEditInitialSection('icebreakers')
+                    setShowEditBio(true)
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* Render icebreakers in drag-and-drop order */}
@@ -1102,6 +1299,19 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
 
               return null
             })}
+
+            {/* Add icebreakers button - always shown for owners */}
+            {isOwnParty && (
+              <button
+                className="add-icebreakers-link"
+                onClick={() => {
+                  setEditInitialSection('icebreakers')
+                  setShowEditBio(true)
+                }}
+              >
+                add icebreakers
+              </button>
+            )}
           </div>
         )}
         </>
@@ -1111,12 +1321,19 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
       {/* Edit Bio Overlay - for development */}
       {showEditBio && (
         <div className="edit-bio-overlay">
-          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
+          <button className="edit-bio-close" onClick={() => {
+            setShowEditBio(false)
+            setEditInitialSection(null)
+          }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
-          <EditBio profileData={profileSections} onSave={handleSaveProfile} />
+          <EditBio
+            profileData={profileSections}
+            onSave={handleSaveProfile}
+            initialSection={editInitialSection}
+          />
         </div>
       )}
 
@@ -1131,6 +1348,134 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments }) {
           onOpenComments={onOpenComments}
           profileName={party.name}
         />
+      )}
+
+      {/* Members Modal */}
+      {showMembersModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowMembersModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Members</h3>
+              <button className="stat-modal-close" onClick={() => setShowMembersModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {mockPartyMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="stat-modal-row clickable"
+                  onClick={() => { setShowMembersModal(false); onMemberClick?.(member); }}
+                >
+                  <div className="stat-row-user">
+                    <div className="stat-row-avatar-ring" style={{ borderColor: partyColor }}>
+                      <img src={member.avatar} alt={member.username} className="stat-row-avatar" />
+                    </div>
+                    <div className="stat-row-info">
+                      <span className="stat-row-username">{member.username}</span>
+                      <span className="stat-row-meta">{member.role} · {member.joinedAt}</span>
+                    </div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Followers Modal */}
+      {showFollowersModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowFollowersModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Followers</h3>
+              <button className="stat-modal-close" onClick={() => setShowFollowersModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {partyFollowersState.map((follower) => (
+                <div key={follower.id} className="stat-modal-row">
+                  <div
+                    className="stat-row-user clickable"
+                    onClick={() => { setShowFollowersModal(false); onMemberClick?.(follower); }}
+                  >
+                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(follower.party) }}>
+                      <img src={follower.avatar} alt={follower.username} className="stat-row-avatar" />
+                    </div>
+                    <span className="stat-row-username">{follower.username}</span>
+                  </div>
+                  <button
+                    className={`stat-row-follow-btn ${follower.isFollowing ? 'following' : ''}`}
+                    onClick={() => {
+                      setPartyFollowersState(prev => prev.map(f =>
+                        f.id === follower.id ? { ...f, isFollowing: !f.isFollowing } : f
+                      ))
+                    }}
+                  >
+                    {follower.isFollowing ? 'following' : 'follow'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Races Modal */}
+      {showRacesModal && (
+        <div className="stat-modal-overlay" onClick={() => setShowRacesModal(false)}>
+          <div className="stat-modal races" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Races</h3>
+              <button className="stat-modal-close" onClick={() => setShowRacesModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {/* Won Races - at the top, green */}
+              {mockPartyRaces.filter(r => r.isWon).map((race) => (
+                <div key={race.id} className="stat-modal-row race-row won">
+                  <div className="race-row-info">
+                    <div className="race-row-indicator won"></div>
+                    <span className="race-row-name">{race.name}</span>
+                  </div>
+                  <span className="race-row-position won">Winner</span>
+                </div>
+              ))}
+
+              {/* Running Races - color coded */}
+              {mockPartyRaces.filter(r => r.isRunning && !r.isWon).map((race) => (
+                <div
+                  key={race.id}
+                  className="stat-modal-row race-row clickable"
+                  onClick={() => { setShowRacesModal(false); /* TODO: navigate to race */ }}
+                >
+                  <div className="race-row-info">
+                    <div className="race-row-indicator" style={{ backgroundColor: race.color }}></div>
+                    <span className="race-row-name">{race.name}</span>
+                  </div>
+                  <div className="race-row-stats">
+                    <span className="race-row-position">#{race.position}</span>
+                    {race.percentile && <span className="race-row-percentile">{race.percentile}</span>}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

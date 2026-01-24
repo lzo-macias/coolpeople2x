@@ -32,7 +32,7 @@
 
 .party-profile .profile-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   gap: 10px;
 }
@@ -50,6 +50,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
+  padding-top: 16px;
 }
 
 .party-profile .profile-avatar-ring {
@@ -90,17 +91,19 @@
 .party-profile .profile-stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 50px;
+  gap: 16px 50px;
   text-align: center;
-  padding-right: 20px;
-  padding-top: 10px;
+}
+
+.party-profile .stat-tier-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .party-profile .profile-bio {
   font-size: 12px;
   color: #AAAAAA;
   margin: 34px 20px 0px 40px;
-  /* padding-top: 10px; */
   line-height: 1.4;
   text-align: left;
   align-self: flex-start;
@@ -117,6 +120,10 @@
   font-size: 17px;
   font-weight: 400;
   line-height: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #FFFFFF;
 }
 
@@ -186,6 +193,37 @@
 .party-profile .profile-action-btn.following {
   background: rgba(255, 255, 255, 0.1);
   color: #888888;
+}
+
+.party-profile .profile-action-btn.share {
+  background: #4a4a4a;
+}
+
+.party-profile .profile-action-btn.edit {
+  background: #4a4a4a;
+}
+
+.party-profile .profile-action-btn.promotion {
+  background: #4a4a4a;
+  font-size: 12px;
+}
+
+.party-profile .profile-action-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.party-profile .profile-action-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #777777;
 }
 
 .party-profile .profile-action-icon {
@@ -902,6 +940,30 @@
   flex-direction: column;
 }
 
+/* Empty reviews state for new parties */
+.party-profile .empty-reviews-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 8px 14px;
+  text-align: left;
+}
+
+.party-profile .empty-reviews-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #777777;
+  margin: 0;
+}
+
+.party-profile .empty-reviews-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
 .party-profile .member-item {
   padding: 14px;
   margin-bottom: 8px;
@@ -1011,12 +1073,46 @@
   height: 15px;
 }
 
+/* Leave Review Link */
+.party-profile .leave-review-link {
+  display: block;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 400;
+  text-align: right;
+  margin-top: 8px;
+  margin-left: auto;
+  padding: 0;
+  color: #777777;
+}
+
+.party-profile .leave-review-link:hover {
+  opacity: 0.8;
+}
+
+.party-profile .leave-review-link.verified {
+  background: linear-gradient(90deg, #FF2A55, #00F2EA);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+.party-profile .leave-review-text {
+  color: #777777;
+  font-size: 11px;
+  text-align: right;
+  margin: 0px 5px 5px 0;
+}
+
 /* Load More Buttons */
 .party-profile .load-more-buttons {
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 24px 0;
+  padding: 0;
   cursor: pointer;
 }
 
@@ -1075,7 +1171,8 @@
   bottom: 0;
   background: #FFFFFF;
   z-index: 200;
-  max-width: 396px;
+  width: 100%;
+  max-width: 440px;
   margin: 0 auto;
   overflow-y: auto;
 }
@@ -1112,10 +1209,46 @@
   margin-top: 24px;
 }
 
+/* Empty icebreakers state for new parties */
+.party-profile .profile-sections.empty-icebreakers {
+  align-items: flex-start;
+}
+
+.party-profile .add-icebreakers-link {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.2s ease;
+}
+
+.party-profile .add-icebreakers-link:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .party-profile .profile-sections-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.party-profile .icebreakers-edit-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.party-profile .icebreakers-edit-btn:hover {
+  color: #fff;
 }
 
 .party-profile .profile-sections-title {
@@ -1372,4 +1505,226 @@
   min-height: 200px;
   color: #666;
   font-size: 14px;
+}
+
+/* Stat Item Clickable */
+.party-profile .stat-item.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.party-profile .stat-item.clickable:hover {
+  opacity: 0.7;
+}
+
+/* Stat Modals */
+.party-profile .stat-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.party-profile .stat-modal {
+  background: #0f0f0f;
+  width: 100%;
+  max-width: 440px;
+  max-height: 70vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: partySlideUp 0.3s ease;
+}
+
+@keyframes partySlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.party-profile .stat-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #222222;
+}
+
+.party-profile .stat-modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.party-profile .stat-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666666;
+  padding: 4px;
+  transition: color 0.2s ease;
+}
+
+.party-profile .stat-modal-close:hover {
+  color: #FFFFFF;
+}
+
+.party-profile .stat-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* Stat Modal Row */
+.party-profile .stat-modal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  transition: background 0.2s ease;
+}
+
+.party-profile .stat-modal-row.clickable {
+  cursor: pointer;
+}
+
+.party-profile .stat-modal-row.clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.party-profile .stat-row-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.party-profile .stat-row-user.clickable {
+  cursor: pointer;
+}
+
+.party-profile .stat-row-avatar-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #666666;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.party-profile .stat-row-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.party-profile .stat-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.party-profile .stat-row-username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.party-profile .stat-row-meta {
+  font-size: 12px;
+  color: #666666;
+}
+
+.party-profile .stat-row-follow-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #333333;
+  border: none;
+  color: #FFFFFF;
+}
+
+.party-profile .stat-row-follow-btn:hover {
+  background: #444444;
+}
+
+.party-profile .stat-row-follow-btn.following {
+  background: transparent;
+  border: 1px solid #444444;
+  color: #888888;
+}
+
+.party-profile .stat-row-follow-btn.following:hover {
+  border-color: #666666;
+  color: #AAAAAA;
+}
+
+/* Race Row Styles */
+.party-profile .stat-modal-row.race-row {
+  padding: 14px 20px;
+}
+
+.party-profile .race-row-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.party-profile .race-row-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666666;
+  flex-shrink: 0;
+}
+
+.party-profile .race-row-indicator.won {
+  background: #10b981;
+}
+
+.party-profile .race-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.party-profile .race-row-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.party-profile .race-row-position {
+  font-size: 14px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.party-profile .race-row-position.won {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.party-profile .race-row-percentile {
+  font-size: 12px;
+  color: #666666;
+}
+
+.party-profile .stat-modal-row.race-row.won {
+  background: rgba(16, 185, 129, 0.1);
 }

@@ -9,8 +9,16 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
   const [partyPhoto, setPartyPhoto] = useState(null)
   const [partyPhotoPreview, setPartyPhotoPreview] = useState(null)
   const [partyColor, setPartyColor] = useState('#FF2A55')
+  const [showPhotoEditor, setShowPhotoEditor] = useState(false)
+  const [tempPhotoPreview, setTempPhotoPreview] = useState(null)
+  const [photoZoom, setPhotoZoom] = useState(1)
+  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const fileInputRef = useRef(null)
   const videoRef = useRef(null)
+  const editorCanvasRef = useRef(null)
+  const editorImageRef = useRef(null)
 
   // Restart video from beginning when screen mounts
   useEffect(() => {
@@ -25,6 +33,30 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
       }
     }
   }, [])
+
+  // Capture a frame from the video as avatar if no photo is set
+  const captureVideoFrame = () => {
+    if (!videoRef.current) return null
+    try {
+      const video = videoRef.current
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 150
+      canvas.height = video.videoHeight || 150
+      const ctx = canvas.getContext('2d')
+
+      // If mirrored, flip the canvas
+      if (isMirrored) {
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      return canvas.toDataURL('image/jpeg', 0.8)
+    } catch (err) {
+      console.error('Error capturing video frame:', err)
+      return null
+    }
+  }
 
   // Party Type & Privacy
   const [partyType, setPartyType] = useState('open') // 'open', 'closed'
@@ -109,9 +141,94 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     if (file) {
       setPartyPhoto(file)
       const reader = new FileReader()
-      reader.onloadend = () => setPartyPhotoPreview(reader.result)
+      reader.onloadend = () => {
+        setTempPhotoPreview(reader.result)
+        setPhotoZoom(1)
+        setPhotoPosition({ x: 0, y: 0 })
+        setShowPhotoEditor(true)
+      }
       reader.readAsDataURL(file)
     }
+  }
+
+  // Photo editor drag handlers
+  const handleEditorMouseDown = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    setDragStart({ x: clientX - photoPosition.x, y: clientY - photoPosition.y })
+  }
+
+  const handleEditorMouseMove = (e) => {
+    if (!isDragging) return
+    e.preventDefault()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    setPhotoPosition({
+      x: clientX - dragStart.x,
+      y: clientY - dragStart.y
+    })
+  }
+
+  const handleEditorMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  // Save cropped photo
+  const handleSavePhoto = () => {
+    if (!editorImageRef.current) return
+
+    const img = editorImageRef.current
+    const canvas = document.createElement('canvas')
+    const size = 300 // Output size
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+
+    // Calculate the visible area based on zoom and position
+    const containerSize = 250 // Editor container size
+    const scale = photoZoom
+    const imgWidth = img.naturalWidth
+    const imgHeight = img.naturalHeight
+
+    // Calculate how the image is displayed
+    const displayedWidth = containerSize * scale
+    const displayedHeight = (imgHeight / imgWidth) * containerSize * scale
+
+    // Calculate source coordinates (what part of the image is visible)
+    const offsetX = (containerSize / 2 - photoPosition.x) / scale
+    const offsetY = (containerSize / 2 - photoPosition.y) / scale
+    const visibleSize = containerSize / scale
+
+    // Source rectangle from original image
+    const sourceX = (offsetX - visibleSize / 2) * (imgWidth / containerSize)
+    const sourceY = (offsetY - visibleSize / 2) * (imgHeight / containerSize)
+    const sourceSize = visibleSize * (imgWidth / containerSize)
+
+    // Draw the cropped image
+    ctx.drawImage(
+      img,
+      Math.max(0, sourceX),
+      Math.max(0, sourceY),
+      Math.min(sourceSize, imgWidth),
+      Math.min(sourceSize, imgHeight),
+      0,
+      0,
+      size,
+      size
+    )
+
+    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    setPartyPhotoPreview(croppedDataUrl)
+    setShowPhotoEditor(false)
+  }
+
+  const handleCancelPhotoEdit = () => {
+    setShowPhotoEditor(false)
+    setTempPhotoPreview(null)
+    setPhotoZoom(1)
+    setPhotoPosition({ x: 0, y: 0 })
   }
 
   const handleAddAdmin = (user) => {
@@ -200,11 +317,15 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     const cleanName = formatPartyName(partyName)
     const cleanHandle = formatPartyName(partyHandle)
     const displayName = cleanName ? `${cleanName} Party` : `${cleanHandle} Party`
+
+    // Use uploaded photo preview (data URL) or capture a frame from the video
+    const avatarPhoto = partyPhotoPreview || captureVideoFrame()
+
     const partyData = {
       name: displayName,
       handle: partyHandle,
       bio: partyBio,
-      photo: partyPhoto,
+      photo: avatarPhoto,
       color: partyColor,
       introVideo: recordedVideoUrl,
       introVideoMirrored: isMirrored,
@@ -223,17 +344,34 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
         location: selectedLocation,
         shareTo: selectedSocials
       },
-      // Baseline stats for new party
+      // Baseline stats for new party (mirrors new candidate profiles)
       stats: {
         members: 1, // Just the creator
         followers: 0,
         posts: 0,
-        rating: 3.0, // Starting rating
-        ratingCount: 0,
+        cpPoints: 100, // Starting in Bronze tier (0-999)
+        tier: 'Bronze',
+        change: '+0.00',
         chartChange: '+0.0%',
-        sparklineData: [50, 50, 50, 50, 50, 50, 50], // Flat baseline
+        sparklineData: [100, 100, 100, 100, 100, 100, 100], // Flat baseline at starting points
         ranking: 'New'
       },
+      // New parties only race in Best Party until they grow
+      races: ['Best Party'],
+      // Empty reviews until people leave them
+      reviews: [],
+      testimonials: {
+        cpVerified: [], // CP verified member testimonials
+        community: []   // Community member testimonials
+      },
+      // Empty icebreakers - party can add them later
+      icebreakers: {
+        topicsThatEnergize: { title: 'Topics that energize us', tags: [] },
+        guessWhichTrue: { title: 'Guess Which One is True', options: ['', '', ''], correctIndex: null },
+        customWritten: [],
+        customSliders: []
+      },
+      isNewParty: true, // Flag for starter party display logic
       createdAt: new Date().toISOString()
     }
     console.log('Creating party:', partyData)
@@ -283,11 +421,27 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
         <div className="party-photo-row">
           <button
             className="party-photo-btn"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (partyPhotoPreview && tempPhotoPreview) {
+                // Re-open editor for existing photo
+                setShowPhotoEditor(true)
+              } else {
+                // Select new photo
+                fileInputRef.current?.click()
+              }
+            }}
             style={{ borderColor: partyColor }}
           >
             {partyPhotoPreview ? (
-              <img src={partyPhotoPreview} alt="Party" />
+              <>
+                <img src={partyPhotoPreview} alt="Party" />
+                <div className="party-photo-edit-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </div>
+              </>
             ) : (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -699,6 +853,83 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
                 Create Party
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Editor Modal */}
+      {showPhotoEditor && tempPhotoPreview && (
+        <div className="photo-editor-overlay">
+          <div className="photo-editor-modal">
+            <div className="photo-editor-header">
+              <button className="photo-editor-cancel" onClick={handleCancelPhotoEdit}>
+                Cancel
+              </button>
+              <span className="photo-editor-title">Adjust Photo</span>
+              <button className="photo-editor-save" onClick={handleSavePhoto}>
+                Done
+              </button>
+            </div>
+
+            <div className="photo-editor-instructions">
+              Drag to reposition
+            </div>
+
+            <div
+              className="photo-editor-container"
+              onMouseDown={handleEditorMouseDown}
+              onMouseMove={handleEditorMouseMove}
+              onMouseUp={handleEditorMouseUp}
+              onMouseLeave={handleEditorMouseUp}
+              onTouchStart={handleEditorMouseDown}
+              onTouchMove={handleEditorMouseMove}
+              onTouchEnd={handleEditorMouseUp}
+            >
+              <div className="photo-editor-circle">
+                <img
+                  ref={editorImageRef}
+                  src={tempPhotoPreview}
+                  alt="Edit"
+                  className="photo-editor-image"
+                  style={{
+                    transform: `translate(${photoPosition.x}px, ${photoPosition.y}px) scale(${photoZoom})`,
+                    cursor: isDragging ? 'grabbing' : 'grab'
+                  }}
+                  draggable={false}
+                />
+              </div>
+            </div>
+
+            <div className="photo-editor-zoom">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+              <input
+                type="range"
+                min="1"
+                max="3"
+                step="0.01"
+                value={photoZoom}
+                onChange={(e) => setPhotoZoom(parseFloat(e.target.value))}
+                className="photo-editor-slider"
+              />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="11" y1="8" x2="11" y2="14" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+            </div>
+
+            <button
+              className="photo-editor-change"
+              onClick={() => {
+                setShowPhotoEditor(false)
+                fileInputRef.current?.click()
+              }}
+            >
+              Change Photo
+            </button>
           </div>
         </div>
       )}

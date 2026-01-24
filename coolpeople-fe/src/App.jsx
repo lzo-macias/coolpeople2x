@@ -327,6 +327,17 @@ function App() {
     // First check if it's the user's created party
     if (userParty && (partyName === userParty.name || partyName === userParty.handle)) {
       // Build party profile data from user's party with their posts
+      const partyStats = userParty.stats || {
+        members: 1,
+        followers: 0,
+        posts: partyPosts.length,
+        cpPoints: 100,
+        tier: 'Bronze',
+        change: '+0.00',
+        chartChange: '+0.0%',
+        sparklineData: [100, 100, 100, 100, 100, 100, 100],
+        ranking: 'New'
+      }
       const userPartyProfile = {
         name: userParty.name,
         handle: userParty.handle,
@@ -334,14 +345,19 @@ function App() {
         type: userParty.type,
         avatar: userParty.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(userParty.name)}&background=${userParty.color.replace('#', '')}&color=fff&size=150`,
         bio: userParty.bio || `Welcome to ${userParty.name}! A new political party making a difference.`,
-        stats: userParty.stats || {
-          members: 1,
-          followers: 0,
-          posts: partyPosts.length,
-          rating: 3.0,
-        },
+        // Top-level members/followers for compatibility with mockParty merge
+        members: partyStats.members,
+        followers: partyStats.followers,
+        cpPoints: partyStats.cpPoints,
+        stats: partyStats,
         posts: partyPosts,
         isUserParty: true,
+        // New party baseline data
+        isNewParty: userParty.isNewParty !== false, // Default to true for user parties
+        races: userParty.races || ['Best Party'],
+        testimonials: userParty.testimonials || { cpVerified: [], community: [] },
+        icebreakers: userParty.icebreakers || null,
+        reviews: userParty.reviews || [],
       }
       saveToHistory()
       setShowComments(false)
@@ -614,6 +630,7 @@ function App() {
               party={activeParty}
               onMemberClick={handleOpenProfile}
               onOpenComments={handleOpenComments}
+              isOwnParty={userParty && (activeParty?.name === userParty.name || activeParty?.handle === userParty.handle)}
             />
           </div>
         </div>

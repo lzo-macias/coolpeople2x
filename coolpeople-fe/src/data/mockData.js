@@ -2,55 +2,49 @@
 // This will be replaced with real API calls to backend
 
 // CoolPeople Tier System
-// SVG icons for each tier (viewBox="0 0 24 24")
+// Icon paths for dark mode (use /icons/tiers/light/ for light mode)
 export const CP_TIERS = [
   {
     name: 'Bronze',
     min: 0,
     max: 999,
     color: '#a67c52',
-    // Bullseye/target icon
-    svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-12c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z'
+    icon: '/icons/tiers/dark/bronze.svg'
   },
   {
     name: 'Silver',
     min: 1000,
     max: 2499,
     color: '#8a8a8a',
-    // Star outline
-    svgPath: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z M12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28z'
+    icon: '/icons/tiers/dark/silver.svg'
   },
   {
     name: 'Gold',
     min: 2500,
     max: 4999,
     color: '#d4a000',
-    // Medal/person icon
-    svgPath: 'M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0 4l-4 8h8l-4-8z'
+    icon: '/icons/tiers/dark/gold.svg'
   },
   {
     name: 'Diamond',
     min: 5000,
     max: 9999,
     color: '#5b9bd5',
-    // Diamond shape
-    svgPath: 'M12 2L2 9l10 13 10-13-10-7zm0 3.5L18.5 9 12 18.5 5.5 9 12 5.5z'
+    icon: '/icons/tiers/dark/diamond.svg'
   },
   {
     name: 'Challenger',
     min: 10000,
     max: 24999,
     color: '#9B59B6',
-    // Star with inner star
-    svgPath: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z M12 14.4l-2.26 1.36.6-2.57-2-1.73 2.63-.23L12 9.1l1.02 2.13 2.63.23-2 1.73.6 2.57z'
+    icon: '/icons/tiers/dark/challenger.svg'
   },
   {
     name: 'Master',
     min: 25000,
     max: Infinity,
     color: '#ef4444',
-    // Person with star (trophy stance)
-    svgPath: 'M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 14l-4.8 2.6.9-5.3-3.8-3.7 5.3-.8L12 2zM12 17v5M8 22h8'
+    icon: '/icons/tiers/dark/master.svg'
   },
 ]
 
