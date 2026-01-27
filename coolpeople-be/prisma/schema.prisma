@@ -1,0 +1,1167 @@
+// =============================================================================
+// CoolPeople Database Schema
+// Competition-based social platform
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserType {
+  PARTICIPANT  // Can engage but not compete
+  CANDIDATE    // Can compete in races, receives reviews
+}
+
+enum RaceType {
+  CANDIDATE_VS_CANDIDATE
+  PARTY_VS_PARTY
+}
+
+enum WinCondition {
+  POINTS
+  BALLOT
+}
+
+enum Tier {
+  BRONZE
+  SILVER
+  GOLD
+  DIAMOND
+  CHALLENGER
+  MASTER
+}
+
+enum ChatMode {
+  OPEN        // All members with chat permission can message
+  ADMIN_ONLY  // Only admin/moderate can message
+  CYCLE       // Daily rotating cohorts
+}
+
+enum IcebreakerType {
+  WRITTEN   // Prompt and text response
+  TAGS      // Prompt and select from options
+  GAMES     // Guess which is true
+  SLIDERS   // Prompt with 1-10 slider
+  VIDEOS    // Prompt with video response
+}
+
+enum PointAction {
+  // Positive actions (award points)
+  LIKE
+  COMMENT
+  SAVE
+  SHARE
+  NOMINATE
+  FOLLOW
+  WATCH_FULL
+  WATCH_PARTIAL
+  REVIEW_5_STAR       // +10 points
+  REVIEW_4_STAR       // +6 points
+  REVIEW_3_STAR       // +2 points (neutral-ish)
+  BALLOT_RANK_1
+  BALLOT_RANK_2
+  BALLOT_RANK_3
+  DM_RECEIVED
+
+  // Negative actions (deduct points)
+  REVIEW_2_STAR       // -2 points
+  REVIEW_1_STAR       // -5 points
+  HIDE
+  REPORT_CONFIRMED
+  UNFOLLOW
+
+  // System actions
+  DECAY               // Point decay (90-day rolling window)
+}
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  COMMENT
+  NOMINATION
+  REVIEW
+  RACE_UPDATE
+  BALLOT_OPEN
+  PARTY_INVITE
+  DM
+  MENTION
+}
+
+enum ReportStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum ReportTargetType {
+  USER
+  REEL
+  COMMENT
+  REVIEW
+  PARTY
+}
+
+enum FollowRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+// =============================================================================
+// USERS
+// =============================================================================
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String?   // Null if using OAuth only
+  phone           String?   @unique
+
+  // Profile
+  username        String    @unique
+  displayName     String
+  bio             String?
+  avatarUrl       String?
+
+  // Status
+  userType        UserType  @default(PARTICIPANT)
+  isVerified      Boolean   @default(false)
+  isFrozen        Boolean   @default(false)  // Candidate reverted to participant
+  isPrivate       Boolean   @default(false)  // Only applies to PARTICIPANT role
+
+  // OAuth
+  googleId        String?   @unique
+  appleId         String?   @unique
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // -------------------------------------------------------------------------
+  // Relations
+  // -------------------------------------------------------------------------
+
+  // Content created
+  reels           Reel[]
+  stories         Story[]
+
+  // Engagements given
+  likes           Like[]
+  comments        Comment[]
+  commentLikes    CommentLike[]
+  saves           Save[]
+  shares          Share[]
+  reposts         Repost[]
+
+  // Reviews
+  reviewsAuthored Review[]  @relation("ReviewAuthor")
+  reviewsReceived Review[]  @relation("ReviewTarget")
+  reviewReplies   ReviewReply[]
+
+  // Social
+  followers       Follow[]  @relation("Following")
+  following       Follow[]  @relation("Follower")
+  followRequestsSent     FollowRequest[] @relation("FollowRequestSent")
+  followRequestsReceived FollowRequest[] @relation("FollowRequestReceived")
+  favorites       Favorite[] @relation("FavoriteOwner")
+  favoritedBy     Favorite[] @relation("FavoritedUser")
+  blocksCreated   Block[]   @relation("Blocker")
+  blocksReceived  Block[]   @relation("Blocked")
+
+  // Party
+  partyMemberships  PartyMembership[]
+  partyFollows      PartyFollow[]
+  partyJoinRequests PartyJoinRequest[]
+
+  // Races
+  raceFollows     RaceFollow[]
+  raceCompetitions RaceCompetitor[]
+
+  // Nominations
+  nominationsGiven    Nomination[] @relation("NominationGiver")
+  nominationsReceived Nomination[] @relation("NominationReceiver")
+
+  // Points
+  pointLedgers    PointLedger[]
+
+  // Messaging
+  dmsSent         DirectMessage[] @relation("DMSender")
+  dmsReceived     DirectMessage[] @relation("DMReceiver")
+  chatMessages    ChatMessage[]
+  chatReactions   ChatReaction[]
+
+  // Icebreakers
+  icebreakers     Icebreaker[]
+
+  // Ballots
+  ballots         Ballot[]
+
+  // Notifications
+  notifications   Notification[]
+
+  // Reports
+  reportsCreated  Report[] @relation("Reporter")
+
+  // Premium
+  subscription    Subscription?
+
+  // Mentions and watches
+  mentions        UserMention[]
+  watchEvents     WatchEvent[]
+
+  // Feed algorithm
+  affinityScores  UserAffinity[] @relation("AffinityOwner")
+  affinityTargets UserAffinity[] @relation("AffinityTarget")
+
+  // Hides
+  hidesCreated    Hide[]         @relation("HideOwner")
+  hidesReceived   Hide[]         @relation("HiddenUser")
+
+  // Story views
+  storyViews      StoryView[]
+
+  @@index([email])
+  @@index([username])
+  @@index([userType])
+}
+
+// =============================================================================
+// PARTIES
+// =============================================================================
+
+model Party {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  handle          String    @unique  // @partyhandle
+  description     String?
+  avatarUrl       String?
+  bannerUrl       String?
+
+  // Settings
+  isPrivate       Boolean   @default(false)
+  chatMode        ChatMode  @default(OPEN)
+
+  // Soft delete
+  deletedAt       DateTime?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // -------------------------------------------------------------------------
+  // Relations
+  // -------------------------------------------------------------------------
+
+  // Members
+  memberships     PartyMembership[]
+
+  // Join Requests (for private parties)
+  joinRequests    PartyJoinRequest[]
+
+  // Content
+  reels           Reel[]    // Party collaborative posts
+
+  // Social
+  followers       PartyFollow[]
+
+  // Races
+  raceCompetitions RaceCompetitor[]
+
+  // Points
+  pointLedgers    PointLedger[]
+
+  // Reviews
+  reviewsReceived Review[]  @relation("PartyReviewTarget")
+
+  // Chat
+  groupChat       GroupChat?
+
+  // Icebreakers
+  icebreakers     Icebreaker[]
+
+  @@index([name])
+  @@index([handle])
+  @@index([deletedAt])
+}
+
+model PartyMembership {
+  id          String   @id @default(uuid())
+  userId      String
+  partyId     String
+
+  // Permissions: view, post, chat, invite, moderate, admin
+  permissions String[] @default(["view"])
+
+  joinedAt    DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party       Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, partyId])
+  @@index([partyId])
+}
+
+model PartyJoinRequest {
+  id        String              @id @default(uuid())
+  userId    String
+  partyId   String
+  status    FollowRequestStatus @default(PENDING)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party     Party               @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, partyId])
+  @@index([partyId, status])
+}
+
+// =============================================================================
+// RACES
+// =============================================================================
+
+model Race {
+  id              String       @id @default(uuid())
+  title           String
+  description     String?
+  bannerUrl       String?
+
+  // Configuration
+  raceType        RaceType
+  winCondition    WinCondition
+  endDate         DateTime?    // Null = rolling/never-ending
+  ballotOpenDate  DateTime?    // When voting opens (for ballot races)
+
+  // Ballot scheduling
+  ballotOpensAt   DateTime?    // When ballot opens (typically 7 days before endDate)
+  ballotClosesAt  DateTime?    // When ballot closes (same as endDate)
+  ballotProcessed Boolean      @default(false)
+
+  // System flag
+  isSystemRace    Boolean      @default(false)
+
+  // Creator (null for system races)
+  creatorId       String?
+
+  // Timestamps
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // -------------------------------------------------------------------------
+  // Relations
+  // -------------------------------------------------------------------------
+
+  followers       RaceFollow[]
+  competitors     RaceCompetitor[]
+
+  // Content targeting this race
+  reelTargets     RaceTarget[]
+  nominations     Nomination[]
+
+  // Points
+  pointLedgers    PointLedger[]
+
+  // Ballots
+  ballots         Ballot[]
+
+  @@index([raceType])
+  @@index([isSystemRace])
+}
+
+model RaceFollow {
+  id        String   @id @default(uuid())
+  userId    String
+  raceId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, raceId])
+  @@index([raceId])
+}
+
+// Polymorphic: competitor can be User OR Party
+model RaceCompetitor {
+  id              String   @id @default(uuid())
+  raceId          String
+
+  // Polymorphic reference - one will be null
+  userId          String?
+  partyId         String?
+
+  enrolledAt      DateTime @default(now())
+
+  race            Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party           Party?   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  // Ballot rankings received
+  ballotRankings  BallotRanking[]
+
+  @@unique([raceId, userId])
+  @@unique([raceId, partyId])
+  @@index([raceId])
+}
+
+// =============================================================================
+// REELS (Short-form Video Content)
+// =============================================================================
+
+model Reel {
+  id              String    @id @default(uuid())
+
+  // Creator
+  userId          String
+  partyId         String?   // If collaborative post with party
+
+  // Media
+  videoUrl        String
+  thumbnailUrl    String?
+  selfieOverlayUrl String?  // Optional selfie overlay
+  duration        Int       // Duration in seconds (15-90)
+
+  // Metadata
+  title           String?
+  description     String?
+
+  // Quote/Response
+  quoteParentId   String?   // If this is a quote response to another reel
+
+  // Audio
+  soundId         String?
+
+  // Location
+  locationId      String?
+
+  // Denormalized counts (updated on engagement)
+  likeCount       Int       @default(0)
+  commentCount    Int       @default(0)
+  shareCount      Int       @default(0)
+  saveCount       Int       @default(0)
+  repostCount     Int       @default(0)
+  viewCount       Int       @default(0)
+
+  // Soft delete
+  deletedAt       DateTime?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // -------------------------------------------------------------------------
+  // Relations
+  // -------------------------------------------------------------------------
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party           Party?    @relation(fields: [partyId], references: [id])
+  quoteParent     Reel?     @relation("QuoteParent", fields: [quoteParentId], references: [id])
+  quotes          Reel[]    @relation("QuoteParent")
+  sound           Sound?    @relation(fields: [soundId], references: [id])
+  location        Location? @relation(fields: [locationId], references: [id])
+
+  // Engagements
+  likes           Like[]
+  comments        Comment[]
+  saves           Save[]
+  shares          Share[]
+  reposts         Repost[]
+
+  // Tagging
+  hashtags        ReelHashtag[]
+  mentions        UserMention[]
+
+  // Race targeting
+  raceTargets     RaceTarget[]
+  nominations     Nomination[]
+
+  // Watch analytics
+  watchEvents     WatchEvent[]
+
+  // Hides
+  hides           Hide[]
+
+  @@index([userId])
+  @@index([partyId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model ReelHashtag {
+  id        String   @id @default(uuid())
+  reelId    String
+  hashtagId String
+
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@unique([reelId, hashtagId])
+}
+
+model Hashtag {
+  id        String        @id @default(uuid())
+  name      String        @unique  // Without # symbol
+  createdAt DateTime      @default(now())
+
+  reels     ReelHashtag[]
+
+  @@index([name])
+}
+
+model UserMention {
+  id        String   @id @default(uuid())
+  reelId    String
+  userId    String
+
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reelId, userId])
+}
+
+model RaceTarget {
+  id        String   @id @default(uuid())
+  reelId    String
+  raceId    String
+
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@unique([reelId, raceId])
+}
+
+model Nomination {
+  id              String   @id @default(uuid())
+  reelId          String
+  nominatorId     String   // User who made the nomination
+  nomineeId       String   // Candidate being nominated
+  raceId          String
+
+  createdAt       DateTime @default(now())
+
+  reel            Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  nominator       User     @relation("NominationGiver", fields: [nominatorId], references: [id], onDelete: Cascade)
+  nominee         User     @relation("NominationReceiver", fields: [nomineeId], references: [id], onDelete: Cascade)
+  race            Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  // One nomination per person per race
+  @@unique([nominatorId, nomineeId, raceId])
+  @@index([nomineeId])
+  @@index([raceId])
+}
+
+// =============================================================================
+// STORIES (24-hour content)
+// =============================================================================
+
+model Story {
+  id              String    @id @default(uuid())
+  userId          String
+
+  // Media
+  videoUrl        String
+  thumbnailUrl    String?
+  duration        Int       // Max 60 seconds
+
+  // Soft delete
+  deletedAt       DateTime?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime  // 24 hours from creation
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  views           StoryView[]
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// ENGAGEMENT
+// =============================================================================
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  reelId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reelId])
+  @@index([reelId])
+}
+
+model Comment {
+  id              String    @id @default(uuid())
+  userId          String
+  reelId          String
+
+  content         String
+
+  // Threaded replies (1 level deep for MVP)
+  parentId        String?
+
+  // Soft delete
+  deletedAt       DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel            Reel      @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  parent          Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies         Comment[] @relation("CommentReplies")
+
+  likes           CommentLike[]
+
+  @@index([reelId])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+}
+
+model Save {
+  id        String   @id @default(uuid())
+  userId    String
+  reelId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reelId])
+  @@index([userId])
+}
+
+model Share {
+  id        String   @id @default(uuid())
+  userId    String
+  reelId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@index([reelId])
+}
+
+model Repost {
+  id        String   @id @default(uuid())
+  userId    String
+  reelId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reelId])
+  @@index([userId])
+}
+
+// Watch time tracking for points
+model WatchEvent {
+  id              String    @id @default(uuid())
+  userId          String
+  reelId          String
+
+  watchPercent    Float     // 0.0 to 1.0
+
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reel            Reel      @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@index([reelId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// REVIEWS
+// =============================================================================
+
+// Polymorphic: target can be User (candidate) OR Party
+model Review {
+  id              String    @id @default(uuid())
+  authorId        String
+
+  // Polymorphic target - one will be null
+  targetUserId    String?   // Candidate receiving review
+  targetPartyId   String?   // Party receiving review
+
+  rating          Int       // 1-5 stars
+  content         String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  author          User      @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  targetUser      User?     @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  targetParty     Party?    @relation("PartyReviewTarget", fields: [targetPartyId], references: [id], onDelete: Cascade)
+
+  replies         ReviewReply[]
+
+  @@index([targetUserId])
+  @@index([targetPartyId])
+  @@index([rating])
+}
+
+model ReviewReply {
+  id        String   @id @default(uuid())
+  reviewId  String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+// =============================================================================
+// POINTS SYSTEM
+// =============================================================================
+
+// Ledger tracks total points per user/party per race
+model PointLedger {
+  id              String    @id @default(uuid())
+
+  // Polymorphic owner
+  userId          String?
+  partyId         String?
+
+  raceId          String
+
+  totalPoints     Float     @default(0)
+  tier            Tier      @default(BRONZE)
+
+  updatedAt       DateTime  @updatedAt
+
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party           Party?    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  race            Race      @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  events          PointEvent[]
+  snapshots       PointSnapshot[]
+
+  @@unique([userId, raceId])
+  @@unique([partyId, raceId])
+  @@index([raceId, totalPoints])  // For leaderboard queries
+}
+
+// Daily point snapshots for sparkline charts
+model PointSnapshot {
+  id        String   @id @default(uuid())
+  ledgerId  String
+  points    Float
+  tier      Tier
+  rank      Int?     // Rank within race at time of snapshot
+  date      DateTime @db.Date  // Calendar day
+
+  createdAt DateTime @default(now())
+
+  ledger    PointLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@unique([ledgerId, date])
+  @@index([ledgerId, date])
+}
+
+// Individual point events for sparkline history
+model PointEvent {
+  id              String      @id @default(uuid())
+  ledgerId        String
+
+  action          PointAction
+  points          Float
+
+  // Reference to what triggered this (for auditing)
+  sourceUserId    String?     // Who caused this event
+  sourceReelId    String?     // Related reel if applicable
+
+  // Decay tracking
+  expiresAt       DateTime?   // 90 days from creation (null for DECAY events)
+  isExpired       Boolean     @default(false)
+
+  createdAt       DateTime    @default(now())
+
+  ledger          PointLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@index([ledgerId, createdAt])  // For sparkline queries
+  @@index([createdAt])            // For decay processing
+  @@index([expiresAt, isExpired]) // For decay job queries
+}
+
+// =============================================================================
+// SOCIAL (Follows, Favorites, Blocks)
+// =============================================================================
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model FollowRequest {
+  id          String              @id @default(cuid())
+  fromUserId  String
+  toUserId    String
+  status      FollowRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  fromUser    User @relation("FollowRequestSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser      User @relation("FollowRequestReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
+}
+
+model PartyFollow {
+  id        String   @id @default(uuid())
+  userId    String
+  partyId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party     Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, partyId])
+  @@index([partyId])
+}
+
+model Favorite {
+  id              String   @id @default(uuid())
+  userId          String   // User who favorited
+  favoritedUserId String   // Candidate who was favorited
+  createdAt       DateTime @default(now())
+
+  user            User     @relation("FavoriteOwner", fields: [userId], references: [id], onDelete: Cascade)
+  favoritedUser   User     @relation("FavoritedUser", fields: [favoritedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, favoritedUserId])
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+// =============================================================================
+// MESSAGING
+// =============================================================================
+
+model DirectMessage {
+  id          String    @id @default(uuid())
+  senderId    String
+  receiverId  String
+  content     String
+
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  sender      User      @relation("DMSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User      @relation("DMReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, createdAt])
+}
+
+model GroupChat {
+  id        String        @id @default(uuid())
+  partyId   String        @unique
+
+  party     Party         @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id          String        @id @default(uuid())
+  groupChatId String
+  userId      String
+  content     String
+
+  createdAt   DateTime      @default(now())
+
+  groupChat   GroupChat     @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reactions   ChatReaction[]
+
+  @@index([groupChatId, createdAt])
+}
+
+model ChatReaction {
+  id        String      @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String      // Emoji character
+
+  createdAt DateTime    @default(now())
+
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+// =============================================================================
+// BALLOTS (Ranked Choice Voting)
+// =============================================================================
+
+model Ballot {
+  id        String   @id @default(uuid())
+  raceId    String
+  voterId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  voter     User     @relation(fields: [voterId], references: [id], onDelete: Cascade)
+
+  rankings  BallotRanking[]
+
+  @@unique([raceId, voterId])
+}
+
+model BallotRanking {
+  id            String         @id @default(uuid())
+  ballotId      String
+  competitorId  String
+  rank          Int            // 1 = first choice, 2 = second, etc.
+
+  ballot        Ballot         @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  competitor    RaceCompetitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([ballotId, competitorId])
+  @@unique([ballotId, rank])
+}
+
+// =============================================================================
+// ICEBREAKERS
+// =============================================================================
+
+// Polymorphic: owner can be User or Party
+model Icebreaker {
+  id              String          @id @default(uuid())
+
+  // Polymorphic owner
+  userId          String?
+  partyId         String?
+
+  type            IcebreakerType
+  prompt          String
+
+  // Response varies by type
+  textResponse    String?         // For WRITTEN
+  tagsResponse    String[]        // For TAGS (array of selected tags)
+  sliderResponse  Int?            // For SLIDERS (1-10)
+  videoUrl        String?         // For VIDEOS
+  gameOptions     String[]        // For GAMES (three options)
+  gameAnswer      Int?            // For GAMES (index of true one)
+
+  sortOrder       Int             @default(0)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  party           Party?          @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([partyId])
+}
+
+// =============================================================================
+// MEDIA REFERENCES
+// =============================================================================
+
+model Sound {
+  id        String   @id @default(uuid())
+  name      String
+  artistName String?
+  audioUrl  String
+  duration  Int      // Duration in seconds
+
+  createdAt DateTime @default(now())
+
+  reels     Reel[]
+
+  @@index([name])
+}
+
+model Location {
+  id        String   @id @default(uuid())
+  name      String
+  latitude  Float?
+  longitude Float?
+
+  reels     Reel[]
+
+  @@index([name])
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id              String           @id @default(uuid())
+  userId          String
+  type            NotificationType
+
+  // Flexible content - JSON stored as string
+  title           String
+  body            String
+  data            String?          // JSON string for additional data
+
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+// =============================================================================
+// MODERATION
+// =============================================================================
+
+model Report {
+  id              String           @id @default(uuid())
+  reporterId      String
+
+  targetType      ReportTargetType
+  targetId        String           // ID of the reported entity
+
+  reason          String
+  description     String?
+
+  status          ReportStatus     @default(PENDING)
+  moderatorNotes  String?
+
+  createdAt       DateTime         @default(now())
+  resolvedAt      DateTime?
+
+  reporter        User             @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([targetType, targetId])
+}
+
+// =============================================================================
+// FEED ALGORITHM
+// =============================================================================
+
+// Tracks cumulative engagement affinity between users for feed ranking
+model UserAffinity {
+  id              String    @id @default(uuid())
+  userId          String    // The user whose feed is being ranked
+  targetUserId    String    // The user they have affinity toward
+
+  score           Float     @default(0)
+
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation("AffinityOwner", fields: [userId], references: [id], onDelete: Cascade)
+  targetUser      User      @relation("AffinityTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetUserId])
+  @@index([userId])
+}
+
+// Allows users to hide specific reels or all content from a user
+model Hide {
+  id              String    @id @default(uuid())
+  userId          String    // The user who is hiding
+
+  // Polymorphic: hide a specific reel OR all content from a user
+  hiddenReelId    String?
+  hiddenUserId    String?
+
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation("HideOwner", fields: [userId], references: [id], onDelete: Cascade)
+  hiddenReel      Reel?     @relation(fields: [hiddenReelId], references: [id], onDelete: Cascade)
+  hiddenUser      User?     @relation("HiddenUser", fields: [hiddenUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hiddenReelId])
+  @@unique([userId, hiddenUserId])
+  @@index([userId])
+}
+
+// =============================================================================
+// STORY VIEWS
+// =============================================================================
+
+model StoryView {
+  id        String   @id @default(uuid())
+  storyId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@index([storyId])
+}
+
+// =============================================================================
+// PREMIUM
+// =============================================================================
+
+model Subscription {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+
+  // Subscription details
+  tier            String    @default("premium")  // For future tiers
+
+  startDate       DateTime  @default(now())
+  endDate         DateTime?
+
+  // Payment reference (Stripe, etc.)
+  externalId      String?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

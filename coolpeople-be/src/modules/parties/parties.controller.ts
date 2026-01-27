@@ -1,0 +1,227 @@
+/**
+ * Parties Controller
+ * HTTP request handlers for party management
+ */
+
+import type { Request, Response } from 'express';
+import * as partiesService from './parties.service.js';
+import { sendSuccess, sendCreated, sendNoContent, sendPaginated } from '../../lib/response.js';
+
+// =============================================================================
+// PARTY CRUD
+// =============================================================================
+
+// POST /api/parties
+export const createParty = async (req: Request, res: Response): Promise<void> => {
+  const party = await partiesService.createParty(req.body, req.user!.userId);
+  sendCreated(res, { party });
+};
+
+// GET /api/parties
+export const listParties = async (req: Request, res: Response): Promise<void> => {
+  const { search, cursor, limit } = req.query as {
+    search?: string;
+    cursor?: string;
+    limit: string;
+  };
+
+  const result = await partiesService.listParties(
+    { search },
+    cursor,
+    parseInt(limit) || 20,
+    req.user?.userId
+  );
+
+  sendPaginated(res, result.parties, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// GET /api/parties/:id
+export const getParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const party = await partiesService.getParty(id, req.user?.userId);
+  sendSuccess(res, { party });
+};
+
+// PATCH /api/parties/:id
+export const updateParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const party = await partiesService.updateParty(id, req.body);
+  sendSuccess(res, { party });
+};
+
+// DELETE /api/parties/:id
+export const deleteParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  await partiesService.deleteParty(id);
+  sendNoContent(res);
+};
+
+// =============================================================================
+// FOLLOW / UNFOLLOW
+// =============================================================================
+
+// POST /api/parties/:id/follow
+export const followParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  await partiesService.followParty(req.user!.userId, id);
+  sendSuccess(res, { following: true });
+};
+
+// DELETE /api/parties/:id/follow
+export const unfollowParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  await partiesService.unfollowParty(req.user!.userId, id);
+  sendSuccess(res, { following: false });
+};
+
+// =============================================================================
+// MEMBERSHIP
+// =============================================================================
+
+// POST /api/parties/:id/join
+export const joinParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const result = await partiesService.joinParty(req.user!.userId, id);
+  if (result.joined) {
+    sendCreated(res, { joined: true, requested: false });
+  } else {
+    sendCreated(res, { joined: false, requested: true });
+  }
+};
+
+// DELETE /api/parties/:id/leave
+export const leaveParty = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  await partiesService.leaveParty(req.user!.userId, id);
+  sendNoContent(res);
+};
+
+// GET /api/parties/:id/members
+export const listMembers = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.listMembers(
+    id,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.members, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// PATCH /api/parties/:id/members/:userId
+export const updateMemberPermissions = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const userId = req.params.userId as string;
+  const member = await partiesService.updateMemberPermissions(
+    id,
+    userId,
+    req.user!.userId,
+    req.body
+  );
+  sendSuccess(res, { member });
+};
+
+// DELETE /api/parties/:id/members/:userId
+export const removeMember = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const userId = req.params.userId as string;
+  await partiesService.removeMember(id, userId, req.user!.userId);
+  sendNoContent(res);
+};
+
+// =============================================================================
+// JOIN REQUESTS
+// =============================================================================
+
+// GET /api/parties/:id/join-requests
+export const listJoinRequests = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.listJoinRequests(
+    id,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.requests, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// POST /api/parties/:id/join-requests/:requestId/approve
+export const approveJoinRequest = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const requestId = req.params.requestId as string;
+  await partiesService.approveJoinRequest(id, requestId);
+  sendSuccess(res, { approved: true });
+};
+
+// POST /api/parties/:id/join-requests/:requestId/deny
+export const denyJoinRequest = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const requestId = req.params.requestId as string;
+  await partiesService.denyJoinRequest(id, requestId);
+  sendSuccess(res, { denied: true });
+};
+
+// =============================================================================
+// GROUP CHAT
+// =============================================================================
+
+// GET /api/parties/:id/chat/messages
+export const getChatMessages = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.getChatMessages(
+    id,
+    req.user!.userId,
+    cursor,
+    parseInt(limit) || 50
+  );
+  sendPaginated(res, result.messages, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// POST /api/parties/:id/chat/messages
+export const sendChatMessage = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const message = await partiesService.sendChatMessage(
+    id,
+    req.user!.userId,
+    req.body.content
+  );
+  sendCreated(res, { message });
+};
+
+// DELETE /api/parties/:id/chat/messages/:messageId
+export const deleteChatMessage = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const messageId = req.params.messageId as string;
+  await partiesService.deleteChatMessage(id, messageId, req.user!.userId);
+  sendNoContent(res);
+};
+
+// POST /api/parties/:id/chat/messages/:messageId/reactions
+export const addReaction = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const messageId = req.params.messageId as string;
+  await partiesService.addReaction(id, messageId, req.user!.userId, req.body.emoji);
+  sendCreated(res, { reacted: true });
+};
+
+// DELETE /api/parties/:id/chat/messages/:messageId/reactions/:emoji
+export const removeReaction = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const messageId = req.params.messageId as string;
+  const emoji = req.params.emoji as string;
+  await partiesService.removeReaction(id, messageId, req.user!.userId, emoji);
+  sendNoContent(res);
+};

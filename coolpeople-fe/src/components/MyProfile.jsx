@@ -164,6 +164,8 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [starterPoints] = useState(() => calculateStarterPoints(userPosts))
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [showCopiedToast, setShowCopiedToast] = useState(false)
 
   // Use user's created party if available, otherwise default to Independent
   const currentParty = userParty ? userParty.name : (myProfileData.party || 'Independent')
@@ -334,7 +336,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
             </div>
 
             <div className="my-profile-actions">
-              <button className="action-btn share">share</button>
+              <button className="action-btn share" onClick={() => setShowShareModal(true)}>share</button>
               <button className="action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
             </div>
           </div>
@@ -466,6 +468,61 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
           onOpenComments={onOpenComments}
           profileName={myProfileData.username}
         />
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="share-modal-overlay" onClick={() => setShowShareModal(false)}>
+          <div className="share-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="share-modal-header">
+              <h3>Share Profile</h3>
+              <button className="share-modal-close" onClick={() => setShowShareModal(false)}>×</button>
+            </div>
+            <div className="share-modal-options">
+              <button className="share-option" onClick={() => {
+                navigator.clipboard.writeText(`https://coolpeople.com/@${myProfileData.username}`)
+                setShowShareModal(false)
+                setShowCopiedToast(true)
+                setTimeout(() => setShowCopiedToast(false), 2000)
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                <span>Copy Link</span>
+              </button>
+              <button className="share-option">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>Send Message</span>
+              </button>
+              <button className="share-option">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span>Share to Story</span>
+              </button>
+              <button className="share-option">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                <span>More Options</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copied Toast */}
+      {showCopiedToast && (
+        <div className="copied-toast">Link copied!</div>
       )}
     </div>
   )

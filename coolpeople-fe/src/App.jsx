@@ -613,6 +613,7 @@ function App() {
             onUserClick={handleOpenProfile}
             onOpenComments={handleOpenComments}
             userActivity={userActivity}
+            isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id}
           />
         </div>
       )}

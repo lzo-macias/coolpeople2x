@@ -1,0 +1,92 @@
+/**
+ * Users Module Types
+ */
+
+import type { UserType, Tier, FollowRequestStatus } from '../../../generated/prisma/index.js';
+
+// -----------------------------------------------------------------------------
+// Public Profile (what others see)
+// -----------------------------------------------------------------------------
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  userType: UserType;
+  isVerified: boolean;
+  isPrivate: boolean;
+  createdAt: Date;
+
+  // Stats
+  followersCount: number;
+  followingCount: number;
+
+  // Candidate-only fields
+  points?: {
+    total: number;
+    tier: Tier;
+    raceId: string;
+    raceName: string;
+  }[];
+  reviewsCount?: number;
+  averageRating?: number;
+}
+
+// -----------------------------------------------------------------------------
+// Private Profile (what the user sees about themselves)
+// -----------------------------------------------------------------------------
+
+export interface PrivateProfile extends PublicProfile {
+  email: string;
+  phone: string | null;
+  isFrozen: boolean;
+
+  // Party memberships
+  parties: {
+    id: string;
+    name: string;
+    handle: string;
+    permissions: string[];
+  }[];
+
+  // Races
+  racesFollowing: { id: string; title: string }[];
+  racesCompeting: { id: string; title: string }[];
+
+  // Follow requests (pending count for private accounts)
+  pendingFollowRequestsCount?: number;
+}
+
+// -----------------------------------------------------------------------------
+// Follow Request Types
+// -----------------------------------------------------------------------------
+
+export interface FollowRequestResponse {
+  id: string;
+  fromUser: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  status: FollowRequestStatus;
+  createdAt: Date;
+}
+
+// -----------------------------------------------------------------------------
+// Update Types
+// -----------------------------------------------------------------------------
+
+export interface UpdateProfileRequest {
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+  phone?: string;
+}
+
+export interface BecomeCandidateRequest {
+  // Future: might require acceptance of terms
+  acceptTerms: boolean;
+}
