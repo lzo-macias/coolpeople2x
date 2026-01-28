@@ -17,11 +17,7 @@ export const registerSchema = z.object({
       .trim(),
     password: z
       .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        'Password must contain at least one uppercase letter, one lowercase letter, and one number'
-      ),
+      .min(8, 'Password must be at least 8 characters'),
     username: z
       .string()
       .min(3, 'Username must be at least 3 characters')
@@ -32,11 +28,6 @@ export const registerSchema = z.object({
       )
       .toLowerCase()
       .trim(),
-    displayName: z
-      .string()
-      .min(1, 'Display name is required')
-      .max(50, 'Display name must be at most 50 characters')
-      .trim(),
   }),
 });
 
@@ -46,9 +37,9 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z
+    identifier: z
       .string()
-      .email('Invalid email format')
+      .min(1, 'Email or username is required')
       .toLowerCase()
       .trim(),
     password: z

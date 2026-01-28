@@ -26,29 +26,10 @@ import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generate
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
 
 function AppContent() {
+  // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const { user: authUser, isAuthenticated, loading: authLoading } = useAuth()
   const [authView, setAuthView] = useState('login') // 'login' or 'register'
   const [currentPage, setCurrentPage] = useState(1) // Start on home
-
-  // Show loading state while checking auth
-  if (authLoading) {
-    return (
-      <div className="auth-loading-screen">
-        <div className="auth-loading-content">
-          <div className="auth-loading-logo">CoolPeople</div>
-          <div className="auth-loading-spinner"></div>
-        </div>
-      </div>
-    )
-  }
-
-  // Show login/register if not authenticated
-  if (!isAuthenticated) {
-    if (authView === 'register') {
-      return <Register onSwitchToLogin={() => setAuthView('login')} />
-    }
-    return <Login onSwitchToRegister={() => setAuthView('register')} />
-  }
   const [showComments, setShowComments] = useState(false)
   const [activeReel, setActiveReel] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
@@ -71,8 +52,15 @@ function AppContent() {
   const [userActivity, setUserActivity] = useState([]) // Track all user actions for details page
   const [isLoading, setIsLoading] = useState(false)
   const [partyProfiles, setPartyProfiles] = useState({ ...mockPartyProfiles }) // Party profiles cache
+  const [navHistory, setNavHistory] = useState([])
 
-  // Fetch reels feed from API
+  // Refs must also be at the top
+  const reelsFeedRef = useRef(null)
+  const touchStartX = useRef(0)
+  const touchEndX = useRef(0)
+  const profileOverlayRef = useRef(null)
+
+  // useEffects for data fetching
   useEffect(() => {
     const fetchReels = async () => {
       if (!isAuthenticated) return
@@ -82,10 +70,8 @@ function AppContent() {
         if (response.data && response.data.length > 0) {
           setReels(response.data)
         }
-        // If no data from API, keep mock data as fallback
       } catch (error) {
         console.log('Using mock reels data:', error.message)
-        // Keep mock data on error
       } finally {
         setIsLoading(false)
       }
@@ -93,14 +79,12 @@ function AppContent() {
     fetchReels()
   }, [isAuthenticated])
 
-  // Fetch conversations from API
   useEffect(() => {
     const fetchConversations = async () => {
       if (!isAuthenticated) return
       try {
         const response = await messagesApi.getConversations()
         if (response.data && response.data.length > 0) {
-          // Transform API response to conversation format
           const convMap = {}
           response.data.forEach(conv => {
             convMap[conv.id] = conv.messages || []
@@ -114,7 +98,6 @@ function AppContent() {
     fetchConversations()
   }, [isAuthenticated])
 
-  // Fetch stories from API
   useEffect(() => {
     const fetchStories = async () => {
       if (!isAuthenticated) return
@@ -129,6 +112,28 @@ function AppContent() {
     }
     fetchStories()
   }, [isAuthenticated])
+
+  console.log('AppContent render - isAuthenticated:', isAuthenticated, 'user:', authUser)
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-content">
+          <div className="auth-loading-logo">CoolPeople</div>
+          <div className="auth-loading-spinner"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login/register if not authenticated
+  if (!isAuthenticated) {
+    if (authView === 'register') {
+      return <Register onSwitchToLogin={() => setAuthView('login')} />
+    }
+    return <Login onSwitchToRegister={() => setAuthView('register')} />
+  }
 
   // Function to track user activity (likes, comments, nominations, etc.)
   const trackActivity = (type, video) => {
@@ -151,9 +156,6 @@ function AppContent() {
     }
     setUserActivity(prev => [activity, ...prev])
   }
-
-  // Ref for scrolling reels feed to top after posting
-  const reelsFeedRef = useRef(null)
 
   // Current user info from auth context
   // isParticipant = true means they can't be nominated as a candidate in races
@@ -303,9 +305,6 @@ function AppContent() {
     }, 100)
   }
 
-  // Navigation history stack
-  const [navHistory, setNavHistory] = useState([])
-
   // Save current overlay state to history
   const saveToHistory = () => {
     const currentState = {
@@ -352,9 +351,6 @@ function AppContent() {
   }
 
   // Swipe handling
-  const touchStartX = useRef(0)
-  const touchEndX = useRef(0)
-
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX
   }
@@ -387,8 +383,6 @@ function AppContent() {
     setShowComments(false)
     setActiveReel(null)
   }
-
-  const profileOverlayRef = useRef(null)
 
   const handleOpenProfile = (candidate) => {
     saveToHistory()

@@ -18,8 +18,10 @@ export const AuthProvider = ({ children }) => {
       const token = getAuthToken();
       if (token) {
         try {
-          const userData = await authApi.me();
-          setUser(userData.user || userData);
+          const result = await authApi.me();
+          // API returns {success: true, data: {user}} or {user}
+          const userData = result.data?.user || result.user || result;
+          setUser(userData);
         } catch (err) {
           // Token invalid or expired
           setAuthToken(null);
@@ -35,9 +37,14 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const result = await authApi.login(credentials);
-      setUser(result.user);
+      // API returns {success: true, data: {user, token}}
+      const userData = result.data?.user || result.user;
+      console.log('Login result:', result);
+      console.log('Setting user:', userData);
+      setUser(userData);
       return result;
     } catch (err) {
+      console.error('Login error:', err);
       setError(err.message);
       throw err;
     }
@@ -47,10 +54,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const result = await authApi.register(data);
-      if (result.token) {
-        setAuthToken(result.token);
-        setUser(result.user);
-      }
+      // Don't auto-login, let user sign in manually
       return result;
     } catch (err) {
       setError(err.message);

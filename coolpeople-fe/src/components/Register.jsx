@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import '../styling/Auth.css'
 
 function Register({ onSwitchToLogin }) {
-  const { register, loginWithGoogle, loginWithApple, error: authError } = useAuth()
+  const { register, login, loginWithGoogle, loginWithApple, error: authError } = useAuth()
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -17,9 +17,14 @@ function Register({ onSwitchToLogin }) {
     setIsLoading(true)
 
     try {
+      console.log('1. Starting registration...')
       await register({ email, username, password })
-      // Success - AuthContext will update isAuthenticated
+      console.log('2. Registration successful, now logging in...')
+      const result = await login({ identifier: username, password })
+      console.log('3. Login successful!', result)
+      // Success - AuthContext will update isAuthenticated and show main app
     } catch (err) {
+      console.error('Registration/Login error:', err)
       setError(err.message || 'Registration failed. Please try again.')
     } finally {
       setIsLoading(false)
@@ -125,6 +130,13 @@ function Register({ onSwitchToLogin }) {
             </div>
           </div>
 
+                  <button
+            type="submit"
+            className="auth-continue-btn"
+            disabled={isLoading || !email || !username || !password}
+          >
+            {isLoading ? 'Creating account...' : 'Continue'}
+          </button>
         </form>
 
         {/* Divider */}

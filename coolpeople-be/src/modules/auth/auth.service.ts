@@ -40,7 +40,7 @@ export const toSafeUser = (user: User): SafeUser => ({
 // -----------------------------------------------------------------------------
 
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
-  const { email, password, username, displayName } = data;
+  const { email, password, username } = data;
 
   // Check if email already exists
   const existingEmail = await prisma.user.findUnique({
@@ -61,13 +61,13 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
   // Hash password
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Create user
+  // Create user (displayName defaults to username)
   const user = await prisma.user.create({
     data: {
       email,
       passwordHash,
       username,
-      displayName,
+      displayName: username,
       userType: 'PARTICIPANT', // New users start as participants
     },
   });
@@ -90,15 +90,20 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 // -----------------------------------------------------------------------------
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
-  const { email, password } = data;
+  const { identifier, password } = data;
 
-  // Find user by email
-  const user = await prisma.user.findUnique({
-    where: { email },
+  // Find user by email or username
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: identifier },
+        { username: identifier },
+      ],
+    },
   });
 
   if (!user) {
-    throw new UnauthorizedError('Invalid email or password');
+    throw new UnauthorizedError('Invalid username/email or password');
   }
 
   // Check if user has a password (might be OAuth-only)

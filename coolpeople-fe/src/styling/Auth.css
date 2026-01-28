@@ -183,6 +183,31 @@
   to { transform: rotate(360deg); }
 }
 
+/* Continue Button */
+.auth-continue-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(90deg, #FF6B8A, #4ECDC4);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.auth-continue-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+}
+
+.auth-continue-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Bottom Section - fills remaining space */
 .auth-bottom-section {
   display: flex;

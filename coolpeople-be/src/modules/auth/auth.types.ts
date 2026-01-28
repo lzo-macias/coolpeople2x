@@ -12,11 +12,10 @@ export interface RegisterRequest {
   email: string;
   password: string;
   username: string;
-  displayName: string;
 }
 
 export interface LoginRequest {
-  email: string;
+  identifier: string;
   password: string;
 }
 

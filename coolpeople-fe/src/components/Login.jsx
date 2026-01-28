@@ -16,7 +16,7 @@ function Login({ onSwitchToRegister }) {
     setIsLoading(true)
 
     try {
-      await login({ emailOrUsername, password })
+      await login({ identifier: emailOrUsername, password })
       // Success - AuthContext will update isAuthenticated
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.')
@@ -104,6 +104,13 @@ function Login({ onSwitchToRegister }) {
             </div>
           </div>
 
+                  <button
+            type="submit"
+            className="auth-continue-btn"
+            disabled={isLoading || !emailOrUsername || !password}
+          >
+            {isLoading ? 'Signing in...' : 'Continue'}
+          </button>
         </form>
 
         {/* Divider */}
