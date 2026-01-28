@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import './styling/App.css'
+import './styling/Auth.css'
 import NominationStories from './components/NominationStories'
 import NominationCard from './components/NominationCard'
 import InviteFriends from './components/InviteFriends'
@@ -15,6 +16,8 @@ import MyProfile from './components/MyProfile'
 import MyBallot from './components/MyBallot'
 import Messages from './components/Messages'
 import CreateScreen from './components/CreateScreen'
+import Login from './components/Login'
+import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi } from './services/api'
 import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
@@ -23,8 +26,29 @@ import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generate
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
 
 function AppContent() {
-  const { user: authUser, isAuthenticated } = useAuth()
+  const { user: authUser, isAuthenticated, loading: authLoading } = useAuth()
+  const [authView, setAuthView] = useState('login') // 'login' or 'register'
   const [currentPage, setCurrentPage] = useState(1) // Start on home
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-content">
+          <div className="auth-loading-logo">CoolPeople</div>
+          <div className="auth-loading-spinner"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login/register if not authenticated
+  if (!isAuthenticated) {
+    if (authView === 'register') {
+      return <Register onSwitchToLogin={() => setAuthView('login')} />
+    }
+    return <Login onSwitchToRegister={() => setAuthView('register')} />
+  }
   const [showComments, setShowComments] = useState(false)
   const [activeReel, setActiveReel] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
@@ -131,15 +155,15 @@ function AppContent() {
   // Ref for scrolling reels feed to top after posting
   const reelsFeedRef = useRef(null)
 
-  // Current user info (would come from auth in real app)
+  // Current user info from auth context
   // isParticipant = true means they can't be nominated as a candidate in races
   const currentUser = {
-    id: 'current-user',
-    username: 'William.Hiya',
-    displayName: 'William Harrison',
+    id: authUser?.id || 'current-user',
+    username: authUser?.username || 'User',
+    displayName: authUser?.displayName || 'User',
     party: userParty?.name || 'Independent',
-    avatar: 'https://i.pravatar.cc/40?img=12',
-    isParticipant: true, // Participant (not a candidate) - can target races but can't be nominated
+    avatar: authUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser?.displayName || 'User')}&background=8b5cf6&color=fff`,
+    isParticipant: authUser?.userType === 'PARTICIPANT', // PARTICIPANT can't be nominated, CANDIDATE can
   }
 
   // Handle new post creation

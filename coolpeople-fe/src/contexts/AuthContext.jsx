@@ -63,6 +63,31 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const loginWithGoogle = async () => {
+    setError(null);
+    try {
+      // Initialize Google OAuth
+      // For now, this will use a popup-based flow
+      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${import.meta.env.VITE_GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/callback')}&response_type=code&scope=email%20profile&prompt=select_account`;
+      window.location.href = googleAuthUrl;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const loginWithApple = async () => {
+    setError(null);
+    try {
+      // Initialize Apple Sign In
+      const appleAuthUrl = `https://appleid.apple.com/auth/authorize?client_id=${import.meta.env.VITE_APPLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/callback')}&response_type=code&scope=email%20name&response_mode=form_post`;
+      window.location.href = appleAuthUrl;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   const updateUser = (userData) => {
     setUser(prev => ({ ...prev, ...userData }));
   };
@@ -75,6 +100,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    loginWithGoogle,
+    loginWithApple,
     updateUser,
   };
 

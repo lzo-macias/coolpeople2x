@@ -49,35 +49,16 @@ const systemRaces = [
 ];
 
 // -----------------------------------------------------------------------------
-// Test Users
+// Test Users - Removed for production-ready fresh start
+// Users will register through the app
 // -----------------------------------------------------------------------------
 
-const testUsers = [
-  {
-    email: 'alice@test.com',
-    username: 'alice',
-    displayName: 'Alice Admin',
-    userType: 'CANDIDATE' as const,
-  },
-  {
-    email: 'bob@test.com',
-    username: 'bob',
-    displayName: 'Bob Builder',
-    userType: 'CANDIDATE' as const,
-  },
-  {
-    email: 'charlie@test.com',
-    username: 'charlie',
-    displayName: 'Charlie Chatter',
-    userType: 'PARTICIPANT' as const,
-  },
-  {
-    email: 'diana@test.com',
-    username: 'diana',
-    displayName: 'Diana Dancer',
-    userType: 'PARTICIPANT' as const,
-  },
-];
+const testUsers: Array<{
+  email: string;
+  username: string;
+  displayName: string;
+  userType: 'CANDIDATE' | 'PARTICIPANT';
+}> = [];
 
 // -----------------------------------------------------------------------------
 // Main seed function

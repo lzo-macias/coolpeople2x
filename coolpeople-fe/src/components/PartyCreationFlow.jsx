@@ -101,15 +101,9 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
   const sendToOptions = ['Mamas gaga', 'Sunday Canvassing', 'Local Activists']
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
 
-  // Mock users for search
-  const mockUsers = [
-    { id: 1, username: 'sarah_politics', name: 'Sarah Johnson', avatar: 'https://i.pravatar.cc/100?img=1' },
-    { id: 2, username: 'mike_civic', name: 'Mike Chen', avatar: 'https://i.pravatar.cc/100?img=2' },
-    { id: 3, username: 'alex_voter', name: 'Alex Rivera', avatar: 'https://i.pravatar.cc/100?img=3' },
-    { id: 4, username: 'jordan_2024', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=4' },
-    { id: 5, username: 'casey_local', name: 'Casey Williams', avatar: 'https://i.pravatar.cc/100?img=5' },
-    { id: 6, username: 'taylor_vote', name: 'Taylor Brown', avatar: 'https://i.pravatar.cc/100?img=6' },
-  ]
+  // Users for search - will be fetched from backend API
+  // Empty for fresh start - users will be populated as they register
+  const mockUsers = []
 
   const filteredAdminUsers = mockUsers.filter(user =>
     !adminInvites.find(a => a.id === user.id) &&
