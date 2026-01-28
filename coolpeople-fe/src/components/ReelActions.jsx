@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelActions.css'
 import { getPartyColor } from '../data/mockData'
+import { reelsApi, usersApi } from '../services/api'
 
 // Mock recent contacts for share sheet (users, parties, group chats)
 const recentContacts = [
@@ -29,27 +30,74 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const [createGroupExpanded, setCreateGroupExpanded] = useState(false)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
 
-  const handleLike = () => {
-    if (isLiked) {
-      // Parse and decrement
+  const handleLike = async () => {
+    // Optimistic update
+    const wasLiked = isLiked
+    if (wasLiked) {
       const num = parseInt(likeCount.replace(/,/g, '')) - 1
       setLikeCount(num.toLocaleString())
     } else {
-      // Parse and increment
       const num = parseInt(likeCount.replace(/,/g, '')) + 1
       setLikeCount(num.toLocaleString())
-      // Track the like activity
       if (onTrackActivity && reel) {
         onTrackActivity('like', reel)
       }
     }
-    setIsLiked(!isLiked)
+    setIsLiked(!wasLiked)
+
+    // Sync with API
+    try {
+      if (reel?.id) {
+        if (wasLiked) {
+          await reelsApi.unlikeReel(reel.id)
+        } else {
+          await reelsApi.likeReel(reel.id)
+        }
+      }
+    } catch (error) {
+      // Revert on error
+      console.log('Like error:', error.message)
+      setIsLiked(wasLiked)
+      const num = parseInt(likeCount.replace(/,/g, '')) + (wasLiked ? 1 : -1)
+      setLikeCount(num.toLocaleString())
+    }
+  }
+
+  const handleRepost = async () => {
+    try {
+      if (reel?.id) {
+        await reelsApi.repostReel(reel.id)
+      }
+    } catch (error) {
+      console.log('Repost error:', error.message)
+    }
+    setShowRepostMenu(false)
+  }
+
+  const handleShare = async () => {
+    try {
+      if (reel?.id) {
+        await reelsApi.shareReel(reel.id)
+      }
+    } catch (error) {
+      console.log('Share error:', error.message)
+    }
+  }
+
+  const handleFollow = async () => {
+    try {
+      if (user?.id) {
+        await usersApi.followUser(user.id)
+      }
+    } catch (error) {
+      console.log('Follow error:', error.message)
+    }
   }
 
   return (
     <div className="reel-actions">
       {/* Profile with follow badge */}
-      <button className="action-btn profile-btn">
+      <button className="action-btn profile-btn" onClick={handleFollow}>
         <img
           src={user?.avatar || 'https://i.pravatar.cc/40?img=1'}
           alt="profile"
@@ -92,7 +140,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
       </button>
 
       {/* Share */}
-      <button className="action-btn" onClick={() => setShowShareSheet(true)}>
+      <button className="action-btn" onClick={() => { handleShare(); setShowShareSheet(true); }}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
           <polyline points="16 6 12 2 8 6" />
@@ -116,10 +164,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
           <div className="repost-menu" onClick={(e) => e.stopPropagation()}>
             <div className="repost-menu-handle" />
             <div className="repost-options-row">
-              <button className="repost-option repost" onClick={() => {
-                // Handle repost
-                setShowRepostMenu(false)
-              }}>
+              <button className="repost-option repost" onClick={handleRepost}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M17 1l4 4-4 4" />
                   <path d="M3 11V9a4 4 0 0 1 4-4h14" />

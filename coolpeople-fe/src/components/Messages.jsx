@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { mockMessages, getPartyColor } from '../data/mockData'
+import { messagesApi, storiesApi, notificationsApi, searchApi } from '../services/api'
 import Conversation from './Conversation'
 import CreateScreen from './CreateScreen'
 import '../styling/Messages.css'
@@ -108,8 +109,139 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const touchStartX = useRef(0)
   const currentUsername = 'William.h.for.mayor'
 
-  const unreadCount = mockMessages.filter(m => m.hasUnread).length
-  const totalCount = mockMessages.length
+  // State for API data with mock fallbacks
+  const [messages, setMessages] = useState(mockMessages)
+  const [stories, setStories] = useState([])
+  const [notifications, setNotifications] = useState({ likes: [], comments: [], reviews: [] })
+  const [activity, setActivity] = useState({ likes: 0, comments: 0, reviews: 0 })
+  const [searchResults, setSearchResults] = useState([])
+
+  // Fetch messages from API
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const response = await messagesApi.getConversations()
+        if (response.data && response.data.length > 0) {
+          // Transform API response to match mock format
+          const transformedMessages = response.data.map(conv => ({
+            id: conv.id,
+            user: {
+              username: conv.otherUser?.username || conv.otherUser?.displayName,
+              avatar: conv.otherUser?.avatarUrl,
+              party: conv.otherUser?.party || null,
+            },
+            lastMessage: conv.lastMessage?.text || '',
+            timestamp: formatTimestamp(conv.lastMessage?.createdAt),
+            unreadCount: conv.unreadCount || 0,
+            isOnline: conv.otherUser?.isOnline || false,
+            hasUnread: conv.unreadCount > 0,
+          }))
+          setMessages(transformedMessages)
+        }
+      } catch (error) {
+        console.log('Using mock messages:', error.message)
+      }
+    }
+    fetchMessages()
+  }, [])
+
+  // Fetch stories from API
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        const response = await storiesApi.getFeed()
+        if (response.data && response.data.length > 0) {
+          setStories(response.data)
+        }
+      } catch (error) {
+        console.log('Using mock stories:', error.message)
+      }
+    }
+    fetchStories()
+  }, [])
+
+  // Fetch notifications from API
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await notificationsApi.getNotifications()
+        if (response.data) {
+          // Group notifications by type
+          const grouped = {
+            likes: response.data.filter(n => n.type === 'LIKE').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: 'liked your post',
+              timestamp: formatTimestamp(n.createdAt),
+              postImage: n.reel?.thumbnailUrl,
+            })),
+            comments: response.data.filter(n => n.type === 'COMMENT').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: `commented: "${n.comment?.text || ''}"`,
+              timestamp: formatTimestamp(n.createdAt),
+              postImage: n.reel?.thumbnailUrl,
+            })),
+            reviews: response.data.filter(n => n.type === 'REVIEW').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: `left you a ${n.review?.rating || 5}-star review`,
+              timestamp: formatTimestamp(n.createdAt),
+              rating: n.review?.rating,
+            })),
+          }
+          setNotifications(grouped)
+          setActivity({
+            likes: grouped.likes.length,
+            comments: grouped.comments.length,
+            reviews: grouped.reviews.length,
+          })
+        }
+      } catch (error) {
+        console.log('Using mock notifications:', error.message)
+      }
+    }
+    fetchNotifications()
+  }, [])
+
+  // Handle compose search
+  useEffect(() => {
+    if (!composeSearch || composeSearch.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    const searchTimer = setTimeout(async () => {
+      try {
+        const response = await searchApi.search(composeSearch, { type: 'users' })
+        if (response.data?.users) {
+          setSearchResults(response.data.users)
+        }
+      } catch (error) {
+        console.log('Search error:', error.message)
+      }
+    }, 300)
+
+    return () => clearTimeout(searchTimer)
+  }, [composeSearch])
+
+  // Helper function to format timestamps
+  const formatTimestamp = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 60) return `${diffMins}m`
+    if (diffHours < 24) return `${diffHours}h`
+    return `${diffDays}d`
+  }
+
+  const unreadCount = messages.filter(m => m.hasUnread).length
+  const totalCount = messages.length
 
   const filters = [
     { id: 'all', label: 'All', count: totalCount },
@@ -118,7 +250,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     { id: 'requests', label: 'Requests', count: null },
   ]
 
-  const filteredMessages = mockMessages.filter((msg) => {
+  const filteredMessages = messages.filter((msg) => {
     if (activeFilter === 'unread') return msg.hasUnread
     if (activeFilter === 'party') return msg.user.party === 'The Pink Lady Party'
     return true
@@ -335,15 +467,23 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const renderActivityScreen = () => {
     if (!showActivity) return null
 
+    // Use API notifications with fallback to mock
+    const activityNotifications = {
+      likes: notifications.likes.length > 0 ? notifications.likes : mockActivityNotifications.likes,
+      comments: notifications.comments.length > 0 ? notifications.comments : mockActivityNotifications.comments,
+      reviews: notifications.reviews.length > 0 ? notifications.reviews : mockActivityNotifications.reviews,
+    }
+
     const allNotifications = [
-      ...mockActivityNotifications.likes.map(n => ({ ...n, type: 'like' })),
-      ...mockActivityNotifications.comments.map(n => ({ ...n, type: 'comment' })),
-      ...mockActivityNotifications.reviews.map(n => ({ ...n, type: 'review' })),
+      ...activityNotifications.likes.map(n => ({ ...n, type: 'like' })),
+      ...activityNotifications.comments.map(n => ({ ...n, type: 'comment' })),
+      ...activityNotifications.reviews.map(n => ({ ...n, type: 'review' })),
     ].sort((a, b) => {
       const timeToMinutes = (t) => {
-        if (t.includes('m ago')) return parseInt(t)
-        if (t.includes('h ago')) return parseInt(t) * 60
-        if (t.includes('d ago')) return parseInt(t) * 60 * 24
+        if (!t) return 0
+        if (t.includes('m')) return parseInt(t) || 0
+        if (t.includes('h')) return (parseInt(t) || 0) * 60
+        if (t.includes('d')) return (parseInt(t) || 0) * 60 * 24
         return 0
       }
       return timeToMinutes(a.timestamp) - timeToMinutes(b.timestamp)
@@ -352,10 +492,10 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     const filteredNotifications = activityFilter === 'all'
       ? allNotifications
       : activityFilter === 'likes'
-        ? mockActivityNotifications.likes.map(n => ({ ...n, type: 'like' }))
+        ? activityNotifications.likes.map(n => ({ ...n, type: 'like' }))
         : activityFilter === 'comments'
-          ? mockActivityNotifications.comments.map(n => ({ ...n, type: 'comment' }))
-          : mockActivityNotifications.reviews.map(n => ({ ...n, type: 'review' }))
+          ? activityNotifications.comments.map(n => ({ ...n, type: 'comment' }))
+          : activityNotifications.reviews.map(n => ({ ...n, type: 'review' }))
 
     return createPortal(
       <div className="activity-screen">
@@ -436,13 +576,20 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   }
 
   // All users for compose search
-  const allUsers = mockMessages.map(m => m.user)
+  const allUsers = messages.map(m => m.user)
 
-  // Filter users based on search
+  // Filter users based on search - prefer API results when available
   const filteredUsers = composeSearch.trim()
-    ? allUsers.filter(user =>
-        user.username.toLowerCase().includes(composeSearch.toLowerCase())
-      )
+    ? (searchResults.length > 0
+        ? searchResults.map(u => ({
+            id: u.id,
+            username: u.username || u.displayName,
+            avatar: u.avatarUrl,
+            party: u.party,
+          }))
+        : allUsers.filter(user =>
+            user.username.toLowerCase().includes(composeSearch.toLowerCase())
+          ))
     : allUsers
 
   // Toggle recipient selection
@@ -457,10 +604,21 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   }
 
   // Handle send message
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (selectedRecipients.length > 0 && composeMessage.trim()) {
-      // In a real app, this would send the message
-      console.log('Sending to:', selectedRecipients, 'Message:', composeMessage)
+      try {
+        // Send message to each recipient
+        const sendPromises = selectedRecipients.map(recipient =>
+          messagesApi.sendMessage({
+            recipientId: recipient.id,
+            text: composeMessage,
+          })
+        )
+        await Promise.all(sendPromises)
+        console.log('Messages sent successfully')
+      } catch (error) {
+        console.log('Error sending message:', error.message)
+      }
       // Reset and close
       setSelectedRecipients([])
       setComposeMessage('')
@@ -670,7 +828,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               </svg>
             </div>
             <div className="activity-info">
-              <span className="activity-count">{mockActivity.likes}</span>
+              <span className="activity-count">{activity.likes || mockActivity.likes}</span>
               <span className="activity-label">New likes</span>
             </div>
           </div>
@@ -681,7 +839,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               </svg>
             </div>
             <div className="activity-info">
-              <span className="activity-count">{mockActivity.comments}</span>
+              <span className="activity-count">{activity.comments || mockActivity.comments}</span>
               <span className="activity-label">Comments</span>
             </div>
           </div>
@@ -692,7 +850,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               </svg>
             </div>
             <div className="activity-info">
-              <span className="activity-count">{mockActivity.reviews}</span>
+              <span className="activity-count">{activity.reviews || mockActivity.reviews}</span>
               <span className="activity-label">Reviews</span>
             </div>
           </div>

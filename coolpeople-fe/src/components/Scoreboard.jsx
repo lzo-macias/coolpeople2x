@@ -3,6 +3,7 @@ import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardPartyRow from './ScoreboardPartyRow'
 import InviteFriends from './InviteFriends'
+import { racesApi, favoritesApi, searchApi } from '../services/api'
 import { mockScoreboard, mockPartyScoreboard, getPartyColor } from '../data/mockData'
 
 // Mock recommended users
@@ -37,13 +38,108 @@ function Scoreboard({ onOpenProfile, isActive }) {
   const [pendingUnfavorites, setPendingUnfavorites] = useState(new Set()) // Track recently unfavorited users
   const [isExpanded, setIsExpanded] = useState(false) // Track if section is expanded beyond 8 rows
   const [isDropdownOpen, setIsDropdownOpen] = useState(false) // Track if race dropdown is open
+  const [isLoading, setIsLoading] = useState(false)
+  const [races, setRaces] = useState([]) // Available races from API
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState({ people: [], races: [] })
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
+
+  // Fetch scoreboard data from API for the active race
+  useEffect(() => {
+    const fetchScoreboard = async () => {
+      // Skip if not active or no races loaded
+      if (!isActive) return
+      setIsLoading(true)
+      try {
+        // Fetch list of races first
+        const racesResponse = await racesApi.listRaces()
+        if (racesResponse.data && racesResponse.data.length > 0) {
+          setRaces(racesResponse.data)
+
+          // Fetch scoreboard for each race
+          const scoreboardPromises = racesResponse.data.slice(0, 5).map(async (race) => {
+            try {
+              const scoreboardResponse = await racesApi.getScoreboard(race.id, { limit: 20 })
+              return { raceId: race.id, data: scoreboardResponse.data || [] }
+            } catch (err) {
+              return { raceId: race.id, data: [] }
+            }
+          })
+
+          const scoreboards = await Promise.all(scoreboardPromises)
+
+          // Update users/parties based on race type
+          scoreboards.forEach(sb => {
+            const race = racesResponse.data.find(r => r.id === sb.raceId)
+            if (race && sb.data.length > 0) {
+              if (race.raceType === 'PARTY_VS_PARTY') {
+                setParties(sb.data.map((entry, idx) => ({
+                  ...entry,
+                  rank: idx + 1,
+                  partyId: entry.party?.id || entry.id,
+                  partyName: entry.party?.name || entry.name,
+                  color: entry.party?.color || '#e91e8c',
+                  avatar: entry.party?.avatarUrl || entry.avatarUrl,
+                  score: entry.totalPoints,
+                  sparklineData: entry.sparkline?.map(s => s.points) || [],
+                  isFavorited: entry.isFavorited || false,
+                })))
+              } else {
+                setUsers(sb.data.map((entry, idx) => ({
+                  ...entry,
+                  rank: idx + 1,
+                  userId: entry.user?.id || entry.id,
+                  username: entry.user?.username || entry.username,
+                  avatar: entry.user?.avatarUrl || entry.avatarUrl,
+                  party: entry.user?.party || entry.party,
+                  score: entry.totalPoints,
+                  sparklineData: entry.sparkline?.map(s => s.points) || [],
+                  isFavorited: entry.isFavorited || false,
+                })))
+              }
+            }
+          })
+        }
+      } catch (error) {
+        console.log('Using mock scoreboard data:', error.message)
+        // Keep mock data on error
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchScoreboard()
+  }, [isActive])
+
+  // Handle search
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults({ people: [], races: [] })
+      return
+    }
+
+    const searchTimer = setTimeout(async () => {
+      try {
+        const response = await searchApi.search(searchQuery)
+        if (response.data) {
+          setSearchResults({
+            people: response.data.users || [],
+            races: response.data.races || [],
+          })
+        }
+      } catch (error) {
+        console.log('Search error:', error.message)
+      }
+    }, 300) // Debounce search
+
+    return () => clearTimeout(searchTimer)
+  }, [searchQuery])
 
   // Close search when navigating away and clear pending unfavorites
   useEffect(() => {
     if (!isActive) {
       setIsSearchOpen(false)
       setPendingUnfavorites(new Set())
+      setSearchQuery('')
     }
   }, [isActive])
 
@@ -116,7 +212,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
     }
   }
 
-  const handleToggleFavorite = (userId) => {
+  const handleToggleFavorite = async (userId) => {
     const user = users.find(u => u.userId === userId)
 
     // If we're in favorited view and unfavoriting, add to pending unfavorites
@@ -133,14 +229,32 @@ function Scoreboard({ onOpenProfile, isActive }) {
       })
     }
 
+    // Optimistic update
     setUsers(users.map(u =>
       u.userId === userId
         ? { ...u, isFavorited: !u.isFavorited }
         : u
     ))
+
+    // Sync with API
+    try {
+      if (user?.isFavorited) {
+        await favoritesApi.removeFavorite(userId)
+      } else {
+        await favoritesApi.addFavorite({ userId, type: 'USER' })
+      }
+    } catch (error) {
+      // Revert on error
+      console.log('Favorite toggle error:', error.message)
+      setUsers(users.map(u =>
+        u.userId === userId
+          ? { ...u, isFavorited: user?.isFavorited }
+          : u
+      ))
+    }
   }
 
-  const handleTogglePartyFavorite = (partyId) => {
+  const handleTogglePartyFavorite = async (partyId) => {
     const party = parties.find(p => p.partyId === partyId)
 
     // If we're in favorited view and unfavoriting, add to pending unfavorites
@@ -157,11 +271,29 @@ function Scoreboard({ onOpenProfile, isActive }) {
       })
     }
 
+    // Optimistic update
     setParties(parties.map(p =>
       p.partyId === partyId
         ? { ...p, isFavorited: !p.isFavorited }
         : p
     ))
+
+    // Sync with API
+    try {
+      if (party?.isFavorited) {
+        await favoritesApi.removeFavorite(partyId)
+      } else {
+        await favoritesApi.addFavorite({ partyId, type: 'PARTY' })
+      }
+    } catch (error) {
+      // Revert on error
+      console.log('Favorite toggle error:', error.message)
+      setParties(parties.map(p =>
+        p.partyId === partyId
+          ? { ...p, isFavorited: party?.isFavorited }
+          : p
+      ))
+    }
   }
 
   return (

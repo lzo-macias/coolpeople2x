@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import '../styling/CommentsSection.css'
 import Comment from './Comment'
 import { mockComments } from '../data/mockData'
+import { commentsApi } from '../services/api'
 
 function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
   const [dividerAtBottom, setDividerAtBottom] = useState(false)
@@ -13,10 +14,65 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
   const inputRef = useRef(null)
   const commentsContainerRef = useRef(null)
 
-  const baseComments = mockComments['reel-1'] || { cpComments: [], regularComments: [] }
+  const mockBaseComments = mockComments['reel-1'] || { cpComments: [], regularComments: [] }
+  const [apiComments, setApiComments] = useState(null)
   const [userComments, setUserComments] = useState([])
   const [commentReplies, setCommentReplies] = useState({})
   const [replyingTo, setReplyingTo] = useState(null) // { commentId, username }
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Fetch comments from API
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!reel?.id) return
+      setIsLoading(true)
+      try {
+        const response = await commentsApi.getComments(reel.id)
+        if (response.data && response.data.length > 0) {
+          // Transform API response to match expected format
+          const cpComments = response.data
+            .filter(c => c.isVerified)
+            .map(c => ({
+              id: c.id,
+              userId: c.user?.id,
+              username: c.user?.username,
+              avatar: c.user?.avatarUrl,
+              party: c.user?.party,
+              profileType: c.user?.isCandidate ? 'candidate' : 'participant',
+              text: c.text,
+              likes: c.likeCount || 0,
+              isCP: true,
+              replies: [],
+              createdAt: c.createdAt,
+            }))
+          const regularComments = response.data
+            .filter(c => !c.isVerified)
+            .map(c => ({
+              id: c.id,
+              userId: c.user?.id,
+              username: c.user?.username,
+              avatar: c.user?.avatarUrl,
+              party: c.user?.party,
+              profileType: c.user?.isCandidate ? 'candidate' : 'participant',
+              text: c.text,
+              likes: c.likeCount || 0,
+              isCP: false,
+              replies: [],
+              createdAt: c.createdAt,
+            }))
+          setApiComments({ cpComments, regularComments })
+        }
+      } catch (error) {
+        console.log('Using mock comments:', error.message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchComments()
+  }, [reel?.id])
+
+  // Use API comments if available, otherwise use mock
+  const baseComments = apiComments || mockBaseComments
 
   const handleReply = (commentId, username) => {
     setReplyingTo({ commentId, username })
@@ -24,9 +80,11 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
     inputRef.current?.focus()
   }
 
-  const handleSendComment = () => {
+  const handleSendComment = async () => {
     if (commentText.trim()) {
       const newId = `user-${Date.now()}`
+      const text = commentText
+      setCommentText('') // Clear immediately for better UX
 
       if (replyingTo) {
         // Adding a reply to a comment
@@ -34,7 +92,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           id: newId,
           username: 'You',
           avatar: 'https://i.pravatar.cc/40?img=20',
-          text: commentText,
+          text: text,
           likes: 0,
           party: null
         }
@@ -49,13 +107,25 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           const replyElement = document.getElementById(newId)
           replyElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 100)
+
+        // Sync with API
+        try {
+          if (reel?.id) {
+            await commentsApi.addComment(reel.id, {
+              text: text,
+              parentId: replyingTo.commentId,
+            })
+          }
+        } catch (error) {
+          console.log('Add reply error:', error.message)
+        }
       } else {
         // Adding a new top-level comment
         const newComment = {
           id: newId,
           username: 'You',
           avatar: 'https://i.pravatar.cc/40?img=20',
-          text: commentText,
+          text: text,
           likes: 0,
           party: null,
           profileType: 'participant'
@@ -67,8 +137,16 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
           const commentElement = document.getElementById(newId)
           commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 100)
+
+        // Sync with API
+        try {
+          if (reel?.id) {
+            await commentsApi.addComment(reel.id, { text: text })
+          }
+        } catch (error) {
+          console.log('Add comment error:', error.message)
+        }
       }
-      setCommentText('')
     }
   }
 

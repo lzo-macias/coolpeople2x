@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './styling/App.css'
 import NominationStories from './components/NominationStories'
 import NominationCard from './components/NominationCard'
@@ -15,12 +15,15 @@ import MyProfile from './components/MyProfile'
 import MyBallot from './components/MyBallot'
 import Messages from './components/Messages'
 import CreateScreen from './components/CreateScreen'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { reelsApi, messagesApi, partiesApi, storiesApi } from './services/api'
 import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
 
-function App() {
+function AppContent() {
+  const { user: authUser, isAuthenticated } = useAuth()
   const [currentPage, setCurrentPage] = useState(1) // Start on home
   const [showComments, setShowComments] = useState(false)
   const [activeReel, setActiveReel] = useState(null)
@@ -36,12 +39,72 @@ function App() {
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
   const [userParty, setUserParty] = useState(null) // User's created party
   const [hasOptedIn, setHasOptedIn] = useState(false) // Whether user has opted into social credit
-  const [reels, setReels] = useState([...mockReels]) // All posts in feed
+  const [reels, setReels] = useState([...mockReels]) // All posts in feed - fallback to mock
   const [userPosts, setUserPosts] = useState([]) // Current user's posts
   const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
   const [userStories, setUserStories] = useState([]) // User's stories (nominations)
   const [conversations, setConversations] = useState({ ...mockConversations }) // Chat messages by conversation ID
   const [userActivity, setUserActivity] = useState([]) // Track all user actions for details page
+  const [isLoading, setIsLoading] = useState(false)
+  const [partyProfiles, setPartyProfiles] = useState({ ...mockPartyProfiles }) // Party profiles cache
+
+  // Fetch reels feed from API
+  useEffect(() => {
+    const fetchReels = async () => {
+      if (!isAuthenticated) return
+      setIsLoading(true)
+      try {
+        const response = await reelsApi.getFeed()
+        if (response.data && response.data.length > 0) {
+          setReels(response.data)
+        }
+        // If no data from API, keep mock data as fallback
+      } catch (error) {
+        console.log('Using mock reels data:', error.message)
+        // Keep mock data on error
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchReels()
+  }, [isAuthenticated])
+
+  // Fetch conversations from API
+  useEffect(() => {
+    const fetchConversations = async () => {
+      if (!isAuthenticated) return
+      try {
+        const response = await messagesApi.getConversations()
+        if (response.data && response.data.length > 0) {
+          // Transform API response to conversation format
+          const convMap = {}
+          response.data.forEach(conv => {
+            convMap[conv.id] = conv.messages || []
+          })
+          setConversations(convMap)
+        }
+      } catch (error) {
+        console.log('Using mock conversations:', error.message)
+      }
+    }
+    fetchConversations()
+  }, [isAuthenticated])
+
+  // Fetch stories from API
+  useEffect(() => {
+    const fetchStories = async () => {
+      if (!isAuthenticated) return
+      try {
+        const response = await storiesApi.getFeed()
+        if (response.data && response.data.length > 0) {
+          setUserStories(response.data)
+        }
+      } catch (error) {
+        console.log('Using mock stories:', error.message)
+      }
+    }
+    fetchStories()
+  }, [isAuthenticated])
 
   // Function to track user activity (likes, comments, nominations, etc.)
   const trackActivity = (type, video) => {
@@ -368,16 +431,47 @@ function App() {
       return
     }
 
-    // Otherwise check mock party profiles
-    const partyData = mockPartyProfiles[partyName]
-    if (partyData) {
+    // Check cached party profiles first
+    const cachedParty = partyProfiles[partyName]
+    if (cachedParty) {
       saveToHistory()
       setShowComments(false)
       setShowProfile(false)
       setShowParticipantProfile(false)
-      setActiveParty(partyData)
+      setActiveParty(cachedParty)
       setShowPartyProfile(true)
+      return
     }
+
+    // Try to fetch from API
+    const fetchPartyProfile = async () => {
+      try {
+        // Try to find party by name in API
+        const response = await partiesApi.getParty(partyName)
+        if (response) {
+          // Cache the party profile
+          setPartyProfiles(prev => ({ ...prev, [partyName]: response }))
+          saveToHistory()
+          setShowComments(false)
+          setShowProfile(false)
+          setShowParticipantProfile(false)
+          setActiveParty(response)
+          setShowPartyProfile(true)
+        }
+      } catch (error) {
+        // Fallback to mock data
+        const mockParty = mockPartyProfiles[partyName]
+        if (mockParty) {
+          saveToHistory()
+          setShowComments(false)
+          setShowProfile(false)
+          setShowParticipantProfile(false)
+          setActiveParty(mockParty)
+          setShowPartyProfile(true)
+        }
+      }
+    }
+    fetchPartyProfile()
   }
 
   const handleClosePartyProfile = () => {
@@ -656,6 +750,15 @@ function App() {
         </div>
       )}
     </div>
+  )
+}
+
+// Wrap App with AuthProvider
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

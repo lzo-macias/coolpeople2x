@@ -5,6 +5,7 @@ import ReelActions from './ReelActions'
 import EngagementScoreBar from './EngagementScoreBar'
 import QuoteNominateScreen from './QuoteNominateScreen'
 import { getPartyColor } from '../data/mockData'
+import { racesApi, reelsApi } from '../services/api'
 
 // Helper to generate sparkline data
 const generateSparklineData = (trend = 'up', points = 20) => {
@@ -236,6 +237,70 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   })
   const [raceFollowed, setRaceFollowed] = useState(false)
   const [raceParticipating, setRaceParticipating] = useState(false)
+  const [raceScoreboard, setRaceScoreboard] = useState([])
+  const [followedRaces, setFollowedRaces] = useState([])
+
+  // Record view when reel becomes visible
+  useEffect(() => {
+    if (isVisible && reel?.id) {
+      const recordView = async () => {
+        try {
+          await reelsApi.recordView(reel.id, { watchDuration: 0, completed: false })
+        } catch (error) {
+          // Silent fail for view tracking
+        }
+      }
+      recordView()
+    }
+  }, [isVisible, reel?.id])
+
+  // Fetch scoreboard when race modal opens
+  useEffect(() => {
+    const fetchScoreboard = async () => {
+      if (!showRaceModal || !reel?.targetRace) return
+      try {
+        // Try to find race by name and get scoreboard
+        const racesResponse = await racesApi.listRaces()
+        const race = racesResponse.data?.find(r => r.title === reel.targetRace)
+        if (race) {
+          const scoreboardResponse = await racesApi.getScoreboard(race.id)
+          if (scoreboardResponse.data) {
+            setRaceScoreboard(scoreboardResponse.data.map((entry, idx) => ({
+              id: entry.user?.id || entry.id,
+              name: entry.user?.displayName || entry.user?.username,
+              avatar: entry.user?.avatarUrl,
+              data: entry.sparkline?.map(s => s.points) || [],
+              nominations: formatNominations(entry.totalPoints || 0),
+              stars: 4.5, // Default rating
+              sparkline: entry.sparkline?.map(s => s.points) || generateSparklineData('up'),
+            })))
+          }
+        }
+      } catch (error) {
+        console.log('Using mock scoreboard:', error.message)
+      }
+    }
+    fetchScoreboard()
+  }, [showRaceModal, reel?.targetRace])
+
+  // Fetch followed races for nomination
+  useEffect(() => {
+    const fetchFollowedRaces = async () => {
+      try {
+        const response = await racesApi.listRaces({ type: 'followed' })
+        if (response.data && response.data.length > 0) {
+          setFollowedRaces(response.data.map(r => ({
+            id: r.id,
+            name: r.title,
+            icon: r.bannerUrl || 'https://i.pravatar.cc/40?img=60',
+          })))
+        }
+      } catch (error) {
+        console.log('Using mock followed races:', error.message)
+      }
+    }
+    fetchFollowedRaces()
+  }, [])
 
   // Mock race deadline (290 days from now for demo)
   const [raceDeadline] = useState(() => {
@@ -448,7 +513,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   // Has target race - auto-nominate with checkmark and sound
                   setHasNominatedPoster(true)
                   playNominateSound()
-                } else if (mockFollowedRaces.length > 0) {
+                } else if ((followedRaces.length > 0 || mockFollowedRaces.length > 0)) {
                   // No target race but has followed races, show race selection first
                   setShowNominateRaceSelect(true)
                 } else {
@@ -536,7 +601,17 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 <div className="race-modal-actions">
                   <button
                     className={`race-modal-btn follow ${raceFollowed ? 'checked' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
+                      try {
+                        // Find race ID
+                        const racesResponse = await racesApi.listRaces()
+                        const race = racesResponse.data?.find(r => r.title === data.targetRace)
+                        if (race) {
+                          await racesApi.followRace(race.id)
+                        }
+                      } catch (error) {
+                        console.log('Follow race error:', error.message)
+                      }
                       setRaceFollowed(true)
                       setTimeout(() => setShowRaceModal(false), 400)
                     }}
@@ -545,7 +620,17 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   </button>
                   <button
                     className={`race-modal-btn participate ${raceParticipating ? 'checked' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
+                      try {
+                        // Find race ID
+                        const racesResponse = await racesApi.listRaces()
+                        const race = racesResponse.data?.find(r => r.title === data.targetRace)
+                        if (race) {
+                          await racesApi.competeInRace(race.id)
+                        }
+                      } catch (error) {
+                        console.log('Compete in race error:', error.message)
+                      }
                       setRaceParticipating(true)
                       setTimeout(() => setShowRaceModal(false), 400)
                     }}
@@ -645,8 +730,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   <span className="nominate-race-tag">Current</span>
                 </button>
               )}
-              {/* Followed races */}
-              {mockFollowedRaces.map(race => (
+              {/* Followed races - use API data with mock fallback */}
+              {(followedRaces.length > 0 ? followedRaces : mockFollowedRaces).map(race => (
                 <button
                   key={race.id}
                   className="nominate-race-item"
