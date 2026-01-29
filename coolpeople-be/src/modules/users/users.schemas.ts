@@ -40,7 +40,22 @@ export const updateProfileSchema = z.object({
       .optional(),
     avatarUrl: z
       .string()
-      .url('Invalid avatar URL')
+      .refine(
+        (val) => {
+          // Allow null/empty
+          if (!val) return true;
+          // Allow data URLs (base64 images)
+          if (val.startsWith('data:image/')) return true;
+          // Allow regular URLs
+          try {
+            new URL(val);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'Invalid avatar URL or image data' }
+      )
       .nullable()
       .optional(),
     phone: z

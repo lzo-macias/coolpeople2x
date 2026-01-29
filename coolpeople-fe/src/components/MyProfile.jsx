@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
 import CandidateProfile from './CandidateProfile'
-import { generateSparklineData, getPartyColor } from '../data/mockData'
+import { getPartyColor } from '../data/mockData'
 import '../styling/MyProfile.css'
 
 // Activity type colors and icons (same as CandidateProfile)
@@ -116,27 +117,14 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
   )
 }
 
-// Current logged-in user data (independent, not opted into social credit)
-const myProfileData = {
-  username: 'William.Hiya',
-  avatar: 'https://i.pravatar.cc/150?img=12',
+// Default profile data for new users (stats start at 0)
+const defaultProfileData = {
   party: null, // Independent - no party affiliation
   hasOptedIn: false,
-  following: '9,999',
-  followers: '1M',
-  races: '8',
+  following: '0',
+  followers: '0',
+  races: '0',
   ranking: '.3%',
-  postImages: [
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop',
-  ],
 }
 
 // Tier configuration for CP points
@@ -158,36 +146,208 @@ const calculateStarterPoints = (posts) => {
   return basePoints + postBonus
 }
 
-function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers }) {
+const BIO_MAX_LENGTH = 150 // ~3 lines max
+
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange }) {
+  // Get user data from currentUser prop, fallback to defaults
+  const profileData = {
+    username: currentUser?.username || 'User',
+    avatar: currentUser?.avatar || null, // null means no custom avatar set
+    ...defaultProfileData,
+    // Override with currentUser values if available
+    following: currentUser?.following || defaultProfileData.following,
+    followers: currentUser?.followers || defaultProfileData.followers,
+    races: currentUser?.racesFollowing?.length?.toString() || defaultProfileData.races,
+  }
   const [activeTab, setActiveTab] = useState('posts')
   const [showEditBio, setShowEditBio] = useState(false)
+  const [showBioEdit, setShowBioEdit] = useState(false)
+  const [bioText, setBioText] = useState(currentUser?.bio || '')
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [starterPoints] = useState(() => calculateStarterPoints(userPosts))
   const [showShareModal, setShowShareModal] = useState(false)
   const [showCopiedToast, setShowCopiedToast] = useState(false)
+  const [customAvatar, setCustomAvatar] = useState(null)
+  const [showCropModal, setShowCropModal] = useState(false)
+  const [cropImage, setCropImage] = useState(null)
+  const [cropZoom, setCropZoom] = useState(1)
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const avatarInputRef = useRef(null)
+  const cropCanvasRef = useRef(null)
+  const cropImageRef = useRef(null)
+
+  // Sync bioText with currentUser.bio when it changes externally (e.g., from parent state)
+  useEffect(() => {
+    if (currentUser?.bio !== undefined) {
+      setBioText(currentUser.bio)
+    }
+  }, [currentUser?.bio])
+
+  // Handle avatar file selection
+  const handleAvatarClick = () => {
+    avatarInputRef.current?.click()
+  }
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Use URL.createObjectURL for immediate display
+      const imageUrl = URL.createObjectURL(file)
+      setCropImage(imageUrl)
+      setCropZoom(1)
+      setCropPosition({ x: 0, y: 0 })
+      setShowCropModal(true)
+    }
+  }
+
+  // Handle crop drag start
+  const handleCropDragStart = (e) => {
+    e.preventDefault()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    setIsDragging(true)
+    setDragStart({ x: clientX - cropPosition.x, y: clientY - cropPosition.y })
+  }
+
+  // Handle crop drag move
+  const handleCropDragMove = (e) => {
+    if (!isDragging) return
+    e.preventDefault()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    setCropPosition({
+      x: clientX - dragStart.x,
+      y: clientY - dragStart.y
+    })
+  }
+
+  // Handle crop drag end
+  const handleCropDragEnd = () => {
+    setIsDragging(false)
+  }
+
+  // Handle zoom change
+  const handleZoomChange = (e) => {
+    setCropZoom(parseFloat(e.target.value))
+  }
+
+  // Cancel crop
+  const handleCropCancel = () => {
+    if (cropImage) {
+      URL.revokeObjectURL(cropImage)
+    }
+    setShowCropModal(false)
+    setCropImage(null)
+    setCropZoom(1)
+    setCropPosition({ x: 0, y: 0 })
+  }
+
+  // Apply crop and save avatar
+  const handleCropApply = () => {
+    const img = cropImageRef.current
+    if (!img) return
+
+    const outputSize = 200
+    const cropCircleSize = 240
+
+    // Calculate the base displayed size (before zoom) - matches CSS max-height: 400px
+    let baseDisplayWidth, baseDisplayHeight
+    const maxHeight = 400
+    if (img.naturalHeight > maxHeight) {
+      baseDisplayHeight = maxHeight
+      baseDisplayWidth = img.naturalWidth * (maxHeight / img.naturalHeight)
+    } else {
+      baseDisplayWidth = img.naturalWidth
+      baseDisplayHeight = img.naturalHeight
+    }
+
+    // Apply zoom to get final displayed size
+    const displayedWidth = baseDisplayWidth * cropZoom
+    const displayedHeight = baseDisplayHeight * cropZoom
+
+    // Calculate ratio between original image and displayed size
+    const ratioX = img.naturalWidth / displayedWidth
+    const ratioY = img.naturalHeight / displayedHeight
+
+    // The crop circle is centered in the crop area
+    // The image is centered, then offset by cropPosition
+    // Find where crop circle top-left is relative to displayed image top-left
+    const cropLeftInDisplay = (displayedWidth / 2) - cropPosition.x - (cropCircleSize / 2)
+    const cropTopInDisplay = (displayedHeight / 2) - cropPosition.y - (cropCircleSize / 2)
+
+    // Convert to original image coordinates
+    const sourceX = Math.max(0, cropLeftInDisplay * ratioX)
+    const sourceY = Math.max(0, cropTopInDisplay * ratioY)
+    const sourceWidth = cropCircleSize * ratioX
+    const sourceHeight = cropCircleSize * ratioY
+
+    // Create canvas and draw
+    const canvas = document.createElement('canvas')
+    canvas.width = outputSize
+    canvas.height = outputSize
+    const ctx = canvas.getContext('2d')
+
+    // Fill with white background
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, outputSize, outputSize)
+
+    // Circular clip
+    ctx.beginPath()
+    ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2)
+    ctx.closePath()
+    ctx.clip()
+
+    // Draw the cropped portion
+    ctx.drawImage(
+      img,
+      sourceX, sourceY, sourceWidth, sourceHeight,
+      0, 0, outputSize, outputSize
+    )
+
+    // Get the cropped image as data URL
+    const croppedImageUrl = canvas.toDataURL('image/jpeg', 0.9)
+    setCustomAvatar(croppedImageUrl)
+    onAvatarChange?.(croppedImageUrl)
+
+    // Clean up object URL
+    if (cropImage) {
+      URL.revokeObjectURL(cropImage)
+    }
+    setShowCropModal(false)
+    setCropImage(null)
+  }
+
+  // Determine which avatar to show
+  const displayAvatar = customAvatar || profileData.avatar
 
   // Use user's created party if available, otherwise default to Independent
-  const currentParty = userParty ? userParty.name : (myProfileData.party || 'Independent')
+  const currentParty = userParty ? userParty.name : (profileData.party || 'Independent')
   const partyColor = userParty ? userParty.color : '#808080' // Independent is gray
 
   // If user has opted in, render as CandidateProfile with starter data
   if (hasOptedIn) {
+    // Use persisted races or default to CP race
+    const competingRaces = currentUser?.racesCompeting?.length > 0 ? currentUser.racesCompeting : ['CP']
+
     const starterCandidate = {
       id: 'my-profile',
-      username: myProfileData.username,
-      avatar: myProfileData.avatar,
+      username: profileData.username,
+      avatar: displayAvatar,
       party: null, // Still Independent
-      bio: '', // No bio yet
+      bio: currentUser?.bio || bioText, // Use persisted bio from currentUser, fallback to local state
       nominations: '0',
-      followers: myProfileData.followers,
-      races: ['CP'], // Just CP race for social credit
-      ranking: myProfileData.ranking,
+      following: currentUser?.following || profileData.following,
+      followers: currentUser?.followers || profileData.followers,
+      races: competingRaces, // Races user is competing in
+      ranking: profileData.ranking,
       cpPoints: starterPoints,
       change: `+${(Math.random() * 10).toFixed(2)}`,
       sparklineData: Array(20).fill(0).map((_, i) => starterPoints + Math.floor(Math.random() * 20) - 10),
       filteredSparklineData: Array(20).fill(0).map((_, i) => starterPoints + Math.floor(Math.random() * 15) - 5),
-      postImages: myProfileData.postImages,
+      postImages: userPosts, // Use actual user posts, not mock data
       isFollowing: false,
       isFavorited: false,
     }
@@ -201,60 +361,15 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
         isOwnProfile={true}
         isStarter={true}
         onEditIcebreakers={onEditIcebreakers}
+        onOptOut={onOptOut}
+        onAvatarChange={onAvatarChange}
+        onBioChange={onBioChange}
       />
     )
   }
 
-  // Convert default images to reel format with variable engagement scores
-  const trends = ['up', 'down', 'stable']
-  const mockRaces = ['NYC Mayor 2024', 'City Council District 5', 'State Assembly']
-  const defaultPostsAsReels = myProfileData.postImages.map((img, i) => ({
-    id: `default-${i}`,
-    thumbnail: img,
-    user: {
-      username: myProfileData.username,
-      avatar: myProfileData.avatar,
-      party: currentParty,
-    },
-    title: '',
-    caption: '',
-    targetRace: mockRaces[i % mockRaces.length],
-    stats: { votes: '0', likes: '0', comments: '0', shazam: '0', shares: '0' },
-    engagementScores: [
-      {
-        id: `eng-${i}-1`,
-        username: myProfileData.username,
-        avatar: myProfileData.avatar,
-        party: currentParty,
-        sparklineData: generateSparklineData(trends[i % 3]),
-        recentChange: i % 2 === 0 ? '+1' : null,
-        trend: trends[i % 3],
-      },
-      {
-        id: `eng-${i}-2`,
-        username: 'Lzo.macias',
-        avatar: 'https://i.pravatar.cc/40?img=1',
-        party: 'Democrat',
-        sparklineData: generateSparklineData(trends[(i + 1) % 3]),
-        recentChange: i % 3 === 0 ? '+2' : null,
-        trend: trends[(i + 1) % 3],
-      },
-      {
-        id: `eng-${i}-3`,
-        username: 'Sarah.J',
-        avatar: 'https://i.pravatar.cc/40?img=5',
-        party: 'Republican',
-        sparklineData: generateSparklineData(trends[(i + 2) % 3]),
-        recentChange: null,
-        trend: trends[(i + 2) % 3],
-      },
-    ],
-  }))
-
-  // Combine user posts with default posts (user posts already have reel format)
-  const allPosts = userPosts.length > 0
-    ? [...userPosts, ...defaultPostsAsReels]
-    : defaultPostsAsReels
+  // Only show actual user posts (no mock data for new accounts)
+  const allPosts = userPosts
 
   // Handle post click to open SinglePostView
   const handlePostClick = (index) => {
@@ -275,18 +390,33 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
         <div className="my-profile-top">
           {/* Left - Avatar and Info */}
           <div className="my-profile-left">
-            <div
-              className="my-profile-avatar-ring"
-              style={{ borderColor: partyColor }}
+            <input
+              type="file"
+              id="avatar-file-input"
+              ref={avatarInputRef}
+              onChange={handleAvatarChange}
+              accept="image/*"
+              style={{ display: 'none' }}
+            />
+            <label
+              htmlFor="avatar-file-input"
+              className={`my-profile-avatar-ring ${!displayAvatar ? 'placeholder' : ''}`}
+              style={{ borderColor: partyColor, cursor: 'pointer' }}
             >
-              <img
-                src={myProfileData.avatar}
-                alt={myProfileData.username}
-                className="my-profile-avatar"
-              />
-            </div>
+              {displayAvatar ? (
+                <img
+                  src={displayAvatar}
+                  alt={profileData.username}
+                  className="my-profile-avatar"
+                />
+              ) : (
+                <div className="my-profile-avatar-placeholder">
+                  <span>add a profile photo</span>
+                </div>
+              )}
+            </label>
             <div className="my-profile-info">
-              <h2 className="my-profile-username">{myProfileData.username}</h2>
+              <h2 className="my-profile-username">{profileData.username}</h2>
               <button
                 className="my-profile-party"
                 onClick={() => userParty && onPartyClick?.(userParty.handle)}
@@ -313,20 +443,20 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
           <div className="my-profile-right">
             <div className="my-profile-stats-grid">
               <div className="stat-item">
-                <span className="stat-number">{myProfileData.following}</span>
+                <span className="stat-number">{profileData.following}</span>
                 <span className="stat-label">Following</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{myProfileData.followers}</span>
+                <span className="stat-number">{profileData.followers}</span>
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{myProfileData.races}</span>
+                <span className="stat-number">{profileData.races}</span>
                 <span className="stat-label">races</span>
               </div>
               <div className="stat-item">
                 <span className="stat-number">
-                  {myProfileData.ranking}
+                  {profileData.ranking}
                   <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
                   </svg>
@@ -335,11 +465,31 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
               </div>
             </div>
 
-            <div className="my-profile-actions">
-              <button className="action-btn share" onClick={() => setShowShareModal(true)}>share</button>
-              <button className="action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
-            </div>
+            {/* Bio */}
+            {bioText ? (
+              <button className="my-profile-bio" onClick={() => setShowBioEdit(true)}>
+                {bioText}
+              </button>
+            ) : (
+              <button className="my-profile-bio empty" onClick={() => setShowBioEdit(true)}>
+                Add Bio
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="my-profile-actions">
+          <button className="action-btn share" onClick={() => setShowShareModal(true)}>share</button>
+          <button className="action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
+          <button className="action-btn-icon invite">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="9" cy="7" r="4" />
+              <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="16" y1="11" x2="22" y2="11" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -394,27 +544,33 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
       <div className="my-profile-content">
         {activeTab === 'posts' && (
           <div className="posts-grid">
-            {allPosts.map((post, index) => (
-              <div
-                key={post.id || index}
-                className="post-item"
-                onClick={() => handlePostClick(index)}
-              >
-                {post.videoUrl ? (
-                  <video
-                    src={post.videoUrl}
-                    className={post.isMirrored ? 'mirrored' : ''}
-                    muted
-                    playsInline
-                    loop
-                    onMouseOver={(e) => e.target.play()}
-                    onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
-                  />
-                ) : (
-                  <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
-                )}
+            {allPosts.length === 0 ? (
+              <div className="posts-empty">
+                <p>no posts yet</p>
               </div>
-            ))}
+            ) : (
+              allPosts.map((post, index) => (
+                <div
+                  key={post.id || index}
+                  className="post-item"
+                  onClick={() => handlePostClick(index)}
+                >
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -457,8 +613,8 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
         </div>
       )}
 
-      {/* Single Post View */}
-      {showSinglePost && (
+      {/* Single Post View - rendered via portal to escape transformed parent */}
+      {showSinglePost && createPortal(
         <SinglePostView
           posts={allPosts}
           initialIndex={selectedPostIndex}
@@ -466,8 +622,9 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
           onEndReached={() => setShowSinglePost(false)}
           onPartyClick={onPartyClick}
           onOpenComments={onOpenComments}
-          profileName={myProfileData.username}
-        />
+          profileName={profileData.username}
+        />,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Share Modal */}
@@ -480,7 +637,7 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
             </div>
             <div className="share-modal-options">
               <button className="share-option" onClick={() => {
-                navigator.clipboard.writeText(`https://coolpeople.com/@${myProfileData.username}`)
+                navigator.clipboard.writeText(`https://coolpeople.com/@${profileData.username}`)
                 setShowShareModal(false)
                 setShowCopiedToast(true)
                 setTimeout(() => setShowCopiedToast(false), 2000)
@@ -523,6 +680,115 @@ function MyProfile({ onPartyClick, onOptIn, userParty, userPosts = [], hasOptedI
       {/* Copied Toast */}
       {showCopiedToast && (
         <div className="copied-toast">Link copied!</div>
+      )}
+
+      {/* Bio Edit Modal */}
+      {showBioEdit && createPortal(
+        <div className="bio-edit-overlay">
+          <div className="bio-edit-modal">
+            <div className="bio-edit-header">
+              <button className="bio-edit-cancel" onClick={() => {
+                setBioText(currentUser?.bio || '')
+                setShowBioEdit(false)
+              }}>
+                Cancel
+              </button>
+              <h3>Edit Bio</h3>
+              <button
+                className="bio-edit-save"
+                onClick={() => {
+                  onBioChange?.(bioText)
+                  setShowBioEdit(false)
+                }}
+              >
+                Save
+              </button>
+            </div>
+            <div className="bio-edit-content">
+              <textarea
+                className="bio-edit-textarea"
+                placeholder="Write a short bio..."
+                value={bioText}
+                onChange={(e) => {
+                  if (e.target.value.length <= BIO_MAX_LENGTH) {
+                    setBioText(e.target.value)
+                  }
+                }}
+                maxLength={BIO_MAX_LENGTH}
+                autoFocus
+              />
+              <div className="bio-edit-counter">
+                <span className={bioText.length >= BIO_MAX_LENGTH ? 'at-limit' : ''}>
+                  {bioText.length}/{BIO_MAX_LENGTH}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* Avatar Crop Modal - rendered via portal to avoid parent clipping */}
+      {showCropModal && cropImage && createPortal(
+        <div className="crop-modal-overlay">
+          <div className="crop-modal">
+            <div className="crop-modal-header">
+              <button className="crop-cancel-btn" onClick={handleCropCancel}>
+                Cancel
+              </button>
+              <h3>Adjust Photo</h3>
+              <button className="crop-apply-btn" onClick={handleCropApply}>
+                Done
+              </button>
+            </div>
+
+            <div
+              className="crop-area"
+              onMouseDown={handleCropDragStart}
+              onMouseMove={handleCropDragMove}
+              onMouseUp={handleCropDragEnd}
+              onMouseLeave={handleCropDragEnd}
+              onTouchStart={handleCropDragStart}
+              onTouchMove={handleCropDragMove}
+              onTouchEnd={handleCropDragEnd}
+            >
+              <div className="crop-image-container">
+                <img
+                  ref={cropImageRef}
+                  src={cropImage}
+                  alt="Crop preview"
+                  className="crop-image"
+                  style={{
+                    transform: `translate(${cropPosition.x}px, ${cropPosition.y}px) scale(${cropZoom})`,
+                  }}
+                  draggable={false}
+                />
+              </div>
+              <div className="crop-circle-overlay"></div>
+            </div>
+
+            <div className="crop-controls">
+              <div className="zoom-control">
+                <svg className="zoom-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z"/>
+                </svg>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="3"
+                  step="0.1"
+                  value={cropZoom}
+                  onChange={handleZoomChange}
+                  className="zoom-slider"
+                />
+                <svg className="zoom-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm-.5-4h2v2H9V9H7V8h2V6h1v2h2v1h-2v1H9V10z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
     </div>
   )

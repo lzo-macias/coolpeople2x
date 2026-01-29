@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom'
 import '../styling/EditProfile.css'
 import '../styling/ReelCard.css'
 import EditBio from './EditBio'
+import { useAuth } from '../contexts/AuthContext'
 
-function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null }) {
+function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut }) {
+  const { logout } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -697,7 +699,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
           </svg>
         </button>
 
-        <button className="settings-row" onClick={() => {}}>
+        <button className="settings-row" onClick={() => { logout(); onClose(); }}>
           <div className="settings-row-left">
             <span className="settings-row-icon accent-pink">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -780,7 +782,13 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
                 <button
                   className="warning-btn confirm"
                   onClick={() => {
-                    setEditedCandidate(prev => ({ ...prev, status: pendingStatus }))
+                    if (pendingStatus === 'Participant') {
+                      // Call onOptOut to revert to participant in the app state
+                      onOptOut?.()
+                      onClose?.()
+                    } else {
+                      setEditedCandidate(prev => ({ ...prev, status: pendingStatus }))
+                    }
                     setShowStatusWarning(false)
                     setPendingStatus(null)
                     setActiveSection(null)

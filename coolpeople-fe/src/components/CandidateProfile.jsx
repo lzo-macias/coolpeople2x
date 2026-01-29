@@ -354,7 +354,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange }) {
   // Merge passed candidate with defaults for missing properties
   const candidate = { ...mockCandidate, ...passedCandidate }
 
@@ -380,6 +380,16 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   }
 
   const profileRef = useRef(null)
+  const avatarInputRef = useRef(null)
+
+  // Handle avatar file selection for own profile
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file && onAvatarChange) {
+      const imageUrl = URL.createObjectURL(file)
+      onAvatarChange(imageUrl)
+    }
+  }
 
   // Scroll to top when candidate changes
   useEffect(() => {
@@ -404,6 +414,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
+  const [showBioTextEdit, setShowBioTextEdit] = useState(false) // Simple bio text editor modal
+  const [bioText, setBioText] = useState(passedCandidate?.bio || '')
   const [editInitialSection, setEditInitialSection] = useState(null)
   const [profileSections, setProfileSections] = useState(isStarter ? emptyProfileSections : initialProfileSections)
   const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
@@ -462,48 +474,56 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   // Convert posts to reel format for SinglePostView with variable engagement scores
   const trends = ['up', 'down', 'stable']
   const mockRaces = ['NYC Mayor 2024', 'City Council District 5', 'State Assembly']
-  const defaultPostsAsReels = (candidate.postImages || []).map((img, i) => ({
-    id: `candidate-post-${i}`,
-    thumbnail: img,
-    user: {
-      username: candidate.username,
-      avatar: candidate.avatar,
-      party: candidate.party,
-    },
-    title: '',
-    caption: '',
-    targetRace: mockRaces[i % mockRaces.length],
-    stats: { votes: '0', likes: '0', comments: '0', shazam: '0', shares: '0' },
-    engagementScores: [
-      {
-        id: `cand-eng-${i}-1`,
+  const defaultPostsAsReels = (candidate.postImages || []).map((item, i) => {
+    // Check if item is a full post object or just an image URL
+    const isPostObject = typeof item === 'object' && item !== null
+
+    return {
+      id: isPostObject ? (item.id || `candidate-post-${i}`) : `candidate-post-${i}`,
+      thumbnail: isPostObject ? (item.thumbnail || item.videoUrl) : item,
+      videoUrl: isPostObject ? item.videoUrl : null,
+      isMirrored: isPostObject ? item.isMirrored : false,
+      user: isPostObject && item.user ? item.user : {
         username: candidate.username,
         avatar: candidate.avatar,
         party: candidate.party,
-        sparklineData: generateSparklineData(trends[i % 3]),
-        recentChange: i % 2 === 0 ? '+1' : null,
-        trend: trends[i % 3],
       },
-      {
-        id: `cand-eng-${i}-2`,
-        username: 'Lzo.macias',
-        avatar: 'https://i.pravatar.cc/40?img=1',
-        party: 'Democrat',
-        sparklineData: generateSparklineData(trends[(i + 1) % 3]),
-        recentChange: i % 3 === 0 ? '+2' : null,
-        trend: trends[(i + 1) % 3],
-      },
-      {
-        id: `cand-eng-${i}-3`,
-        username: 'Sarah.J',
-        avatar: 'https://i.pravatar.cc/40?img=5',
-        party: 'Republican',
-        sparklineData: generateSparklineData(trends[(i + 2) % 3]),
-        recentChange: null,
-        trend: trends[(i + 2) % 3],
-      },
-    ],
-  }))
+      title: isPostObject ? (item.title || '') : '',
+      caption: isPostObject ? (item.caption || '') : '',
+      targetRace: isPostObject ? (item.targetRace || null) : mockRaces[i % mockRaces.length],
+      stats: isPostObject && item.stats ? item.stats : { votes: '0', likes: '0', comments: '0', shazam: '0', shares: '0' },
+      textOverlays: isPostObject ? (item.textOverlays || []) : [],
+      engagementScores: isPostObject && item.engagementScores ? item.engagementScores : [
+        {
+          id: `cand-eng-${i}-1`,
+          username: candidate.username,
+          avatar: candidate.avatar,
+          party: candidate.party,
+          sparklineData: generateSparklineData(trends[i % 3]),
+          recentChange: i % 2 === 0 ? '+1' : null,
+          trend: trends[i % 3],
+        },
+        {
+          id: `cand-eng-${i}-2`,
+          username: 'Lzo.macias',
+          avatar: 'https://i.pravatar.cc/40?img=1',
+          party: 'Democrat',
+          sparklineData: generateSparklineData(trends[(i + 1) % 3]),
+          recentChange: i % 3 === 0 ? '+2' : null,
+          trend: trends[(i + 1) % 3],
+        },
+        {
+          id: `cand-eng-${i}-3`,
+          username: 'Sarah.J',
+          avatar: 'https://i.pravatar.cc/40?img=5',
+          party: 'Republican',
+          sparklineData: generateSparklineData(trends[(i + 2) % 3]),
+          recentChange: null,
+          trend: trends[(i + 2) % 3],
+        },
+      ],
+    }
+  })
 
   // Combine dynamic posts with default posts
   const allPosts = candidate.posts
@@ -724,42 +744,56 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     <div className="candidate-profile" ref={profileRef}>
       {/* Header */}
       <div className="profile-header">
-        {/* Dev edit button */}
-        <button
-          className="dev-edit-btn"
-          onClick={() => setShowEditBio(true)}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
-
-        {/* Favorite star */}
-        <button
-          className={`favorite-star ${isFavorited ? 'active' : ''}`}
-          onClick={() => setIsFavorited(!isFavorited)}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? 'url(#grayGradient)' : 'none'} stroke={isFavorited ? 'none' : '#777777'} strokeWidth="2">
-            <defs>
-              <linearGradient id="grayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#888888" />
-                <stop offset="100%" stopColor="#555555" />
-              </linearGradient>
-            </defs>
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-        </button>
+        {/* Favorite star - only show for other profiles */}
+        {!isOwnProfile && (
+          <button
+            className={`favorite-star ${isFavorited ? 'active' : ''}`}
+            onClick={() => setIsFavorited(!isFavorited)}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? 'url(#grayGradient)' : 'none'} stroke={isFavorited ? 'none' : '#777777'} strokeWidth="2">
+              <defs>
+                <linearGradient id="grayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#888888" />
+                  <stop offset="100%" stopColor="#555555" />
+                </linearGradient>
+              </defs>
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </button>
+        )}
 
         {/* Top row: Avatar column + Stats + Sparkline */}
         <div className="profile-top">
           <div className="profile-left">
-            <div
-              className="profile-avatar-ring"
-              style={{ borderColor: partyColor }}
-            >
-              <img src={candidate.avatar} alt={candidate.username} className="profile-avatar" />
-            </div>
+            {isOwnProfile && (
+              <input
+                type="file"
+                id="candidate-avatar-file-input"
+                ref={avatarInputRef}
+                onChange={handleAvatarFileChange}
+                accept="image/*"
+                style={{ display: 'none' }}
+              />
+            )}
+            {isOwnProfile && !candidate.avatar ? (
+              <label
+                htmlFor="candidate-avatar-file-input"
+                className="profile-avatar-ring placeholder"
+                style={{ borderColor: partyColor, cursor: 'pointer' }}
+              >
+                <div className="profile-avatar-placeholder">
+                  <span>add a profile photo</span>
+                </div>
+              </label>
+            ) : (
+              <div
+                className="profile-avatar-ring"
+                style={{ borderColor: partyColor }}
+                onClick={isOwnProfile ? () => avatarInputRef.current?.click() : undefined}
+              >
+                <img src={candidate.avatar} alt={candidate.username} className="profile-avatar" />
+              </div>
+            )}
             <div className="profile-info">
               <h2 className="profile-username">{candidate.username}</h2>
               {candidate.party ? (
@@ -778,15 +812,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           <div className="profile-right">
             <div className="profile-stats-grid">
               <div className="stat-item clickable" onClick={() => setShowFollowingModal(true)}>
-                <span className="stat-number">1M</span>
+                <span className="stat-number">{candidate.following || '0'}</span>
                 <span className="stat-label">Following</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowFollowersModal(true)}>
-                <span className="stat-number">{candidate.followers}</span>
+                <span className="stat-number">{candidate.followers || '0'}</span>
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
-                <span className="stat-number">{candidate.races?.length || '8'}</span>
+                <span className="stat-number">{candidate.races?.length || '1'}</span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
@@ -810,7 +844,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 )}
               </div>
             </div>
-            <p className="profile-bio">{candidate.bio || 'Running for Mayor. Building a better tomorrow for our community. '}</p>
+            {isOwnProfile ? (
+              candidate.bio ? (
+                <button className="profile-bio" onClick={() => setShowBioTextEdit(true)}>{candidate.bio}</button>
+              ) : (
+                <button className="profile-bio empty" onClick={() => setShowBioTextEdit(true)}>Add Bio</button>
+              )
+            ) : (
+              candidate.bio && <p className="profile-bio">{candidate.bio}</p>
+            )}
           </div>
         </div>
 
@@ -1822,9 +1864,56 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               setEditInitialSection(null)
             }}
             initialSection={editInitialSection}
+            onOptOut={onOptOut}
           />
         </div>,
         document.body
+      )}
+
+      {/* Simple Bio Text Edit Modal */}
+      {showBioTextEdit && createPortal(
+        <div className="bio-edit-overlay">
+          <div className="bio-edit-modal">
+            <div className="bio-edit-header">
+              <button className="bio-edit-cancel" onClick={() => {
+                setBioText(passedCandidate?.bio || '')
+                setShowBioTextEdit(false)
+              }}>
+                Cancel
+              </button>
+              <h3>Edit Bio</h3>
+              <button
+                className="bio-edit-save"
+                onClick={() => {
+                  onBioChange?.(bioText)
+                  setShowBioTextEdit(false)
+                }}
+              >
+                Save
+              </button>
+            </div>
+            <div className="bio-edit-content">
+              <textarea
+                className="bio-edit-textarea"
+                placeholder="Write a short bio..."
+                value={bioText}
+                onChange={(e) => {
+                  if (e.target.value.length <= 150) {
+                    setBioText(e.target.value)
+                  }
+                }}
+                maxLength={150}
+                autoFocus
+              />
+              <div className="bio-edit-counter">
+                <span className={bioText.length >= 150 ? 'at-limit' : ''}>
+                  {bioText.length}/150
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Response Modal for Community Reviews */}
@@ -1924,8 +2013,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         </div>
       )}
 
-      {/* Single Post View */}
-      {showSinglePost && (
+      {/* Single Post View - rendered via portal to escape transformed parent */}
+      {showSinglePost && createPortal(
         <SinglePostView
           posts={allPosts}
           initialIndex={selectedPostIndex}
@@ -1935,7 +2024,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onUsernameClick={onUserClick}
           onOpenComments={onOpenComments}
           profileName={candidate.username}
-        />
+        />,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Following Modal */}

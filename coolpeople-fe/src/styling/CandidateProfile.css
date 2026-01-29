@@ -64,11 +64,40 @@
   overflow: hidden;
 }
 
+label.profile-avatar-ring {
+  display: flex;
+}
+
 .profile-avatar {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.profile-avatar-ring.placeholder {
+  background: #2a2a2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.profile-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  padding: 10px;
+}
+
+.profile-avatar-placeholder span {
+  font-size: 12px;
+  color: #666666;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.3;
 }
 
 .profile-stats {
@@ -93,6 +122,25 @@
   line-height: 1.4;
   text-align: left;
   align-self: flex-start;
+}
+
+button.profile-bio {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: #AAAAAA;
+  margin: 34px 20px 0px 40px;
+  line-height: 1.4;
+  text-align: left;
+  align-self: flex-start;
+  font-family: inherit;
+}
+
+button.profile-bio.empty {
+  color: #555555;
+  font-style: italic;
 }
 
 .stat-item {
@@ -2872,4 +2920,107 @@ video.activity-video-thumbnail.mirrored {
 
 .share-option:hover svg {
   color: #fff;
+}
+
+/* Bio Edit Modal */
+.bio-edit-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bio-edit-modal {
+  width: 100%;
+  max-width: 440px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+.bio-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.bio-edit-header h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.bio-edit-cancel,
+.bio-edit-save {
+  background: none;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+
+.bio-edit-cancel {
+  color: #888;
+}
+
+.bio-edit-save {
+  color: #00F2EA;
+  font-weight: 600;
+}
+
+.bio-edit-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.bio-edit-textarea {
+  flex: 1;
+  max-height: 120px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: #fff;
+  resize: none;
+  outline: none;
+}
+
+.bio-edit-textarea::placeholder {
+  color: #555;
+}
+
+.bio-edit-textarea:focus {
+  border-color: #00F2EA;
+}
+
+.bio-edit-counter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
+}
+
+.bio-edit-counter span {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #666;
+}
+
+.bio-edit-counter span.at-limit {
+  color: #FF2A55;
 }

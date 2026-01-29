@@ -19,7 +19,7 @@ import CreateScreen from './components/CreateScreen'
 import Login from './components/Login'
 import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { reelsApi, messagesApi, partiesApi, storiesApi } from './services/api'
+import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi } from './services/api'
 import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
@@ -44,6 +44,12 @@ function AppContent() {
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
   const [userParty, setUserParty] = useState(null) // User's created party
   const [hasOptedIn, setHasOptedIn] = useState(false) // Whether user has opted into social credit
+  const [customAvatar, setCustomAvatar] = useState(null) // User's custom profile photo
+  const [userBio, setUserBio] = useState('') // User's bio text
+  const [userFollowing, setUserFollowing] = useState('0') // Number of users being followed
+  const [userFollowers, setUserFollowers] = useState('0') // Number of followers
+  const [userRacesFollowing, setUserRacesFollowing] = useState([]) // Races user is following
+  const [userRacesCompeting, setUserRacesCompeting] = useState([]) // Races user is competing in (candidates only)
   const [reels, setReels] = useState([...mockReels]) // All posts in feed - fallback to mock
   const [userPosts, setUserPosts] = useState([]) // Current user's posts
   const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
@@ -113,6 +119,52 @@ function AppContent() {
     fetchStories()
   }, [isAuthenticated])
 
+  // Load user profile data from backend when authenticated
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      if (!authUser?.id) return
+
+      try {
+        const userData = await usersApi.getUser(authUser.id)
+        // Backend returns {success: true, data: {user: {...}}}
+        const profile = userData.data?.user || userData.user || userData.data || userData
+
+        // Update local state with persisted data from backend
+        // Use !== undefined to allow empty strings
+        if (profile.bio !== undefined) setUserBio(profile.bio || '')
+        if (profile.avatarUrl !== undefined) setCustomAvatar(profile.avatarUrl || null)
+        if (profile.followersCount !== undefined) setUserFollowers(profile.followersCount?.toString() || '0')
+        if (profile.followingCount !== undefined) setUserFollowing(profile.followingCount?.toString() || '0')
+        if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing.map(r => r.id || r))
+        if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting.map(r => r.id || r))
+        if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
+      } catch (error) {
+        console.log('Using local state for profile:', error.message)
+      }
+    }
+
+    loadUserProfile()
+  }, [authUser?.id])
+
+  // Load user's posts from backend
+  useEffect(() => {
+    const loadUserPosts = async () => {
+      if (!authUser?.id) return
+
+      try {
+        const response = await reelsApi.getUserReels(authUser.id)
+        const posts = response.data || response
+        if (posts && posts.length > 0) {
+          setUserPosts(posts)
+        }
+      } catch (error) {
+        console.log('Using local posts:', error.message)
+      }
+    }
+
+    loadUserPosts()
+  }, [authUser?.id])
+
   console.log('AppContent render - isAuthenticated:', isAuthenticated, 'user:', authUser)
 
   // Show loading state while checking auth
@@ -164,13 +216,44 @@ function AppContent() {
     username: authUser?.username || 'User',
     displayName: authUser?.displayName || 'User',
     party: userParty?.name || 'Independent',
-    avatar: authUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser?.displayName || 'User')}&background=8b5cf6&color=fff`,
+    avatar: customAvatar || authUser?.avatarUrl || null, // null shows placeholder in MyProfile
     isParticipant: authUser?.userType === 'PARTICIPANT', // PARTICIPANT can't be nominated, CANDIDATE can
+    bio: userBio,
+    following: userFollowing,
+    followers: userFollowers,
+    racesFollowing: userRacesFollowing,
+    racesCompeting: userRacesCompeting,
+  }
+
+  // Handle avatar change from MyProfile - saves to backend
+  const handleAvatarChange = async (avatarUrl) => {
+    setCustomAvatar(avatarUrl)
+    // Save to backend
+    if (authUser?.id) {
+      try {
+        await usersApi.updateUser(authUser.id, { avatarUrl })
+      } catch (error) {
+        console.error('Failed to save avatar:', error)
+      }
+    }
+  }
+
+  // Handle bio change from MyProfile - saves to backend
+  const handleBioChange = async (bio) => {
+    setUserBio(bio)
+    // Save to backend
+    if (authUser?.id) {
+      try {
+        await usersApi.updateUser(authUser.id, { bio })
+      } catch (error) {
+        console.error('Failed to save bio:', error)
+      }
+    }
   }
 
   // Handle new post creation
   // forParty param allows passing party data directly when userParty state hasn't updated yet
-  const handlePostCreated = (postData, forParty = null) => {
+  const handlePostCreated = async (postData, forParty = null) => {
     console.log('handlePostCreated called with:', postData)
     const timestamp = Date.now()
     const effectiveParty = forParty || userParty
@@ -192,6 +275,17 @@ function AppContent() {
 
       // Add to user stories
       setUserStories(prev => [newStory, ...prev])
+
+      // Save story to backend
+      try {
+        await storiesApi.createStory({
+          videoUrl: postData.videoUrl,
+          isMirrored: postData.isMirrored,
+          taggedUser: postData.taggedUser,
+        })
+      } catch (error) {
+        console.error('Failed to save story to backend:', error)
+      }
     } else {
       // Regular post goes to feed
       // Generate engagement scores for the sparklines at top
@@ -261,6 +355,30 @@ function AppContent() {
       // Add to user's posts
       console.log('Adding to user posts:', newReel)
       setUserPosts(prev => [newReel, ...prev])
+
+      // Save to backend
+      try {
+        const reelData = {
+          videoUrl: postData.videoUrl,
+          title: postData.title || '',
+          description: postData.caption || '', // Backend expects 'description' not 'caption'
+          partyId: effectiveParty?.id || null,
+          duration: 30, // Default duration
+        }
+        // Add raceIds if targeting a race (backend expects array of UUIDs)
+        if (postData.targetRace) {
+          // If it's a UUID, wrap in array; otherwise skip
+          const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          if (uuidPattern.test(postData.targetRace)) {
+            reelData.raceIds = [postData.targetRace]
+          }
+        }
+        console.log('Saving reel to backend:', reelData)
+        const result = await reelsApi.createReel(reelData)
+        console.log('Reel saved successfully:', result)
+      } catch (error) {
+        console.error('Failed to save post to backend:', error)
+      }
     }
 
     // Handle sending to chats
@@ -509,9 +627,27 @@ function AppContent() {
     setIsOwnParticipantProfile(false)
   }
 
-  const handleOptIn = () => {
+  const handleOptIn = async () => {
     setHasOptedIn(true)
+    // Auto-enroll in CoolPeople race when becoming a candidate
+    setUserRacesCompeting(prev => prev.includes('CP') ? prev : [...prev, 'CP'])
     handleCloseParticipantProfile()
+
+    // Save to backend
+    if (authUser?.id) {
+      try {
+        await usersApi.becomeCandidate(authUser.id)
+      } catch (error) {
+        console.error('Failed to become candidate:', error)
+      }
+    }
+  }
+
+  // Handle opting out from candidate back to participant
+  const handleOptOut = () => {
+    setHasOptedIn(false)
+    // Note: Per backend spec, points are frozen (decay still active), reviews remain permanent
+    // User can now choose to go private again if they want
   }
 
   // Handle clicking on a username in comments
@@ -547,15 +683,23 @@ function AppContent() {
   // Handle clicking on username in reels
   const handleReelUsernameClick = (user) => {
     // Check if this is the current user
-    const isCurrentUser = user.username === currentUser.username || user.id === currentUser.id
+    const isCurrentUser = user.username === currentUser.username ||
+                          user.id === currentUser.id ||
+                          user.id === authUser?.id
 
+    // If clicking on own username, navigate to MyProfile page
+    if (isCurrentUser) {
+      setCurrentPage(5) // Profile page
+      return
+    }
+
+    // Otherwise show the other user's profile overlay
     setActiveCandidate({
       username: user.username,
       avatar: user.avatar,
       party: user.party || 'Independent',
-      // Pass user's posts if this is the current user
-      posts: isCurrentUser ? userPosts : null,
-      isCurrentUser: isCurrentUser,
+      posts: null,
+      isCurrentUser: false,
     })
     setShowProfile(true)
   }
@@ -646,11 +790,15 @@ function AppContent() {
           <MyProfile
             onPartyClick={handleOpenPartyProfile}
             onOptIn={handleOptIn}
+            onOptOut={handleOptOut}
             userParty={userParty}
             userPosts={userPosts}
             hasOptedIn={hasOptedIn}
             onOpenComments={handleOpenComments}
             userActivity={userActivity}
+            currentUser={currentUser}
+            onAvatarChange={handleAvatarChange}
+            onBioChange={handleBioChange}
           />
         </div>
       </div>
@@ -696,6 +844,9 @@ function AppContent() {
             }}
             onPostCreated={handlePostCreated}
             userParty={userParty}
+            userRacesFollowing={userRacesFollowing}
+            userRacesCompeting={userRacesCompeting}
+            conversations={conversations}
           />
         </div>
       )}

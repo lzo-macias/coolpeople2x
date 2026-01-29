@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import '../styling/PostScreen.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, isQuoteNomination, quotedReel }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
@@ -25,10 +25,46 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
 
-  const targetRaces = isRaceMode ? [raceName] : ['Mayor Race', 'City Council', 'Governor', 'Senate']
-  // Build post to options - include user's party if they have one
-  const postToOptions = userParty ? ['Your Feed', userParty.name] : ['Your Feed']
-  const sendToOptions = ['The Pink Lady', 'Mamas gaga', 'Sunday Canvassing']
+  // Build target races from user's followed/competing races
+  // If in race mode, use the raceName; otherwise show races user follows/competes in
+  const buildTargetRaces = () => {
+    if (isRaceMode && raceName) return [raceName]
+    // Combine followed and competing races, remove duplicates
+    const allRaces = [...new Set([...userRacesFollowing, ...userRacesCompeting])]
+    // Filter out UUIDs (race IDs), "default", and empty values - only keep actual race names
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return allRaces.filter(race =>
+      race &&
+      race !== 'default' &&
+      !uuidPattern.test(race)
+    )
+  }
+  const targetRaces = buildTargetRaces()
+
+  // Build post to options - include user's party if they have one (and not Independent)
+  const postToOptions = userParty && userParty.name !== 'Independent' ? ['Your Feed', userParty.name] : ['Your Feed']
+
+  // Build send to options from active conversations (DMs/group chats user engages with most)
+  const buildSendToOptions = () => {
+    const options = []
+    // Add party if user has one (and not Independent)
+    if (userParty && userParty.name !== 'Independent') {
+      options.push(userParty.name)
+    }
+    // Add most active conversations (get conversation names/titles)
+    const conversationList = Object.values(conversations)
+    if (conversationList.length > 0) {
+      // Take up to 3 most recent/active conversations
+      const activeConvos = conversationList
+        .slice(0, 3)
+        .map(conv => conv.name || conv.title || conv.participantName)
+        .filter(Boolean)
+      options.push(...activeConvos)
+    }
+    return options
+  }
+  const sendToOptions = buildSendToOptions()
+
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
 
   const togglePostTo = (option) => {
@@ -264,22 +300,24 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           <button className="post-hashtag-btn">#</button>
         </div>
 
-        {/* Target Race */}
-        <div className="post-option-row stacked">
-          <span className="post-option-label">Target</span>
-          <div className="post-option-tags">
-            {targetRaces.map(race => (
-              <button
-                key={race}
-                className={`post-tag target ${selectedTarget === race ? 'active' : ''}`}
-                onClick={() => !isRaceMode && setSelectedTarget(selectedTarget === race ? null : race)}
-              >
-                {selectedTarget === race && <span className="post-tag-dot"></span>}
-                {race}
-              </button>
-            ))}
+        {/* Target Race - only show if user follows/competes in races */}
+        {targetRaces.length > 0 && (
+          <div className="post-option-row stacked">
+            <span className="post-option-label">Target</span>
+            <div className="post-option-tags">
+              {targetRaces.map(race => (
+                <button
+                  key={race}
+                  className={`post-tag target ${selectedTarget === race ? 'active' : ''}`}
+                  onClick={() => !isRaceMode && setSelectedTarget(selectedTarget === race ? null : race)}
+                >
+                  {selectedTarget === race && <span className="post-tag-dot"></span>}
+                  {race}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Post To */}
         <div className="post-option-row stacked">
@@ -297,21 +335,23 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           </div>
         </div>
 
-        {/* Send To */}
-        <div className="post-option-row">
-          <span className="post-option-label">Send To</span>
-          <div className="post-option-tags">
-            {sendToOptions.map(option => (
-              <button
-                key={option}
-                className={`post-tag ${selectedSendTo.includes(option) ? 'active' : ''}`}
-                onClick={() => toggleSendTo(option)}
-              >
-                {option}
-              </button>
-            ))}
+        {/* Send To - only show if user has party or active conversations */}
+        {sendToOptions.length > 0 && (
+          <div className="post-option-row">
+            <span className="post-option-label">Send To</span>
+            <div className="post-option-tags">
+              {sendToOptions.map(option => (
+                <button
+                  key={option}
+                  className={`post-tag ${selectedSendTo.includes(option) ? 'active' : ''}`}
+                  onClick={() => toggleSendTo(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Location */}
         <div className="post-option-row">

@@ -64,8 +64,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    if (result.token) {
-      setAuthToken(result.token);
+    // Backend returns { success: true, data: { user, token } }
+    const token = result.data?.token || result.token;
+    if (token) {
+      setAuthToken(token);
     }
     return result;
   },
@@ -113,6 +115,7 @@ export const usersApi = {
 
   becomeCandidate: (userId) => apiFetch(`/api/users/${userId}/become-candidate`, {
     method: 'POST',
+    body: JSON.stringify({ acceptTerms: true }),
   }),
 };
 

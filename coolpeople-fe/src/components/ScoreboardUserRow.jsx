@@ -10,12 +10,14 @@ const RANK_COLORS = {
 }
 
 function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand }) {
-  const isPositive = user.change >= 0
+  const score = user.score ?? 0
+  const change = user.change ?? 0
+  const isPositive = change >= 0
   const sparklineColor = isPositive ? '#10b981' : '#ef4444'
   const partyColor = getPartyColor(user.party)
 
   // Get tier from score (using score as CP points)
-  const tier = getTierFromPoints(user.score || 0)
+  const tier = getTierFromPoints(score)
   const rankColor = RANK_COLORS[rank] || '#999'
 
   return (
@@ -60,10 +62,10 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
           {tier.icon && (
             <img src={tier.icon} alt={tier.name} className="user-tier-icon" />
           )}
-          <span className="user-score">{user.score.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+          <span className="user-score">{score.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
         </div>
         <span className={`user-change ${isPositive ? 'positive' : 'negative'}`}>
-          {isPositive ? '+' : ''}{user.change.toFixed(2)}
+          {isPositive ? '+' : ''}{change.toFixed(2)}
         </span>
         <span
           className={`user-favorited ${user.isFavorited ? 'active' : ''}`}

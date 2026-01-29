@@ -20,17 +20,53 @@ export const reelIdParamSchema = z.object({
 
 export const createReelSchema = z.object({
   body: z.object({
-    videoUrl: z.string().url('Invalid video URL'),
-    thumbnailUrl: z.string().url('Invalid thumbnail URL').optional(),
+    videoUrl: z
+      .string()
+      .refine(
+        (val) => {
+          if (!val) return false;
+          // Allow data URLs (base64 videos)
+          if (val.startsWith('data:')) return true;
+          // Allow blob URLs (for local preview)
+          if (val.startsWith('blob:')) return true;
+          // Allow regular URLs
+          try {
+            new URL(val);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'Invalid video URL or data' }
+      ),
+    thumbnailUrl: z
+      .string()
+      .refine(
+        (val) => {
+          if (!val) return true;
+          if (val.startsWith('data:')) return true;
+          if (val.startsWith('blob:')) return true;
+          try {
+            new URL(val);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'Invalid thumbnail URL or data' }
+      )
+      .optional(),
     selfieOverlayUrl: z.string().url('Invalid overlay URL').optional(),
     duration: z
       .number()
       .int()
-      .min(15, 'Reel must be at least 15 seconds')
-      .max(90, 'Reel must be at most 90 seconds'),
+      .min(1, 'Reel must be at least 1 second')
+      .max(600, 'Reel must be at most 10 minutes')
+      .optional()
+      .default(30),
     title: z.string().max(100, 'Title must be at most 100 characters').optional(),
     description: z.string().max(2000, 'Description must be at most 2000 characters').optional(),
-    partyId: z.string().uuid('Invalid party ID').optional(),
+    partyId: z.string().uuid('Invalid party ID').optional().nullable(),
     quoteParentId: z.string().uuid('Invalid quote parent ID').optional(),
     soundId: z.string().uuid('Invalid sound ID').optional(),
     locationId: z.string().uuid('Invalid location ID').optional(),

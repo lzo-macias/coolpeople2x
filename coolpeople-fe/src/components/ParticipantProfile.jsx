@@ -96,17 +96,6 @@ function ParticipantProfile({
     <div className="participant-profile">
       {/* Header */}
       <div className="participant-header">
-        {/* Dev edit button */}
-        <button
-          className="dev-edit-btn"
-          onClick={() => setShowEditBio(true)}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
-
         {/* Favorite star */}
         <button
           className={`favorite-star ${isFavorited ? 'active' : ''}`}
@@ -155,11 +144,11 @@ function ParticipantProfile({
                 <span className="stat-label">Nominations</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{participant.followers}</span>
+                <span className="stat-number">{participant.followers || '0'}</span>
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{participant.races?.length || '8'}</span>
+                <span className="stat-number">{participant.races?.length || '0'}</span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
