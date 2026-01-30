@@ -66,6 +66,102 @@ messagesRouter.post(
 );
 
 // -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/unread
+// Mark conversation as unread
+// -----------------------------------------------------------------------------
+
+messagesRouter.post(
+  '/conversations/:userId/unread',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.markConversationUnread
+);
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/pin
+// Pin a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.post(
+  '/conversations/:userId/pin',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.pinConversation
+);
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/pin
+// Unpin a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.delete(
+  '/conversations/:userId/pin',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.unpinConversation
+);
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/mute
+// Mute a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.post(
+  '/conversations/:userId/mute',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.muteConversation
+);
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/mute
+// Unmute a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.delete(
+  '/conversations/:userId/mute',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.unmuteConversation
+);
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/hide
+// Hide a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.post(
+  '/conversations/:userId/hide',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.hideConversation
+);
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/hide
+// Unhide a conversation
+// -----------------------------------------------------------------------------
+
+messagesRouter.delete(
+  '/conversations/:userId/hide',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.unhideConversation
+);
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId
+// Delete entire conversation with a user
+// -----------------------------------------------------------------------------
+
+messagesRouter.delete(
+  '/conversations/:userId',
+  requireAuth,
+  validate(conversationUserParamSchema),
+  messagesController.deleteConversation
+);
+
+// -----------------------------------------------------------------------------
 // DELETE /api/messages/:id
 // Delete own message
 // -----------------------------------------------------------------------------

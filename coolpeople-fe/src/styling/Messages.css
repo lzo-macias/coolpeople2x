@@ -172,11 +172,24 @@
 }
 
 .message-pinned-indicator {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   color: #FF2A55;
   opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-pinned-indicator:hover {
+  opacity: 1;
+  background: rgba(255, 42, 85, 0.2);
+}
+
+.message-pinned-indicator:active {
+  transform: scale(0.9);
 }
 
 /* Avatar Placeholder */
@@ -1179,3 +1192,121 @@
   margin: 0 auto;
   z-index: 9999;
 }
+
+/* ==================== Long Press Popup ==================== */
+.messages-page.popup-active .messages-header,
+.messages-page.popup-active .messages-stories-section,
+.messages-page.popup-active .messages-activity-section,
+.messages-page.popup-active .messages-filters,
+.messages-page.popup-active .messages-list {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.longpress-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+}
+
+.longpress-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #2a2a2a;
+  border-radius: 14px;
+  width: calc(100% - 48px);
+  max-width: 300px;
+  overflow: hidden;
+  z-index: 10001;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: popup-fade-in 0.15s ease-out;
+}
+
+@keyframes popup-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.longpress-popup-options {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.longpress-popup-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.longpress-popup-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.longpress-popup-option:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.longpress-popup-option svg {
+  flex-shrink: 0;
+  color: #888;
+}
+
+.longpress-popup-option.danger {
+  color: #FF4444;
+}
+
+.longpress-popup-option.danger svg {
+  color: #FF4444;
+}
+
+
+.message-meta-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-muted-indicator {
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.message-muted-indicator:hover {
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.message-muted-indicator:active {
+  transform: scale(0.9);
+}
+

@@ -46,6 +46,11 @@ const apiFetch = async (endpoint, options = {}) => {
     throw new Error(error.message || `HTTP ${response.status}`);
   }
 
+  // Handle 204 No Content responses (no body to parse)
+  if (response.status === 204) {
+    return { success: true };
+  }
+
   return response.json();
 };
 
@@ -376,6 +381,39 @@ export const messagesApi = {
 
   markConversationRead: (userId) => apiFetch(`/api/messages/conversations/${userId}/read`, {
     method: 'POST',
+  }),
+
+  markConversationUnread: (userId, count = 5) => apiFetch(`/api/messages/conversations/${userId}/unread`, {
+    method: 'POST',
+    body: JSON.stringify({ count }),
+  }),
+
+  pinConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/pin`, {
+    method: 'POST',
+  }),
+
+  unpinConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/pin`, {
+    method: 'DELETE',
+  }),
+
+  muteConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/mute`, {
+    method: 'POST',
+  }),
+
+  unmuteConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/mute`, {
+    method: 'DELETE',
+  }),
+
+  hideConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/hide`, {
+    method: 'POST',
+  }),
+
+  unhideConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}/hide`, {
+    method: 'DELETE',
+  }),
+
+  deleteConversation: (userId) => apiFetch(`/api/messages/conversations/${userId}`, {
+    method: 'DELETE',
   }),
 
   deleteMessage: (messageId) => apiFetch(`/api/messages/${messageId}`, {

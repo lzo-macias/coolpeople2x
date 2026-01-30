@@ -128,7 +128,7 @@ export const leaveRace = (raceId) => {
 // =============================================================================
 
 /**
- * Listen for new messages
+ * Listen for new messages (for conversation list updates)
  * @param {Function} callback - Called when a new message arrives
  * @returns {Function} Cleanup function
  */
@@ -154,6 +154,32 @@ export const onNewMessage = (callback) => {
   return () => {
     socket?.off('message:new', handler)
     eventListeners.delete('message:new')
+  }
+}
+
+/**
+ * Listen for conversation messages (for active chat view)
+ * @param {Function} callback - Called when a message arrives in the joined conversation
+ * @returns {Function} Cleanup function
+ */
+export const onConversationMessage = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      message: {
+        id: data.message.id,
+        senderId: data.message.senderId,
+        content: data.message.content,
+        createdAt: new Date(data.message.createdAt),
+      },
+    })
+  }
+
+  socket.on('conversation:message', handler)
+
+  return () => {
+    socket?.off('conversation:message', handler)
   }
 }
 
@@ -447,6 +473,7 @@ export default {
 
   // Event listeners
   onNewMessage,
+  onConversationMessage,
   onTyping,
   emitTyping,
   onNewStory,

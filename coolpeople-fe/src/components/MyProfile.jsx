@@ -470,6 +470,20 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
 
   return (
     <div className="my-profile">
+      {/* DEBUG BANNER - Remove after debugging */}
+      <div style={{
+        background: 'orange',
+        color: 'black',
+        padding: '20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 99999
+      }}>
+        MY PROFILE PAGE (Page 5) - Username: {currentUser?.username}
+      </div>
+
       {/* Header */}
       <div className="my-profile-header">
         <div className="my-profile-top">

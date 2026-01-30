@@ -34,6 +34,9 @@ export interface ConversationResponse {
   otherUser: ConversationUser;
   lastMessage: MessageResponse;
   unreadCount: number;
+  isPinned: boolean;
+  isMuted: boolean;
+  isHidden: boolean;
 }
 
 // -----------------------------------------------------------------------------

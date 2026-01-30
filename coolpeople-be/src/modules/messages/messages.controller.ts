@@ -66,6 +66,87 @@ export const markConversationRead = async (req: Request, res: Response): Promise
 };
 
 // -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/unread
+// -----------------------------------------------------------------------------
+
+export const markConversationUnread = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  const { count } = req.body as { count?: number };
+  await messagesService.markConversationUnread(req.user!.userId, otherUserId, count || 5);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/pin
+// -----------------------------------------------------------------------------
+
+export const pinConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.pinConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/pin
+// -----------------------------------------------------------------------------
+
+export const unpinConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.unpinConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/mute
+// -----------------------------------------------------------------------------
+
+export const muteConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.muteConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/mute
+// -----------------------------------------------------------------------------
+
+export const unmuteConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.unmuteConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/conversations/:userId/hide
+// -----------------------------------------------------------------------------
+
+export const hideConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.hideConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId/hide
+// -----------------------------------------------------------------------------
+
+export const unhideConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.unhideConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/conversations/:userId
+// -----------------------------------------------------------------------------
+
+export const deleteConversation = async (req: Request, res: Response): Promise<void> => {
+  const otherUserId = req.params.userId as string;
+  await messagesService.deleteConversation(req.user!.userId, otherUserId);
+  sendNoContent(res);
+};
+
+// -----------------------------------------------------------------------------
 // DELETE /api/messages/:id
 // -----------------------------------------------------------------------------
 

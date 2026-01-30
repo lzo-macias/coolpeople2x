@@ -72,7 +72,7 @@ export const getConversations = async (
     return { conversations: [], nextCursor: null };
   }
 
-  // Build conversations with last message and unread count
+  // Build conversations with last message, unread count, and settings
   const conversations: ConversationResponse[] = [];
 
   for (const partnerId of unblockedPartnerIds) {
@@ -103,10 +103,20 @@ export const getConversations = async (
 
     if (!otherUser) continue;
 
+    // Get conversation settings (pinned, muted, hidden)
+    const settings = await prisma.conversationSettings.findUnique({
+      where: {
+        userId_otherUserId: { userId: currentUserId, otherUserId: partnerId },
+      },
+    });
+
     conversations.push({
       otherUser: otherUser as ConversationUser,
       lastMessage: formatMessage(lastMessage),
       unreadCount,
+      isPinned: settings?.isPinned ?? false,
+      isMuted: settings?.isMuted ?? false,
+      isHidden: settings?.isHidden ?? false,
     });
   }
 
@@ -331,5 +341,194 @@ export const deleteMessage = async (
 
   await prisma.directMessage.delete({
     where: { id: messageId },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Mark Conversation as Unread
+// Marks the last N messages as unread by clearing readAt
+// -----------------------------------------------------------------------------
+
+export const markConversationUnread = async (
+  currentUserId: string,
+  otherUserId: string,
+  count: number = 5
+): Promise<void> => {
+  // Get the last N messages from the other user
+  const messages = await prisma.directMessage.findMany({
+    where: {
+      senderId: otherUserId,
+      receiverId: currentUserId,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: count,
+    select: { id: true },
+  });
+
+  if (messages.length > 0) {
+    await prisma.directMessage.updateMany({
+      where: {
+        id: { in: messages.map((m) => m.id) },
+      },
+      data: {
+        readAt: null,
+      },
+    });
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Pin Conversation
+// -----------------------------------------------------------------------------
+
+export const pinConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isPinned: true },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isPinned: true,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Unpin Conversation
+// -----------------------------------------------------------------------------
+
+export const unpinConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isPinned: false },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isPinned: false,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Mute Conversation
+// -----------------------------------------------------------------------------
+
+export const muteConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isMuted: true },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isMuted: true,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Unmute Conversation
+// -----------------------------------------------------------------------------
+
+export const unmuteConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isMuted: false },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isMuted: false,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Hide Conversation
+// -----------------------------------------------------------------------------
+
+export const hideConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isHidden: true },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isHidden: true,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Unhide Conversation
+// -----------------------------------------------------------------------------
+
+export const unhideConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  await prisma.conversationSettings.upsert({
+    where: {
+      userId_otherUserId: { userId: currentUserId, otherUserId },
+    },
+    update: { isHidden: false },
+    create: {
+      userId: currentUserId,
+      otherUserId,
+      isHidden: false,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Delete Conversation
+// Deletes all messages between the two users
+// -----------------------------------------------------------------------------
+
+export const deleteConversation = async (
+  currentUserId: string,
+  otherUserId: string
+): Promise<void> => {
+  // Delete all messages in both directions
+  await prisma.directMessage.deleteMany({
+    where: {
+      OR: [
+        { senderId: currentUserId, receiverId: otherUserId },
+        { senderId: otherUserId, receiverId: currentUserId },
+      ],
+    },
+  });
+
+  // Also delete any conversation settings
+  await prisma.conversationSettings.deleteMany({
+    where: {
+      OR: [
+        { userId: currentUserId, otherUserId },
+        { userId: otherUserId, otherUserId: currentUserId },
+      ],
+    },
   });
 };

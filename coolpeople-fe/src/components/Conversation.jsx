@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
+import { messagesApi } from '../services/api'
+import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket } from '../services/socket'
 import CreateScreen from './CreateScreen'
 import PartySettings from './PartySettings'
 import ChatSettings from './ChatSettings'
@@ -83,27 +85,216 @@ function AudioMessage({ src, duration }) {
   )
 }
 
-function Conversation({ conversation, onBack, sharedConversations, setSharedConversations }) {
+function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar }) {
+  console.log('=== Conversation component rendered ===')
+  console.log('conversation:', conversation)
+  console.log('conversation.user:', conversation?.user)
+  console.log('currentUserId:', currentUserId)
+
   const [messageText, setMessageText] = useState('')
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [localMessages, setLocalMessages] = useState([])
+  const [fetchedMessages, setFetchedMessages] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
   const [showPartySettings, setShowPartySettings] = useState(false)
   const [activeMessageId, setActiveMessageId] = useState(null)
   const [messageReactions, setMessageReactions] = useState({})
   const [replyingTo, setReplyingTo] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [conversationId, setConversationId] = useState(conversation.id)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
+  const messagesEndRef = useRef(null)
+  const currentUserIdRef = useRef(currentUserId)
   const { user } = conversation
+  const otherUserId = user?.id
+  const otherUserIdRef = useRef(otherUserId)
   const isPartyChat = conversation.isParty || false
-  // Use shared conversations if available, otherwise fall back to mock data
-  const conversationMessages = sharedConversations?.[conversation.id] || mockConversations[conversation.id] || []
-  const messages = [...conversationMessages, ...localMessages]
+  const isNewConversation = conversation.isNew || conversationId?.startsWith('new-')
 
-  // Current user avatar (would come from auth context in real app)
-  const currentUserAvatar = 'https://i.pravatar.cc/40?img=12'
+  // Keep refs updated
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId
+    otherUserIdRef.current = otherUserId
+  }, [currentUserId, otherUserId])
+
+  // Combine fetched messages with locally sent messages and sort by time
+  const messages = [...fetchedMessages, ...localMessages].sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return timeA - timeB
+  })
+
+  // Fetch messages from API on mount
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!user?.id) {
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const response = await messagesApi.getMessagesWithUser(user.id)
+        if (response.data) {
+          // Transform API messages to match expected format
+          // API returns messages sorted desc, so reverse for chronological order
+          const transformed = response.data.map(msg => ({
+            id: msg.id,
+            text: msg.content,
+            isOwn: msg.senderId === currentUserId,
+            timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: msg.createdAt,
+          })).reverse()
+          setFetchedMessages(transformed)
+        }
+      } catch (error) {
+        console.error('Failed to fetch messages:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchMessages()
+  }, [user?.id, currentUserId])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length])
+
+  // Join conversation room and listen for real-time messages
+  useEffect(() => {
+    if (!user?.id) return
+
+    // Ensure socket is initialized
+    initializeSocket()
+
+    let messageHandler = null
+    let connectHandler = null
+    let isSetup = false
+
+    const setupListeners = (socket) => {
+      if (isSetup || !socket) return
+      isSetup = true
+
+      // Join the conversation room for real-time updates
+      joinConversation(user.id)
+
+      // Handler for incoming messages
+      messageHandler = (data) => {
+        console.log('=== SOCKET MESSAGE RECEIVED ===', data)
+
+        // Get sender ID from the message data - check multiple possible locations
+        const senderId = data.message?.senderId || data.senderId
+        const receiverId = data.message?.receiverId || data.receiverId
+        const messageId = data.message?.id || data.id
+        const messageContent = data.message?.content || data.content
+        const messageCreatedAt = data.message?.createdAt || data.createdAt
+
+        console.log('Message details:', { senderId, receiverId, messageId, messageContent })
+
+        // Skip if missing required data
+        if (!senderId || !messageId || !messageContent) {
+          console.log('Skipping - missing required data:', { senderId, messageId, messageContent })
+          return
+        }
+
+        // Use refs to get current values (avoid stale closures)
+        const myUserId = currentUserIdRef.current
+        const theirUserId = otherUserIdRef.current
+
+        console.log('ID comparison:', {
+          senderId,
+          myUserId,
+          theirUserId,
+          senderIsMe: senderId === myUserId,
+          senderIsOther: senderId === theirUserId,
+        })
+
+        // Skip if this message is from us (we already added it locally)
+        if (senderId === myUserId) {
+          console.log('Skipping - message is from me (already added locally)')
+          return
+        }
+
+        // Skip if this message is not for this conversation
+        // Check if either: sender is the other user, OR receiver is me (and sender is other user)
+        const isForThisConversation = senderId === theirUserId ||
+          (receiverId && receiverId === myUserId && senderId === theirUserId)
+
+        if (!isForThisConversation) {
+          console.log('Skipping - message not for this conversation')
+          return
+        }
+
+        console.log('Adding message from other user with isOwn: false')
+        const newMsg = {
+          id: messageId,
+          text: messageContent,
+          isOwn: false, // This is from the other user, not us
+          timestamp: new Date(messageCreatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: messageCreatedAt,
+        }
+
+        // Check if message already exists to avoid duplicates
+        setFetchedMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) {
+            console.log('Skipping - duplicate message')
+            return prev
+          }
+          console.log('Message added to fetchedMessages')
+          return [...prev, newMsg]
+        })
+
+        // Mark message as read since we're viewing the conversation
+        messagesApi.markConversationRead(theirUserId).catch(() => {})
+      }
+
+      // Listen for both event types (conversation room and personal room)
+      socket.on('conversation:message', messageHandler)
+      socket.on('message:new', messageHandler)
+    }
+
+    const socket = getSocket()
+
+    if (socket?.connected) {
+      // Socket already connected, set up immediately
+      setupListeners(socket)
+    } else if (socket) {
+      // Socket exists but not connected, wait for connection
+      connectHandler = () => setupListeners(getSocket())
+      socket.on('connect', connectHandler)
+    }
+
+    // Also try with a delay in case socket is being initialized
+    const delayedSetup = setTimeout(() => {
+      const s = getSocket()
+      if (s?.connected && !isSetup) {
+        setupListeners(s)
+      }
+    }, 500)
+
+    // Cleanup on unmount
+    return () => {
+      clearTimeout(delayedSetup)
+      leaveConversation(otherUserIdRef.current)
+      const s = getSocket()
+      if (s) {
+        if (connectHandler) {
+          s.off('connect', connectHandler)
+        }
+        if (messageHandler) {
+          s.off('conversation:message', messageHandler)
+          s.off('message:new', messageHandler)
+        }
+      }
+    }
+  }, [otherUserId])
+
+  // Fallback avatar if none provided
+  const userAvatar = currentUserAvatar || 'https://i.pravatar.cc/40?img=12'
 
   const reactionEmojis = ['❤️', '😂', '😮', '😢', '😡', '👍']
 
@@ -135,27 +326,66 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     setActiveMessageId(null)
   }
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!messageText.trim()) return
+
+    const messageContent = messageText
+    setMessageText('')
+
+    console.log('=== SENDING MESSAGE ===')
+    console.log('My user ID:', currentUserId)
+    console.log('Receiver (other user) ID:', user.id)
+    console.log('Message content:', messageContent)
+
+    const now = new Date()
     const newMessage = {
       id: `local-${Date.now()}`,
-      text: messageText,
+      text: messageContent,
       isOwn: true,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: now.toISOString(),
       replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, username: replyingTo.isOwn ? 'You' : user.username } : null
     }
+    console.log('Adding local message with isOwn: true', newMessage)
     setLocalMessages(prev => [...prev, newMessage])
-
-    // Also update shared conversations if available
-    if (setSharedConversations) {
-      setSharedConversations(prev => ({
-        ...prev,
-        [conversation.id]: [...(prev[conversation.id] || []), newMessage]
-      }))
-    }
-
-    setMessageText('')
     setReplyingTo(null)
+
+    try {
+      // Send message via API - backend expects 'receiverId' and 'content'
+      const response = await messagesApi.sendMessage({
+        receiverId: user.id,
+        content: messageContent,
+      })
+      console.log('API response:', response)
+
+      // Use the message ID as the conversation identifier, or construct from user IDs
+      const messageData = response.data?.message || response.data
+      const convId = messageData?.id ? `conv-${user.id}` : conversationId
+
+      // Update the conversation ID if this was a new conversation
+      if (isNewConversation) {
+        setConversationId(convId)
+      }
+
+      // Always notify parent to update the messages list
+      onMessageSent?.({
+        conversationId: convId,
+        user: user,
+        lastMessage: messageContent,
+        lastMessageAt: new Date().toISOString(),
+        isNew: isNewConversation,
+      })
+
+      // Also update shared conversations if available
+      if (setSharedConversations) {
+        setSharedConversations(prev => ({
+          ...prev,
+          [convId]: [...(prev[convId] || []), newMessage]
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error)
+    }
   }
 
   // Audio recording functions
@@ -174,13 +404,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         const audioUrl = URL.createObjectURL(audioBlob)
 
         // Send audio message
+        const audioNow = new Date()
         const newMessage = {
           id: `local-${Date.now()}`,
           text: null,
           audioUrl: audioUrl,
           audioDuration: recordingTime,
           isOwn: true,
-          timestamp: new Date().toISOString(),
+          timestamp: audioNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: audioNow.toISOString(),
           replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, username: replyingTo.isOwn ? 'You' : user.username } : null
         }
         setLocalMessages(prev => [...prev, newMessage])
@@ -238,6 +470,20 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
   return (
     <div className="conversation-page">
+      {/* DEBUG BANNER - Remove after debugging */}
+      <div style={{
+        background: 'lime',
+        color: 'black',
+        padding: '20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 99999
+      }}>
+        CONVERSATION WITH: {user?.username || 'UNKNOWN'} (ID: {user?.id?.slice(0,8) || 'NO ID'})
+      </div>
+
       {/* Header */}
       <div className="conversation-header">
         <button className="conversation-back-btn" onClick={onBack}>
@@ -264,7 +510,16 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
       {/* Messages */}
       <div className="conversation-messages" onClick={() => setActiveMessageId(null)}>
-        {messages.map((msg) => {
+        {isLoading ? (
+          <div className="conversation-loading">
+            <div className="loading-spinner" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="conversation-empty">
+            <p>No messages yet</p>
+            <span>Send a message to start the conversation</span>
+          </div>
+        ) : messages.map((msg) => {
           const reactions = messageReactions[msg.id] || []
           const isActive = activeMessageId === msg.id
 
@@ -352,12 +607,13 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               </div>
               {msg.isOwn && (
                 <div className="chat-message-avatar">
-                  <img src={currentUserAvatar} alt="You" />
+                  <img src={userAvatar} alt="You" />
                 </div>
               )}
             </div>
           )
         })}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Reply Preview */}
@@ -448,6 +704,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             conversationUser={user}
             onSendToConversation={(mediaUrl, isMirrored) => {
               // Add the sent clip as a message
+              const mediaNow = new Date()
               const newMessage = {
                 id: `local-${Date.now()}`,
                 text: null,
@@ -455,7 +712,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 mediaType: 'video',
                 isMirrored: isMirrored,
                 isOwn: true,
-                timestamp: new Date().toISOString()
+                timestamp: mediaNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                createdAt: mediaNow.toISOString()
               }
               setLocalMessages(prev => [...prev, newMessage])
               setShowCreateScreen(false)
@@ -482,7 +740,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               name: user.username,
               username: user.username,
               avatar: user.avatar,
-              color: '#3B82F6'
+              party: user.party,
             }}
             isGroupChat={false}
             onClose={() => setShowPartySettings(false)}

@@ -1,12 +1,17 @@
 import { useState } from 'react'
+import { getPartyColor } from '../data/mockData'
 import '../styling/ChatSettings.css'
 
 function ChatSettings({ chat, isGroupChat = false, onClose }) {
   const [activeSection, setActiveSection] = useState(null)
+
+  // Get party color - gray for independent, party color otherwise
+  const partyColor = getPartyColor(chat?.party)
+
   const [chatData, setChatData] = useState({
     name: chat?.name || chat?.username || 'Chat',
     avatar: chat?.avatar || 'https://i.pravatar.cc/150?img=47',
-    color: chat?.color || '#3B82F6',
+    color: partyColor,
     notifications: true,
   })
 
@@ -26,15 +31,14 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
     { id: 1, username: chat?.name || chat?.username || 'User', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: false },
   ]
 
-  // Mock shared media
-  const sharedMedia = [
-    { id: 1, image: 'https://picsum.photos/200/200?random=1' },
-    { id: 2, image: 'https://picsum.photos/200/200?random=2' },
-    { id: 3, image: 'https://picsum.photos/200/200?random=3' },
-    { id: 4, image: 'https://picsum.photos/200/200?random=4' },
-    { id: 5, image: 'https://picsum.photos/200/200?random=5' },
-    { id: 6, image: 'https://picsum.photos/200/200?random=6' },
-  ]
+  // Tab state for Links & Content
+  const [activeMediaTab, setActiveMediaTab] = useState('links')
+
+  // Shared links - empty for now, will be populated from API
+  const sharedLinks = []
+
+  // Shared content - empty for now, will be populated from API
+  const sharedContent = []
 
   // Mock connected users for sharing
   const connectedUsers = [
@@ -232,6 +236,7 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
           </svg>
         </button>
 
+        {/* Theme row hidden for now
         <button className="chat-settings-row" onClick={() => setActiveSection('theme')}>
           <div className="chat-settings-row-left">
             <div className="chat-theme-dot" style={{ background: chatData.color }} />
@@ -241,6 +246,7 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+        */}
 
         {isGroupChat && (
           <button className="chat-settings-row" onClick={() => setActiveSection('add-members')}>
@@ -264,12 +270,70 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
 
       {/* Links & Content */}
       <p className="chat-settings-section-label">Links & Content</p>
-      <div className="chat-settings-media-grid">
-        {sharedMedia.map(media => (
-          <div key={media.id} className="chat-settings-media-item">
-            <img src={media.image} alt="Shared media" />
-          </div>
-        ))}
+      <div className="chat-settings-media-tabs">
+        <button
+          className={`chat-settings-media-tab ${activeMediaTab === 'links' ? 'active' : ''}`}
+          onClick={() => setActiveMediaTab('links')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        </button>
+        <button
+          className={`chat-settings-media-tab ${activeMediaTab === 'content' ? 'active' : ''}`}
+          onClick={() => setActiveMediaTab('content')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="chat-settings-media-content">
+        {activeMediaTab === 'links' && (
+          sharedLinks.length > 0 ? (
+            <div className="chat-settings-links-list">
+              {sharedLinks.map(link => (
+                <a key={link.id} href={link.url} className="chat-settings-link-item">
+                  {link.title}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="chat-settings-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              <p>No links shared yet</p>
+            </div>
+          )
+        )}
+
+        {activeMediaTab === 'content' && (
+          sharedContent.length > 0 ? (
+            <div className="chat-settings-media-grid">
+              {sharedContent.map(media => (
+                <div key={media.id} className="chat-settings-media-item">
+                  <img src={media.image} alt="Shared media" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="chat-settings-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <p>No content shared yet</p>
+            </div>
+          )
+        )}
       </div>
     </div>
   )

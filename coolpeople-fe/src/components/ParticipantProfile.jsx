@@ -76,6 +76,7 @@ function ParticipantProfile({
   cachedProfile,
   onProfileLoaded,
   onFollowChange,
+  onMessageUser,
 }) {
   // Merge passed participant with defaults, preferring cached data
   const participant = { ...mockParticipant, ...passedParticipant, ...cachedProfile }
@@ -247,7 +248,35 @@ function ParticipantProfile({
         {/* Action Buttons */}
         {!isOwnProfile && (
           <div className="participant-actions">
-            <button className="participant-action-btn messages">messages</button>
+            <button
+              className="participant-action-btn messages"
+              onClick={() => {
+                console.log('=== MESSAGE BUTTON CLICKED IN ParticipantProfile ===')
+                console.log('passedParticipant:', passedParticipant)
+                console.log('cachedProfile:', cachedProfile)
+                console.log('participant (merged):', participant)
+
+                // Get the actual user ID from passed data, NOT from mock
+                const userId = passedParticipant?.id || passedParticipant?.userId || cachedProfile?.id || cachedProfile?.userId
+                console.log('Extracted userId:', userId)
+
+                if (!userId) {
+                  console.error('Cannot message user: no valid user ID found')
+                  return
+                }
+
+                const messageData = {
+                  id: userId,
+                  username: participant.username,
+                  avatar: participant.avatar || participant.avatarUrl,
+                  displayName: participant.displayName || participant.username,
+                }
+                console.log('Calling onMessageUser with:', messageData)
+                onMessageUser?.(messageData)
+              }}
+            >
+              Message
+            </button>
             <button className="participant-action-btn nominate">nominate</button>
             <button
               className={`participant-action-btn follow ${isFollowing ? 'following' : ''}`}

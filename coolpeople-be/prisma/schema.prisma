@@ -198,6 +198,8 @@ model User {
   dmsReceived     DirectMessage[] @relation("DMReceiver")
   chatMessages    ChatMessage[]
   chatReactions   ChatReaction[]
+  conversationSettings      ConversationSettings[] @relation("UserConversationSettings")
+  otherConversationSettings ConversationSettings[] @relation("OtherUserConversationSettings")
 
   // Icebreakers
   icebreakers     Icebreaker[]
@@ -1145,6 +1147,29 @@ model StoryView {
 
   @@unique([storyId, userId])
   @@index([storyId])
+}
+
+// =============================================================================
+// CONVERSATION SETTINGS
+// =============================================================================
+
+model ConversationSettings {
+  id            String    @id @default(uuid())
+  userId        String
+  otherUserId   String
+
+  isPinned      Boolean   @default(false)
+  isMuted       Boolean   @default(false)
+  isHidden      Boolean   @default(false)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation("UserConversationSettings", fields: [userId], references: [id], onDelete: Cascade)
+  otherUser     User      @relation("OtherUserConversationSettings", fields: [otherUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, otherUserId])
+  @@index([userId])
 }
 
 // =============================================================================

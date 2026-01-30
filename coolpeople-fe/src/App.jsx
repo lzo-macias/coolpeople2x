@@ -15,6 +15,7 @@ import ExplorePage from './components/ExplorePage'
 import MyProfile from './components/MyProfile'
 import MyBallot from './components/MyBallot'
 import Messages from './components/Messages'
+import Conversation from './components/Conversation'
 import CreateScreen from './components/CreateScreen'
 import Login from './components/Login'
 import Register from './components/Register'
@@ -62,6 +63,9 @@ function AppContent() {
   const [partyProfiles, setPartyProfiles] = useState({ ...mockPartyProfiles }) // Party profiles cache
   const [userProfilesCache, setUserProfilesCache] = useState({}) // Centralized user profiles cache
   const [scoreboardRefreshKey, setScoreboardRefreshKey] = useState(0) // Triggers scoreboard refetch when changed
+  const [messageTargetUser, setMessageTargetUser] = useState(null) // User to start conversation with
+  const [showConversationOverlay, setShowConversationOverlay] = useState(false) // Show conversation as overlay
+  const [overlayConversation, setOverlayConversation] = useState(null) // Conversation data for overlay
   const [navHistory, setNavHistory] = useState([])
 
   // Refs must also be at the top
@@ -534,13 +538,24 @@ function AppContent() {
   }
 
   const handleOpenProfile = (candidate) => {
-    // Check if this is the current user
+    console.log('=== handleOpenProfile called ===')
+    console.log('candidate received:', candidate)
+    console.log('currentUser:', currentUser)
+    console.log('authUser:', authUser)
+
+    // Check if this is the current user (check both id and userId since scoreboard uses userId)
+    const candidateId = candidate.id || candidate.userId
+    console.log('candidateId:', candidateId, 'currentUser.id:', currentUser.id)
+
     const isCurrentUser = candidate.username === currentUser.username ||
-                          candidate.id === currentUser.id ||
-                          candidate.id === authUser?.id
+                          candidateId === currentUser.id ||
+                          candidateId === authUser?.id
+
+    console.log('isCurrentUser:', isCurrentUser)
 
     // If clicking on own profile, navigate to MyProfile page
     if (isCurrentUser) {
+      console.log('Redirecting to MyProfile (page 5) - this is own profile')
       setShowComments(false)
       setShowProfile(false)
       setShowPartyProfile(false)
@@ -549,6 +564,7 @@ function AppContent() {
       return
     }
 
+    console.log('Opening other user profile overlay')
     saveToHistory()
     setShowComments(false)
     setShowPartyProfile(false)
@@ -716,6 +732,7 @@ function AppContent() {
     if (comment.profileType === 'candidate') {
       // Open CandidateProfile for users who opted into social credit
       setActiveCandidate({
+        id: comment.id || comment.userId,
         username: comment.username,
         avatar: comment.avatar,
         party: comment.party || 'Independent',
@@ -724,6 +741,7 @@ function AppContent() {
     } else {
       // Open ParticipantProfile for users who haven't opted in
       setActiveParticipant({
+        id: comment.id || comment.userId,
         username: comment.username,
         avatar: comment.avatar,
         party: comment.party,
@@ -753,6 +771,7 @@ function AppContent() {
 
     // Otherwise show the other user's profile overlay
     setActiveCandidate({
+      id: user.id,
       username: user.username,
       avatar: user.avatar,
       party: user.party || 'Independent',
@@ -782,6 +801,7 @@ function AppContent() {
 
     // Engagement scores are candidates (on the scoreboard)
     setActiveCandidate({
+      id: score.id,
       username: score.username,
       avatar: score.avatar,
       party: score.party || 'The Pink Lady Party',
@@ -920,8 +940,39 @@ function AppContent() {
     }
   }
 
+  // Debug: log current state on every render
+  console.log('=== APP RENDER ===', {
+    currentPage,
+    pageName: PAGES[currentPage],
+    showProfile,
+    showParticipantProfile,
+    showPartyProfile,
+    showConversationOverlay,
+    overlayConversationUser: overlayConversation?.user?.username,
+  })
+
   return (
     <div className="app">
+      {/* DEBUG INDICATOR - Remove after debugging */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: showConversationOverlay ? 'rgba(0, 255, 0, 0.9)' : 'rgba(255, 0, 0, 0.9)',
+        color: showConversationOverlay ? 'black' : 'white',
+        padding: '4px 8px',
+        fontSize: '10px',
+        zIndex: 99999,
+        textAlign: 'center',
+        fontFamily: 'monospace'
+      }}>
+        {showConversationOverlay
+          ? `CONVERSATION OVERLAY: ${overlayConversation?.user?.username || 'unknown'}`
+          : `Page: ${currentPage} (${PAGES[currentPage]}) | Profile: ${showProfile ? 'YES' : 'NO'} | Participant: ${showParticipantProfile ? 'YES' : 'NO'}`
+        }
+      </div>
+
       <div
         className="pages-container"
         onTouchStart={handleTouchStart}
@@ -991,6 +1042,8 @@ function AppContent() {
             isCandidate={!currentUser.isParticipant}
             userParty={userParty}
             currentUser={currentUser}
+            startConversationWith={messageTargetUser}
+            onConversationStarted={() => setMessageTargetUser(null)}
           />
         </div>
 
@@ -1017,7 +1070,7 @@ function AppContent() {
         </div>
       </div>
 
-      {!isInConversation && !showCreateScreen && (
+      {!isInConversation && !showCreateScreen && !showConversationOverlay && (
         <BottomNav
           currentPage={PAGES[currentPage]}
           onNavigate={handleNavClick}
@@ -1108,6 +1161,39 @@ function AppContent() {
                 isNowFavorited
               )
             }}
+            onMessageUser={(user) => {
+              console.log('=== APP.JSX onMessageUser HANDLER ===')
+              console.log('User data received:', user)
+
+              // Close ALL profile overlays
+              setShowProfile(false)
+              setShowParticipantProfile(false)
+              setShowPartyProfile(false)
+              setShowComments(false)
+
+              // Create conversation object and show as overlay
+              const conversation = {
+                id: `new-${user.id}`,
+                user: {
+                  id: user.id,
+                  username: user.username,
+                  avatar: user.avatar,
+                  displayName: user.displayName || user.username,
+                },
+                userId: user.id,
+                username: user.username,
+                avatar: user.avatar,
+                lastMessage: '',
+                timestamp: 'now',
+                unreadCount: 0,
+                hasUnread: false,
+                isOnline: false,
+                isNew: true,
+              }
+              setOverlayConversation(conversation)
+              setShowConversationOverlay(true)
+              console.log('Opening conversation overlay with:', user.username)
+            }}
           />
         </div>
       )}
@@ -1155,8 +1241,78 @@ function AppContent() {
                   newFollowerCount
                 )
               }}
+              onMessageUser={(user) => {
+                console.log('=== APP.JSX onMessageUser HANDLER (Participant) ===')
+                console.log('User data received:', user)
+
+                // Close ALL profile overlays
+                setShowProfile(false)
+                setShowParticipantProfile(false)
+                setShowPartyProfile(false)
+                setShowComments(false)
+
+                // Create conversation object and show as overlay
+                const conversation = {
+                  id: `new-${user.id}`,
+                  user: {
+                    id: user.id,
+                    username: user.username,
+                    avatar: user.avatar,
+                    displayName: user.displayName || user.username,
+                  },
+                  userId: user.id,
+                  username: user.username,
+                  avatar: user.avatar,
+                  lastMessage: '',
+                  timestamp: 'now',
+                  unreadCount: 0,
+                  hasUnread: false,
+                  isOnline: false,
+                  isNew: true,
+                }
+                setOverlayConversation(conversation)
+                setShowConversationOverlay(true)
+                console.log('Opening conversation overlay with:', user.username)
+              }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Conversation Overlay - renders on top of everything when messaging from profile */}
+      {showConversationOverlay && overlayConversation && (
+        <div className="conversation-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxWidth: '430px',
+          margin: '0 auto',
+          zIndex: 2000,
+          background: '#0f0f11',
+        }}>
+          <Conversation
+            conversation={overlayConversation}
+            onBack={() => {
+              setShowConversationOverlay(false)
+              setOverlayConversation(null)
+            }}
+            sharedConversations={conversations}
+            setSharedConversations={setConversations}
+            onMessageSent={(data) => {
+              // Update the overlay conversation with the real ID
+              if (data.isNew) {
+                setOverlayConversation(prev => ({
+                  ...prev,
+                  id: data.conversationId,
+                  isNew: false,
+                }))
+              }
+            }}
+            currentUserId={currentUser?.id}
+            currentUserAvatar={currentUser?.avatar}
+          />
         </div>
       )}
     </div>

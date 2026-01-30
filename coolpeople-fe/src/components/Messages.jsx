@@ -41,7 +41,7 @@ const mockActivityNotifications = {
   ballots: [],
 }
 
-function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
@@ -55,11 +55,18 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const storyTimerRef = useRef(null)
   const [storyProgress, setStoryProgress] = useState(0)
   const touchStartX = useRef(0)
+  const activeConversationRef = useRef(null) // Ref to track active conversation for socket handler
   const currentUsername = currentUser?.username || 'User'
 
   // State for API data
   const [messages, setMessages] = useState([])
   const [stories, setStories] = useState([])
+  const [unpinnedConversations, setUnpinnedConversations] = useState(new Set()) // Track manually unpinned conversations
+  const [pinnedConversations, setPinnedConversations] = useState(new Set()) // Track manually pinned conversations
+  const [silencedConversations, setSilencedConversations] = useState(new Set()) // Track silenced conversations
+  const [hiddenConversations, setHiddenConversations] = useState(new Set()) // Track hidden conversations
+  const [longPressPopup, setLongPressPopup] = useState(null) // { message, position }
+  const processedMessageIds = useRef(new Set()) // Track processed message IDs to prevent double-counting
   const [notifications, setNotifications] = useState({ likes: [], comments: [], reposts: [], reviews: [], nominates: [], ballots: [] })
   const [activity, setActivity] = useState({ likes: 0, comments: 0, reposts: 0, reviews: 0, nominates: 0, ballots: 0 })
   const [searchResults, setSearchResults] = useState([])
@@ -165,11 +172,31 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Set up socket event listeners
     const cleanupNewMessage = onNewMessage((data) => {
+      const messageId = data.message?.id
+
+      // Deduplicate - prevent double-counting from multiple event sources
+      if (messageId && processedMessageIds.current.has(messageId)) {
+        return
+      }
+      if (messageId) {
+        processedMessageIds.current.add(messageId)
+        // Clean up old IDs after 10 seconds to prevent memory leak
+        setTimeout(() => processedMessageIds.current.delete(messageId), 10000)
+      }
+
       // Update conversation list with new message
       setMessages(prev => {
         const existingIndex = prev.findIndex(m =>
           m.user?.id === data.senderId || m.id === data.conversationId
         )
+
+        // Check if this message is for the currently active conversation
+        const isActiveConversation = activeConversationRef.current &&
+          (activeConversationRef.current.user?.id === data.senderId ||
+           activeConversationRef.current.id === data.conversationId)
+
+        // Only increment unread count if message is not from current user AND not viewing that conversation
+        const shouldIncrementUnread = data.senderId !== currentUser?.id && !isActiveConversation
 
         if (existingIndex >= 0) {
           const updated = [...prev]
@@ -178,8 +205,10 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             lastMessage: data.message.content,
             lastMessageAt: data.message.createdAt,
             timestamp: formatTimestamp(data.message.createdAt),
-            hasUnread: data.senderId !== currentUser?.id,
-            unreadCount: (updated[existingIndex].unreadCount || 0) + (data.senderId !== currentUser?.id ? 1 : 0),
+            hasUnread: shouldIncrementUnread ? true : updated[existingIndex].hasUnread,
+            unreadCount: shouldIncrementUnread
+              ? (updated[existingIndex].unreadCount || 0) + 1
+              : updated[existingIndex].unreadCount,
           }
           return sortMessages(updated)
         }
@@ -197,8 +226,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             lastMessage: data.message.content,
             lastMessageAt: data.message.createdAt,
             timestamp: formatTimestamp(data.message.createdAt),
-            unreadCount: 1,
-            hasUnread: true,
+            unreadCount: shouldIncrementUnread ? 1 : 0,
+            hasUnread: shouldIncrementUnread,
             isOnline: false,
           }])
         }
@@ -306,6 +335,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       setMessages(prev => {
         const partyChat = prev.find(m => m.partyId === partyId || m.isPartyChat)
         if (partyChat) {
+          // Check if the party chat is currently active
+          const isActiveConversation = activeConversationRef.current &&
+            (activeConversationRef.current.partyId === partyId || activeConversationRef.current.isPartyChat)
+
+          const shouldIncrementUnread = message.senderId !== currentUser?.id && !isActiveConversation
+
           return sortMessages(prev.map(m => {
             if (m.partyId === partyId || m.isPartyChat) {
               return {
@@ -313,8 +348,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 lastMessage: message.content,
                 lastMessageAt: message.createdAt,
                 timestamp: formatTimestamp(message.createdAt),
-                hasUnread: message.senderId !== currentUser?.id,
-                unreadCount: message.senderId !== currentUser?.id ? (m.unreadCount || 0) + 1 : m.unreadCount,
+                hasUnread: shouldIncrementUnread ? true : m.hasUnread,
+                unreadCount: shouldIncrementUnread ? (m.unreadCount || 0) + 1 : m.unreadCount,
               }
             }
             return m
@@ -356,24 +391,44 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         // Fetch conversations
         const conversationsRes = await messagesApi.getConversations()
         if (conversationsRes.data && conversationsRes.data.length > 0) {
-          const transformedMessages = conversationsRes.data.map(conv => ({
-            id: conv.id,
-            partyId: conv.partyId,
-            isPartyChat: conv.isPartyChat || false,
-            user: {
-              id: conv.otherUser?.id,
-              username: conv.otherUser?.username || conv.otherUser?.displayName,
-              avatar: conv.otherUser?.avatarUrl,
-              party: conv.otherUser?.party || null,
-            },
-            lastMessage: conv.lastMessage?.text || '',
-            lastMessageAt: conv.lastMessage?.createdAt,
-            timestamp: formatTimestamp(conv.lastMessage?.createdAt),
-            unreadCount: conv.unreadCount || 0,
-            isOnline: conv.otherUser?.isOnline || false,
-            hasUnread: conv.unreadCount > 0,
-          }))
+          const pinned = new Set()
+          const muted = new Set()
+          const hidden = new Set()
+
+          const transformedMessages = conversationsRes.data.map(conv => {
+            const convId = conv.id || `conv-${conv.otherUser?.id}`
+
+            // Track pinned, muted, hidden conversations
+            if (conv.isPinned) pinned.add(convId)
+            if (conv.isMuted) muted.add(convId)
+            if (conv.isHidden) hidden.add(convId)
+
+            return {
+              id: convId,
+              partyId: conv.partyId,
+              isPartyChat: conv.isPartyChat || false,
+              user: {
+                id: conv.otherUser?.id,
+                username: conv.otherUser?.username || conv.otherUser?.displayName,
+                avatar: conv.otherUser?.avatarUrl,
+                party: conv.otherUser?.party || null,
+              },
+              lastMessage: conv.lastMessage?.content || conv.lastMessage?.text || '',
+              lastMessageAt: conv.lastMessage?.createdAt,
+              timestamp: formatTimestamp(conv.lastMessage?.createdAt),
+              unreadCount: conv.unreadCount || 0,
+              isOnline: conv.otherUser?.isOnline || false,
+              hasUnread: conv.unreadCount > 0,
+              isPinned: conv.isPinned || false,
+              isMuted: conv.isMuted || false,
+              isHidden: conv.isHidden || false,
+            }
+          })
+
           setMessages(sortMessages(transformedMessages))
+          setPinnedConversations(pinned)
+          setSilencedConversations(muted)
+          setHiddenConversations(hidden)
         }
       } catch (error) {
         console.log('Failed to fetch conversations:', error.message)
@@ -462,6 +517,59 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return () => clearInterval(expiryCheckInterval)
   }, [userParty])
 
+  // Handle starting a conversation with a specific user (from profile "Message" button)
+  useEffect(() => {
+    if (!startConversationWith) return
+
+    // Validate that we have a valid user ID
+    if (!startConversationWith.id) {
+      console.error('Cannot start conversation: no valid user ID', startConversationWith)
+      onConversationStarted?.()
+      return
+    }
+
+    console.log('Starting conversation with user:', startConversationWith)
+
+    // Find existing conversation with this user
+    const existingConversation = messages.find(m =>
+      m.user?.id === startConversationWith.id ||
+      m.userId === startConversationWith.id
+    )
+
+    if (existingConversation) {
+      // Open existing conversation
+      console.log('Found existing conversation:', existingConversation)
+      setActiveConversation(existingConversation)
+      onConversationChange?.(true)
+    } else {
+      // Create a new conversation object and open it
+      const newConversation = {
+        id: `new-${startConversationWith.id}`,
+        user: {
+          id: startConversationWith.id,
+          username: startConversationWith.username,
+          avatar: startConversationWith.avatar,
+          displayName: startConversationWith.displayName || startConversationWith.username,
+        },
+        userId: startConversationWith.id,
+        username: startConversationWith.username,
+        avatar: startConversationWith.avatar,
+        lastMessage: '',
+        timestamp: 'now',
+        unreadCount: 0,
+        hasUnread: false,
+        isOnline: false,
+        isNew: true, // Flag to indicate this is a new conversation
+      }
+      console.log('Creating new conversation:', newConversation)
+      setActiveConversation(newConversation)
+      onConversationChange?.(true)
+    }
+
+    // Clear the target user
+    onConversationStarted?.()
+  }, [startConversationWith, messages, onConversationChange, onConversationStarted])
+
   // Handle compose search
   useEffect(() => {
     if (!composeSearch || composeSearch.length < 2) {
@@ -498,31 +606,295 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return `${diffDays}d`
   }
 
-  const unreadCount = messages.filter(m => m.hasUnread).length
-  const totalCount = messages.length
+  const hiddenCount = hiddenConversations.size
+  const visibleMessages = messages.filter(m => !hiddenConversations.has(m.id))
+  const unreadCount = visibleMessages.filter(m => m.hasUnread).length
+  const totalCount = visibleMessages.length
 
   const filters = [
     { id: 'all', label: 'All', count: totalCount },
     { id: 'unread', label: 'Unread', count: unreadCount },
-    { id: 'hidden', label: 'Hidden', count: null },
+    { id: 'hidden', label: 'Hidden', count: hiddenCount > 0 ? hiddenCount : null },
     { id: 'requests', label: 'Requests', count: null },
   ]
 
   // Filter and sort messages - party chat pinned at top, then by most recent
   const filteredMessages = sortMessages(messages.filter((msg) => {
+    // Hidden filter shows only hidden messages
+    if (activeFilter === 'hidden') return hiddenConversations.has(msg.id)
+    // Other filters exclude hidden messages
+    if (hiddenConversations.has(msg.id)) return false
     if (activeFilter === 'unread') return msg.hasUnread
     if (activeFilter === 'party') return msg.isPartyChat || msg.partyId === userParty?.id
     return true
   }))
 
-  const handleOpenConversation = (message) => {
-    setActiveConversation(message)
+  const handleOpenConversation = async (message) => {
+    // Reset unread count for this conversation when opened
+    setMessages(prev => prev.map(m =>
+      m.id === message.id
+        ? { ...m, unreadCount: 0, hasUnread: false }
+        : m
+    ))
+    const openedConversation = { ...message, unreadCount: 0, hasUnread: false }
+    setActiveConversation(openedConversation)
+    activeConversationRef.current = openedConversation // Update ref for socket handler
     onConversationChange?.(true)
+
+    // Persist read status to backend
+    if (message.user?.id) {
+      try {
+        await messagesApi.markConversationRead(message.user.id)
+      } catch (error) {
+        console.log('Failed to mark conversation as read:', error.message)
+      }
+    }
   }
 
   const handleCloseConversation = () => {
     setActiveConversation(null)
+    activeConversationRef.current = null // Clear ref when closing conversation
     onConversationChange?.(false)
+  }
+
+  const handleUnpin = async (messageId, e) => {
+    e.stopPropagation() // Prevent opening the conversation
+
+    // Find the message to get the user ID
+    const message = messages.find(m => m.id === messageId)
+    const userId = message?.user?.id
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, isPinned: false } : m
+    ))
+    setUnpinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.add(messageId)
+      return newSet
+    })
+    setPinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(messageId)
+      return newSet
+    })
+
+    // Persist to backend
+    if (userId) {
+      try {
+        await messagesApi.unpinConversation(userId)
+      } catch (error) {
+        console.log('Failed to unpin conversation:', error.message)
+      }
+    }
+  }
+
+  const handleUnmute = async (messageId, e) => {
+    e.stopPropagation() // Prevent opening the conversation
+
+    // Find the message to get the user ID
+    const message = messages.find(m => m.id === messageId)
+    const userId = message?.user?.id
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, isMuted: false } : m
+    ))
+    setSilencedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(messageId)
+      return newSet
+    })
+
+    // Persist to backend
+    if (userId) {
+      try {
+        await messagesApi.unmuteConversation(userId)
+      } catch (error) {
+        console.log('Failed to unmute conversation:', error.message)
+      }
+    }
+  }
+
+  // Long press popup handlers
+  const handleLongPress = (message, rect) => {
+    setLongPressPopup({ message, rect })
+  }
+
+  const closeLongPressPopup = () => {
+    setLongPressPopup(null)
+  }
+
+  const handleMarkUnread = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Update local state immediately
+    const unreadCount = 5
+    setMessages(prev => prev.map(m =>
+      m.id === message.id
+        ? { ...m, unreadCount, hasUnread: true }
+        : m
+    ))
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.markConversationUnread(userId, unreadCount)
+    } catch (error) {
+      console.log('Failed to mark as unread:', error.message)
+    }
+  }
+
+  const handlePin = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === message.id ? { ...m, isPinned: true } : m
+    ))
+    setPinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.add(message.id)
+      return newSet
+    })
+    setUnpinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(message.id)
+      return newSet
+    })
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.pinConversation(userId)
+    } catch (error) {
+      console.log('Failed to pin conversation:', error.message)
+    }
+  }
+
+  const handleUnpinFromPopup = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === message.id ? { ...m, isPinned: false } : m
+    ))
+    setUnpinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.add(message.id)
+      return newSet
+    })
+    setPinnedConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(message.id)
+      return newSet
+    })
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.unpinConversation(userId)
+    } catch (error) {
+      console.log('Failed to unpin conversation:', error.message)
+    }
+  }
+
+  const handleSilence = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    const isCurrentlyMuted = silencedConversations.has(message.id) || message.isMuted
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === message.id ? { ...m, isMuted: !isCurrentlyMuted } : m
+    ))
+    setSilencedConversations(prev => {
+      const newSet = new Set(prev)
+      if (isCurrentlyMuted) {
+        newSet.delete(message.id)
+      } else {
+        newSet.add(message.id)
+      }
+      return newSet
+    })
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      if (isCurrentlyMuted) {
+        await messagesApi.unmuteConversation(userId)
+      } else {
+        await messagesApi.muteConversation(userId)
+      }
+    } catch (error) {
+      console.log('Failed to toggle mute:', error.message)
+    }
+  }
+
+  const handleDeleteConversation = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Remove from local state immediately
+    setMessages(prev => prev.filter(m => m.id !== message.id))
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.deleteConversation(userId)
+    } catch (error) {
+      console.log('Failed to delete conversation:', error.message)
+    }
+  }
+
+  const handleHide = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === message.id ? { ...m, isHidden: true } : m
+    ))
+    setHiddenConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.add(message.id)
+      return newSet
+    })
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.hideConversation(userId)
+    } catch (error) {
+      console.log('Failed to hide conversation:', error.message)
+    }
+  }
+
+  const handleUnhide = async (message) => {
+    const userId = message.user?.id
+    if (!userId) return
+
+    // Update local state immediately
+    setMessages(prev => prev.map(m =>
+      m.id === message.id ? { ...m, isHidden: false } : m
+    ))
+    setHiddenConversations(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(message.id)
+      return newSet
+    })
+    closeLongPressPopup()
+
+    // Persist to backend
+    try {
+      await messagesApi.unhideConversation(userId)
+    } catch (error) {
+      console.log('Failed to unhide conversation:', error.message)
+    }
   }
 
   // Get stories users (excluding 'add'), including user's own stories
@@ -618,17 +990,76 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
   }
 
+  // Handle when a message is sent from a new conversation
+  const handleMessageSent = (data) => {
+    // Add the new conversation to the messages list
+    setMessages(prev => {
+      // Check if conversation already exists
+      const existingIndex = prev.findIndex(m =>
+        m.id === data.conversationId || m.user?.id === data.user.id
+      )
+
+      if (existingIndex >= 0) {
+        // Update existing conversation
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          id: data.conversationId,
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+          timestamp: formatTimestamp(data.lastMessageAt),
+        }
+        return sortMessages(updated)
+      }
+
+      // Add new conversation to the list
+      return sortMessages([...prev, {
+        id: data.conversationId,
+        user: data.user,
+        lastMessage: data.lastMessage,
+        lastMessageAt: data.lastMessageAt,
+        timestamp: formatTimestamp(data.lastMessageAt),
+        unreadCount: 0,
+        hasUnread: false,
+        isOnline: false,
+      }])
+    })
+
+    // Update the active conversation with the real ID if it was a new conversation
+    if (data.isNew) {
+      setActiveConversation(prev => ({
+        ...prev,
+        id: data.conversationId,
+        isNew: false,
+      }))
+    }
+  }
+
+  // Debug log every render
+  console.log('=== MESSAGES COMPONENT RENDER ===', {
+    hasActiveConversation: !!activeConversation,
+    activeConversationUser: activeConversation?.user?.username,
+    activeConversationId: activeConversation?.id,
+    startConversationWith: startConversationWith?.username,
+  })
+
   // Show conversation view if one is selected
   if (activeConversation) {
+    console.log('>>> RENDERING CONVERSATION COMPONENT with user:', activeConversation.user?.username)
     return (
       <Conversation
         conversation={activeConversation}
         onBack={handleCloseConversation}
         sharedConversations={conversations}
         setSharedConversations={setConversations}
+        onMessageSent={handleMessageSent}
+        currentUserId={currentUser?.id}
+        currentUserAvatar={currentUser?.avatar}
       />
     )
   }
+
+  console.log('>>> RENDERING MESSAGES LIST (no active conversation)')
 
   // Render Story Viewer as a portal
   const renderStoryViewer = () => {
@@ -904,16 +1335,27 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   // Handle send message
   const handleSendMessage = async () => {
     if (selectedRecipients.length > 0 && composeMessage.trim()) {
+      const messageContent = composeMessage
       try {
         // Send message to each recipient
         const sendPromises = selectedRecipients.map(recipient =>
           messagesApi.sendMessage({
-            recipientId: recipient.id,
-            text: composeMessage,
+            receiverId: recipient.id,
+            content: messageContent,
           })
         )
         await Promise.all(sendPromises)
-        console.log('Messages sent successfully')
+
+        // Add conversations to the list for each recipient
+        selectedRecipients.forEach(recipient => {
+          handleMessageSent({
+            conversationId: `conv-${recipient.id}`,
+            user: recipient,
+            lastMessage: messageContent,
+            lastMessageAt: new Date().toISOString(),
+            isNew: true,
+          })
+        })
       } catch (error) {
         console.log('Error sending message:', error.message)
       }
@@ -1048,13 +1490,108 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     )
   }
 
+  // Render Long Press Popup as a portal
+  const renderLongPressPopup = () => {
+    if (!longPressPopup) return null
+
+    const { message } = longPressPopup
+    const isDM = !message.isPartyChat && !message.isGroupChat
+    const isCurrentlyHidden = hiddenConversations.has(message.id) || message.isHidden
+    const isCurrentlyPinned = pinnedConversations.has(message.id) || message.isPinned ||
+      ((message.isPartyChat || message.partyId === userParty?.id) && !unpinnedConversations.has(message.id))
+    const isCurrentlySilenced = silencedConversations.has(message.id) || message.isMuted
+
+    return createPortal(
+      <>
+        <div className="longpress-popup-overlay" onClick={closeLongPressPopup} />
+        <div className="longpress-popup" onClick={(e) => e.stopPropagation()}>
+          <div className="longpress-popup-options">
+            {/* Mark Unread - DMs only */}
+            {isDM && (
+              <button className="longpress-popup-option" onClick={() => handleMarkUnread(message)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                <span>Mark as unread</span>
+              </button>
+            )}
+
+            {/* Pin */}
+            <button className="longpress-popup-option" onClick={() => isCurrentlyPinned ? handleUnpinFromPopup(message) : handlePin(message)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={isCurrentlyPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+              </svg>
+              <span>{isCurrentlyPinned ? 'Unpin' : 'Pin'}</span>
+            </button>
+
+            {/* Silence */}
+            <button className="longpress-popup-option" onClick={() => handleSilence(message)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={isCurrentlySilenced ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                {isCurrentlySilenced ? (
+                  <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                ) : (
+                  <path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/>
+                )}
+              </svg>
+              <span>{isCurrentlySilenced ? 'Unmute' : 'Mute'}</span>
+            </button>
+
+            {/* Hide / Unhide */}
+            <button className="longpress-popup-option" onClick={() => isCurrentlyHidden ? handleUnhide(message) : handleHide(message)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {isCurrentlyHidden ? (
+                  <>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                )}
+              </svg>
+              <span>{isCurrentlyHidden ? 'Unhide' : 'Hide'}</span>
+            </button>
+
+            {/* Delete - at bottom */}
+            <button className="longpress-popup-option danger" onClick={() => handleDeleteConversation(message)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    )
+  }
+
   return (
     <>
       {renderStoryViewer()}
       {renderActivityScreen()}
       {renderComposeScreen()}
       {renderLivePhotoScreen()}
-    <div className="messages-page">
+      {renderLongPressPopup()}
+    <div className={`messages-page ${longPressPopup ? 'popup-active' : ''}`}>
+      {/* DEBUG BANNER - Remove after debugging */}
+      <div style={{
+        background: 'cyan',
+        color: 'black',
+        padding: '20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 99999
+      }}>
+        MESSAGES LIST (Page 3) - No active conversation
+      </div>
+
       {/* Header */}
       <div className="messages-header">
         <div className="messages-username">
@@ -1223,14 +1760,28 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             <span>Start a conversation with someone</span>
           </div>
         ) : (
-          filteredMessages.map((message) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              isPinned={message.isPartyChat || message.partyId === userParty?.id}
-              onClick={() => handleOpenConversation(message)}
-            />
-          ))
+          filteredMessages.map((message) => {
+            const isPartyPinned = message.isPartyChat || message.partyId === userParty?.id
+            const isManuallyPinned = pinnedConversations.has(message.id) || message.isPinned
+            const isPinned = (isPartyPinned || isManuallyPinned) && !unpinnedConversations.has(message.id)
+            const isSilenced = silencedConversations.has(message.id) || message.isMuted
+            const isHidden = hiddenConversations.has(message.id) || message.isHidden
+            const isLongPressActive = longPressPopup?.message?.id === message.id
+            return (
+              <MessageItem
+                key={message.id}
+                message={message}
+                isPinned={isPinned}
+                isSilenced={isSilenced}
+                isHidden={isHidden}
+                isLongPressActive={isLongPressActive}
+                onClick={() => handleOpenConversation(message)}
+                onUnpin={(e) => handleUnpin(message.id, e)}
+                onUnmute={(e) => handleUnmute(message.id, e)}
+                onLongPress={handleLongPress}
+              />
+            )
+          })
         )}
       </div>
     </div>
@@ -1238,19 +1789,58 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   )
 }
 
-function MessageItem({ message, isPinned, onClick }) {
+function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActive, onClick, onUnpin, onUnmute, onLongPress }) {
   const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat } = message
   const partyColor = getPartyColor(user?.party)
+  const longPressTimer = useRef(null)
+  const itemRef = useRef(null)
+
+  const handleTouchStart = (e) => {
+    longPressTimer.current = setTimeout(() => {
+      const rect = itemRef.current?.getBoundingClientRect()
+      onLongPress?.(message, rect)
+    }, 500)
+  }
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  const handleMouseDown = (e) => {
+    longPressTimer.current = setTimeout(() => {
+      const rect = itemRef.current?.getBoundingClientRect()
+      onLongPress?.(message, rect)
+    }, 500)
+  }
+
+  const handleMouseUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
 
   return (
-    <div className={`message-item ${isPinned ? 'pinned' : ''}`} onClick={onClick}>
-      {isPinned && (
-        <div className="message-pinned-indicator">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
-          </svg>
-        </div>
-      )}
+    <div
+      ref={itemRef}
+      className={`message-item ${isPinned ? 'pinned' : ''} ${isSilenced ? 'silenced' : ''} ${isLongPressActive ? 'longpress-active' : ''}`}
+      onClick={onClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="message-avatar-container">
         <div
           className="message-avatar"
@@ -1276,6 +1866,22 @@ function MessageItem({ message, isPinned, onClick }) {
       </div>
 
       <div className="message-meta">
+        <div className="message-meta-icons">
+          {isSilenced && (
+            <div className="message-muted-indicator" onClick={onUnmute} title="Click to unmute">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+              </svg>
+            </div>
+          )}
+          {isPinned && (
+            <div className="message-pinned-indicator" onClick={onUnpin} title="Click to unpin">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+              </svg>
+            </div>
+          )}
+        </div>
         <span className="message-timestamp">{timestamp}</span>
         {unreadCount > 0 && (
           <span className="message-unread-badge">{unreadCount}</span>

@@ -355,7 +355,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, cachedProfile, onProfileLoaded }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
@@ -1209,7 +1209,36 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </>
           ) : (
             <>
-              <button className="profile-action-btn messages">messages</button>
+              <button
+                className="profile-action-btn messages"
+                onClick={() => {
+                  console.log('=== MESSAGE BUTTON CLICKED IN CandidateProfile ===')
+                  console.log('passedCandidate:', passedCandidate)
+                  console.log('fetchedProfile:', fetchedProfile)
+                  console.log('cachedProfile:', cachedProfile)
+                  console.log('candidate (computed):', candidate)
+
+                  // Get the actual user ID from passed/fetched data
+                  const userId = passedCandidate?.userId || passedCandidate?.id || fetchedProfile?.id || cachedProfile?.id
+                  console.log('Extracted userId:', userId)
+
+                  if (!userId) {
+                    console.error('Cannot message user: no valid user ID found')
+                    return
+                  }
+
+                  const messageData = {
+                    id: userId,
+                    username: candidate.username,
+                    avatar: candidate.avatar || candidate.avatarUrl,
+                    displayName: candidate.displayName || candidate.username,
+                  }
+                  console.log('Calling onMessageUser with:', messageData)
+                  onMessageUser?.(messageData)
+                }}
+              >
+                Message
+              </button>
               <div className="nominate-btn-wrapper">
                 <button
                   className={`profile-action-btn nominate ${isNominated ? 'nominated' : ''}`}
