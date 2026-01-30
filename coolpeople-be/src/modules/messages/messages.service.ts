@@ -40,28 +40,46 @@ export const getConversations = async (
   cursor?: string,
   limit: number = 20
 ): Promise<{ conversations: ConversationResponse[]; nextCursor: string | null }> => {
+  // Get IDs of messages the current user has deleted for themselves
+  const deletedMessages = await prisma.deletedMessage.findMany({
+    where: { userId: currentUserId },
+    select: { messageId: true },
+  });
+  const deletedMessageIds = new Set(deletedMessages.map((d) => d.messageId));
+
   // Get all distinct users the current user has exchanged messages with
-  // We use raw query to group by conversation partner efficiently
+  // Include ALL messages first, then filter deleted ones after
   const sentMessages = await prisma.directMessage.findMany({
     where: { senderId: currentUserId },
-    select: { receiverId: true },
-    distinct: ['receiverId'],
+    select: { id: true, receiverId: true },
   });
 
   const receivedMessages = await prisma.directMessage.findMany({
     where: { receiverId: currentUserId },
-    select: { senderId: true },
-    distinct: ['senderId'],
+    select: { id: true, senderId: true },
   });
 
-  // Collect unique partner user IDs
-  const partnerIds = new Set<string>();
-  sentMessages.forEach((m) => partnerIds.add(m.receiverId));
-  receivedMessages.forEach((m) => partnerIds.add(m.senderId));
+  // Filter out deleted messages and collect unique partner IDs
+  const partnerIdsFromSent = new Set(
+    sentMessages
+      .filter((m) => !deletedMessageIds.has(m.id))
+      .map((m) => m.receiverId)
+  );
+  const partnerIdsFromReceived = new Set(
+    receivedMessages
+      .filter((m) => !deletedMessageIds.has(m.id))
+      .map((m) => m.senderId)
+  );
+
+  // Combine partner IDs from both sent and received (non-deleted) messages
+  const partnerIds = new Set<string>([
+    ...Array.from(partnerIdsFromSent),
+    ...Array.from(partnerIdsFromReceived),
+  ]);
 
   // Filter out blocked users
   const unblockedPartnerIds: string[] = [];
-  for (const partnerId of partnerIds) {
+  for (const partnerId of Array.from(partnerIds)) {
     const blocked = await isBlocked(currentUserId, partnerId);
     if (!blocked) {
       unblockedPartnerIds.push(partnerId);
@@ -75,24 +93,34 @@ export const getConversations = async (
   // Build conversations with last message, unread count, and settings
   const conversations: ConversationResponse[] = [];
 
+  // Convert Set to array for Prisma queries
+  const deletedMessageIdsArray = Array.from(deletedMessageIds);
+
   for (const partnerId of unblockedPartnerIds) {
+    // Find last message that hasn't been deleted by the current user
     const lastMessage = await prisma.directMessage.findFirst({
       where: {
         OR: [
           { senderId: currentUserId, receiverId: partnerId },
           { senderId: partnerId, receiverId: currentUserId },
         ],
+        // Exclude deleted messages
+        ...(deletedMessageIdsArray.length > 0 && { NOT: { id: { in: deletedMessageIdsArray } } }),
       },
       orderBy: { createdAt: 'desc' },
     });
 
+    // Skip this conversation if all messages have been deleted
     if (!lastMessage) continue;
 
+    // Count unread messages (excluding deleted ones)
     const unreadCount = await prisma.directMessage.count({
       where: {
         senderId: partnerId,
         receiverId: currentUserId,
         readAt: null,
+        // Exclude deleted messages
+        ...(deletedMessageIdsArray.length > 0 && { NOT: { id: { in: deletedMessageIdsArray } } }),
       },
     });
 
@@ -188,11 +216,24 @@ export const sendMessage = async (
         select: { id: true, username: true, displayName: true, avatarUrl: true },
       });
 
+      const receiverInfo = await prisma.user.findUnique({
+        where: { id: receiverId },
+        select: { id: true, username: true, displayName: true, avatarUrl: true },
+      });
+
       // Emit to receiver's personal room for conversation list update
       io.to(`user:${receiverId}`).emit('message:new', {
         conversationId: `${ids[0]}:${ids[1]}`,
         senderId,
         sender: senderInfo,
+        message: { id: message.id, senderId, content, createdAt: message.createdAt },
+      });
+
+      // Emit to sender's personal room so their messages list updates too
+      io.to(`user:${senderId}`).emit('message:new', {
+        conversationId: `${ids[0]}:${ids[1]}`,
+        senderId,
+        sender: receiverInfo, // For the sender, show the receiver's info
         message: { id: message.id, senderId, content, createdAt: message.createdAt },
       });
 
@@ -277,12 +318,21 @@ export const getMessagesWithUser = async (
     throw new ForbiddenError('Cannot view messages with this user');
   }
 
+  // Get IDs of messages the current user has deleted for themselves
+  const deletedMessages = await prisma.deletedMessage.findMany({
+    where: { userId: currentUserId },
+    select: { messageId: true },
+  });
+  const deletedMessageIds = deletedMessages.map((d) => d.messageId);
+
   const messages = await prisma.directMessage.findMany({
     where: {
       OR: [
         { senderId: currentUserId, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: currentUserId },
       ],
+      // Exclude messages deleted by the current user
+      ...(deletedMessageIds.length > 0 && { NOT: { id: { in: deletedMessageIds } } }),
     },
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -335,12 +385,21 @@ export const deleteMessage = async (
 
   if (!message) throw new NotFoundError('Message');
 
-  if (message.senderId !== userId) {
-    throw new ForbiddenError('You can only delete your own messages');
+  // User can delete any message in their conversation (for themselves only)
+  if (message.senderId !== userId && message.receiverId !== userId) {
+    throw new ForbiddenError('You can only delete messages from your conversations');
   }
 
-  await prisma.directMessage.delete({
-    where: { id: messageId },
+  // Create a "deleted for me" record instead of actually deleting the message
+  await prisma.deletedMessage.upsert({
+    where: {
+      userId_messageId: { userId, messageId },
+    },
+    update: {}, // Already deleted for this user
+    create: {
+      userId,
+      messageId,
+    },
   });
 };
 
@@ -512,23 +571,39 @@ export const deleteConversation = async (
   currentUserId: string,
   otherUserId: string
 ): Promise<void> => {
-  // Delete all messages in both directions
-  await prisma.directMessage.deleteMany({
+  // Get all messages in this conversation
+  const messages = await prisma.directMessage.findMany({
     where: {
       OR: [
         { senderId: currentUserId, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: currentUserId },
       ],
     },
+    select: { id: true },
   });
 
-  // Also delete any conversation settings
+  // Mark all messages as deleted for the current user only (soft delete)
+  // Use upsert to avoid duplicates
+  await Promise.all(
+    messages.map((msg) =>
+      prisma.deletedMessage.upsert({
+        where: {
+          userId_messageId: { userId: currentUserId, messageId: msg.id },
+        },
+        update: {}, // Already deleted for this user
+        create: {
+          userId: currentUserId,
+          messageId: msg.id,
+        },
+      })
+    )
+  );
+
+  // Also delete conversation settings for this user only
   await prisma.conversationSettings.deleteMany({
     where: {
-      OR: [
-        { userId: currentUserId, otherUserId },
-        { userId: otherUserId, otherUserId: currentUserId },
-      ],
+      userId: currentUserId,
+      otherUserId,
     },
   });
 };

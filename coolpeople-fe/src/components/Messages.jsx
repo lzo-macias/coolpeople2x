@@ -94,8 +94,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return [...messagesList].sort((a, b) => {
       // Pin party chat at top if user is in a party
       if (userParty) {
-        const aIsPartyChat = a.isPartyChat || a.partyId === userParty.id
-        const bIsPartyChat = b.isPartyChat || b.partyId === userParty.id
+        const aIsPartyChat = a.isPartyChat || (a.partyId != null && a.partyId === userParty.id)
+        const bIsPartyChat = b.isPartyChat || (b.partyId != null && b.partyId === userParty.id)
         if (aIsPartyChat && !bIsPartyChat) return -1
         if (!aIsPartyChat && bIsPartyChat) return 1
       }
@@ -186,13 +186,18 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
       // Update conversation list with new message
       setMessages(prev => {
+        // Find existing conversation - check both senderId and sender.id
+        // (sender.id is the other user when receiving your own sent message)
         const existingIndex = prev.findIndex(m =>
-          m.user?.id === data.senderId || m.id === data.conversationId
+          m.user?.id === data.senderId ||
+          m.user?.id === data.sender?.id ||
+          m.id === data.conversationId
         )
 
         // Check if this message is for the currently active conversation
         const isActiveConversation = activeConversationRef.current &&
           (activeConversationRef.current.user?.id === data.senderId ||
+           activeConversationRef.current.user?.id === data.sender?.id ||
            activeConversationRef.current.id === data.conversationId)
 
         // Only increment unread count if message is not from current user AND not viewing that conversation
@@ -229,6 +234,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             unreadCount: shouldIncrementUnread ? 1 : 0,
             hasUnread: shouldIncrementUnread,
             isOnline: false,
+            isPinned: false,
+            isMuted: false,
+            isHidden: false,
+            isPartyChat: false,
+            partyId: null,
           }])
         }
 
@@ -625,7 +635,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     // Other filters exclude hidden messages
     if (hiddenConversations.has(msg.id)) return false
     if (activeFilter === 'unread') return msg.hasUnread
-    if (activeFilter === 'party') return msg.isPartyChat || msg.partyId === userParty?.id
+    if (activeFilter === 'party') return msg.isPartyChat || (msg.partyId != null && msg.partyId === userParty?.id)
     return true
   }))
 
@@ -657,25 +667,23 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     onConversationChange?.(false)
   }
 
-  const handleUnpin = async (messageId, e) => {
+  const handleUnpin = async (messageId, userId, e) => {
     e.stopPropagation() // Prevent opening the conversation
-
-    // Find the message to get the user ID
-    const message = messages.find(m => m.id === messageId)
-    const userId = message?.user?.id
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
-      m.id === messageId ? { ...m, isPinned: false } : m
+      m.id === messageId || m.user?.id === userId ? { ...m, isPinned: false } : m
     ))
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(messageId)
+      if (userId) newSet.add(`conv-${userId}`) // Also add alternate ID format
       return newSet
     })
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(messageId)
+      if (userId) newSet.delete(`conv-${userId}`) // Also delete alternate ID format
       return newSet
     })
 
@@ -752,16 +760,18 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
-      m.id === message.id ? { ...m, isPinned: true } : m
+      m.id === message.id || m.user?.id === userId ? { ...m, isPinned: true } : m
     ))
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(message.id)
+      newSet.add(`conv-${userId}`) // Also add alternate ID format
       return newSet
     })
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(message.id)
+      newSet.delete(`conv-${userId}`) // Also delete alternate ID format
       return newSet
     })
     closeLongPressPopup()
@@ -780,16 +790,18 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
-      m.id === message.id ? { ...m, isPinned: false } : m
+      m.id === message.id || m.user?.id === userId ? { ...m, isPinned: false } : m
     ))
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(message.id)
+      newSet.add(`conv-${userId}`) // Also add alternate ID format
       return newSet
     })
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(message.id)
+      newSet.delete(`conv-${userId}`) // Also delete alternate ID format
       return newSet
     })
     closeLongPressPopup()
@@ -1022,6 +1034,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         unreadCount: 0,
         hasUnread: false,
         isOnline: false,
+        isPinned: false,
+        isMuted: false,
+        isHidden: false,
+        isPartyChat: false,
+        partyId: null,
       }])
     })
 
@@ -1498,7 +1515,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     const isDM = !message.isPartyChat && !message.isGroupChat
     const isCurrentlyHidden = hiddenConversations.has(message.id) || message.isHidden
     const isCurrentlyPinned = pinnedConversations.has(message.id) || message.isPinned ||
-      ((message.isPartyChat || message.partyId === userParty?.id) && !unpinnedConversations.has(message.id))
+      ((message.isPartyChat || (message.partyId != null && message.partyId === userParty?.id)) && !unpinnedConversations.has(message.id))
     const isCurrentlySilenced = silencedConversations.has(message.id) || message.isMuted
 
     return createPortal(
@@ -1761,7 +1778,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           </div>
         ) : (
           filteredMessages.map((message) => {
-            const isPartyPinned = message.isPartyChat || message.partyId === userParty?.id
+            const isPartyPinned = message.isPartyChat || (message.partyId != null && message.partyId === userParty?.id)
             const isManuallyPinned = pinnedConversations.has(message.id) || message.isPinned
             const isPinned = (isPartyPinned || isManuallyPinned) && !unpinnedConversations.has(message.id)
             const isSilenced = silencedConversations.has(message.id) || message.isMuted
@@ -1776,7 +1793,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 isHidden={isHidden}
                 isLongPressActive={isLongPressActive}
                 onClick={() => handleOpenConversation(message)}
-                onUnpin={(e) => handleUnpin(message.id, e)}
+                onUnpin={(e) => handleUnpin(message.id, message.user?.id, e)}
                 onUnmute={(e) => handleUnmute(message.id, e)}
                 onLongPress={handleLongPress}
               />

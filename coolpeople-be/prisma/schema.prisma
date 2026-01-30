@@ -902,9 +902,23 @@ model DirectMessage {
 
   sender      User      @relation("DMSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver    User      @relation("DMReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  deletedFor  DeletedMessage[]
 
   @@index([senderId, receiverId])
   @@index([receiverId, createdAt])
+}
+
+// Tracks which messages a user has deleted for themselves (delete for me only)
+model DeletedMessage {
+  id          String        @id @default(uuid())
+  userId      String
+  messageId   String
+  createdAt   DateTime      @default(now())
+
+  message     DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId])
 }
 
 model GroupChat {

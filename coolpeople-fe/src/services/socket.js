@@ -184,6 +184,31 @@ export const onConversationMessage = (callback) => {
 }
 
 /**
+ * Listen for deleted messages
+ * @param {Function} callback - Called when a message is deleted
+ * @returns {Function} Cleanup function
+ */
+export const onMessageDeleted = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      messageId: data.messageId,
+      senderId: data.senderId,
+      receiverId: data.receiverId,
+    })
+  }
+
+  socket.on('message:deleted', handler)
+  eventListeners.set('message:deleted', handler)
+
+  return () => {
+    socket?.off('message:deleted', handler)
+    eventListeners.delete('message:deleted')
+  }
+}
+
+/**
  * Listen for typing indicators
  * @param {Function} callback - Called when typing status changes
  * @returns {Function} Cleanup function
@@ -473,6 +498,7 @@ export default {
 
   // Event listeners
   onNewMessage,
+  onMessageDeleted,
   onConversationMessage,
   onTyping,
   emitTyping,
