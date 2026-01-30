@@ -97,7 +97,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored })
   }
 
   const handleSaveDraft = () => {

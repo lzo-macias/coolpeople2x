@@ -49,8 +49,8 @@ const systemRaces = [
 ];
 
 // -----------------------------------------------------------------------------
-// Test Users - Removed for production-ready fresh start
-// Users will register through the app
+// Test Users for Local Development
+// All passwords: "test123"
 // -----------------------------------------------------------------------------
 
 const testUsers: Array<{
@@ -58,7 +58,32 @@ const testUsers: Array<{
   username: string;
   displayName: string;
   userType: 'CANDIDATE' | 'PARTICIPANT';
-}> = [];
+}> = [
+  {
+    email: 'alice@test.com',
+    username: 'alice',
+    displayName: 'Alice Anderson',
+    userType: 'CANDIDATE',
+  },
+  {
+    email: 'bob@test.com',
+    username: 'bob',
+    displayName: 'Bob Builder',
+    userType: 'CANDIDATE',
+  },
+  {
+    email: 'charlie@test.com',
+    username: 'charlie',
+    displayName: 'Charlie Chen',
+    userType: 'PARTICIPANT',
+  },
+  {
+    email: 'diana@test.com',
+    username: 'diana',
+    displayName: 'Diana Davis',
+    userType: 'PARTICIPANT',
+  },
+];
 
 // -----------------------------------------------------------------------------
 // Main seed function
@@ -84,7 +109,7 @@ async function main() {
 
   // Seed test users
   console.log('\nCreating test users...');
-  const passwordHash = await bcrypt.hash('password123', SALT_ROUNDS);
+  const passwordHash = await bcrypt.hash('test123', SALT_ROUNDS);
 
   for (const userData of testUsers) {
     const existing = await prisma.user.findUnique({
@@ -101,6 +126,38 @@ async function main() {
         },
       });
       console.log(`  - Created: ${userData.username} (${userData.userType}) [${user.id}]`);
+    }
+  }
+
+  // Create follows between test users so they can see each other's content
+  console.log('\nCreating follow relationships...');
+  const allUsers = await prisma.user.findMany({
+    where: { email: { in: testUsers.map(u => u.email) } },
+  });
+
+  // Each user follows all other test users
+  for (const follower of allUsers) {
+    for (const following of allUsers) {
+      if (follower.id !== following.id) {
+        const existingFollow = await prisma.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: follower.id,
+              followingId: following.id,
+            },
+          },
+        });
+
+        if (!existingFollow) {
+          await prisma.follow.create({
+            data: {
+              followerId: follower.id,
+              followingId: following.id,
+            },
+          });
+          console.log(`  - ${follower.username} now follows ${following.username}`);
+        }
+      }
     }
   }
 

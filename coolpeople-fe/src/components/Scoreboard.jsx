@@ -27,7 +27,7 @@ const frontRunners = [
   { id: 'fr-3', rank: 3, label: 'Third Place', nominations: '15,000', avatar: 'https://i.pravatar.cc/100?img=44', party: null },
 ]
 
-function Scoreboard({ onOpenProfile, isActive }) {
+function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange, currentUserId, userRacesFollowing = [], userRacesCompeting = [] }) {
   const [users, setUsers] = useState(mockScoreboard)
   const [parties, setParties] = useState(mockPartyScoreboard)
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
@@ -108,7 +108,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
       }
     }
     fetchScoreboard()
-  }, [isActive])
+  }, [isActive, refreshKey])
 
   // Handle search
   useEffect(() => {
@@ -180,15 +180,36 @@ function Scoreboard({ onOpenProfile, isActive }) {
     ? users.filter(u => u.party === currentUserParty)
     : []
 
-  // Define sections - races I'm following
-  // isPartyRace: true means this section shows parties, not users
-  const sections = [
-    { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers, isPartyRace: false },
-    { id: 'bestparty', label: 'Best Party', users: parties, isPartyRace: true },
-    { id: 'mayor', label: 'Mayor', users: frontrunnerUsers, isPartyRace: false },
-    { id: 'pinklady', label: 'The Pink Lady', users: nominatedUsers, isPartyRace: false },
-    { id: 'baddest', label: 'Baddest Bitch', users: partyUsers, isPartyRace: false },
-  ]
+  // Define sections dynamically based on user's races
+  // Always show CoolPeople and Best Party, then add user's followed/competing races (cap at 5)
+  const sections = (() => {
+    const result = [
+      { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers, isPartyRace: false },
+      { id: 'bestparty', label: 'Best Party', users: parties, isPartyRace: true },
+    ]
+
+    // Combine user's following and competing races, removing duplicates and the base races
+    const userRaces = [...userRacesFollowing, ...userRacesCompeting]
+      .filter((race, index, self) =>
+        // Remove duplicates by id
+        self.findIndex(r => r.id === race.id) === index &&
+        // Exclude CoolPeople and Best Party (already included)
+        race.title?.toLowerCase() !== 'coolpeople' &&
+        race.title?.toLowerCase() !== 'best party'
+      )
+
+    // Add user's races up to cap of 5 total
+    userRaces.slice(0, 3).forEach(race => {
+      result.push({
+        id: race.id,
+        label: race.title,
+        users: frontrunnerUsers, // TODO: fetch specific race scoreboard
+        isPartyRace: false,
+      })
+    })
+
+    return result
+  })()
 
   const handleSwipe = (e) => {
     // Accumulate horizontal scroll delta
@@ -241,8 +262,10 @@ function Scoreboard({ onOpenProfile, isActive }) {
       if (user?.isFavorited) {
         await favoritesApi.removeFavorite(userId)
       } else {
-        await favoritesApi.addFavorite({ userId, type: 'USER' })
+        await favoritesApi.addFavorite(userId)
       }
+      // Notify parent about favorite change for global cache update
+      onFavoriteChange?.(userId, user?.username, !user?.isFavorited)
     } catch (error) {
       // Revert on error
       console.log('Favorite toggle error:', error.message)
@@ -278,22 +301,9 @@ function Scoreboard({ onOpenProfile, isActive }) {
         : p
     ))
 
-    // Sync with API
-    try {
-      if (party?.isFavorited) {
-        await favoritesApi.removeFavorite(partyId)
-      } else {
-        await favoritesApi.addFavorite({ partyId, type: 'PARTY' })
-      }
-    } catch (error) {
-      // Revert on error
-      console.log('Favorite toggle error:', error.message)
-      setParties(parties.map(p =>
-        p.partyId === partyId
-          ? { ...p, isFavorited: party?.isFavorited }
-          : p
-      ))
-    }
+    // Note: Party favorites not yet implemented on backend
+    // For now, keep the optimistic update for visual feedback
+    // TODO: Implement party favorites API when needed
   }
 
   return (
@@ -549,6 +559,7 @@ function Scoreboard({ onOpenProfile, isActive }) {
                       showLoadMore={hasMore && index === visibleItems.length - 1}
                       isExpanded={isExpanded}
                       onToggleExpand={() => setIsExpanded(!isExpanded)}
+                      isOwnProfile={item.userId === currentUserId}
                     />
                   )
                 ))}

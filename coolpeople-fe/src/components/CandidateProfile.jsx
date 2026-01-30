@@ -5,6 +5,7 @@ import Sparkline from './Sparkline'
 import { getPartyColor, generateSparklineData } from '../data/mockData'
 import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
+import { usersApi, reelsApi, reviewsApi, favoritesApi } from '../services/api'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -354,9 +355,412 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange }) {
-  // Merge passed candidate with defaults for missing properties
-  const candidate = { ...mockCandidate, ...passedCandidate }
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, cachedProfile, onProfileLoaded }) {
+  // State for fetched profile data
+  const [fetchedProfile, setFetchedProfile] = useState(null)
+  const [fetchedPosts, setFetchedPosts] = useState([])
+  const [fetchedReposts, setFetchedReposts] = useState([])
+  const [fetchedReviews, setFetchedReviews] = useState([])
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+
+  // Fetch real profile data from API
+  useEffect(() => {
+    // If we have cached data, use it immediately while fetching fresh data
+    if (cachedProfile) {
+      setFetchedProfile(cachedProfile)
+      setLocalFollowerCount(cachedProfile.followersCount || cachedProfile.followers)
+      setIsLoadingProfile(false)
+    }
+
+    // Reset state when profile changes (but preserve cache data above)
+    if (!cachedProfile) {
+      setFetchedProfile(null)
+      setLocalFollowerCount(null)
+    }
+    setFetchedPosts([])
+    setFetchedReposts([])
+    setFetchedReviews([])
+
+    const fetchProfileData = async () => {
+      const userId = passedCandidate?.userId || passedCandidate?.id
+      if (!userId) {
+        setIsLoadingProfile(false)
+        return
+      }
+
+      setIsLoadingProfile(true)
+      try {
+        // Fetch user profile
+        const profileRes = await usersApi.getUser(userId)
+        // Backend returns { success: true, data: { user: profile } }
+        const profileData = profileRes.data?.user || profileRes.user || profileRes.data || profileRes
+        setFetchedProfile(profileData)
+
+        // Update the centralized cache with fresh data
+        if (onProfileLoaded && profileData) {
+          onProfileLoaded({
+            ...profileData,
+            id: profileData.id || userId,
+            userId: profileData.userId || userId,
+          })
+        }
+
+        // Fetch user's posts
+        const postsRes = await reelsApi.getUserReels(userId)
+        const postsData = postsRes.data || postsRes.reels || postsRes || []
+        setFetchedPosts(Array.isArray(postsData) ? postsData : [])
+
+        // Fetch user's reposts
+        try {
+          const repostsRes = await reelsApi.getUserReposts(userId)
+          const repostsData = repostsRes.data || repostsRes.reels || repostsRes || []
+          setFetchedReposts(Array.isArray(repostsData) ? repostsData : [])
+        } catch (e) {
+          // Reposts may fail for some users
+          setFetchedReposts([])
+        }
+
+        // Fetch user's reviews (if candidate)
+        try {
+          const reviewsRes = await reviewsApi.getUserReviews(userId)
+          const reviewsData = reviewsRes.data || reviewsRes.reviews || reviewsRes || []
+          setFetchedReviews(Array.isArray(reviewsData) ? reviewsData : [])
+        } catch (e) {
+          // Reviews may not exist for all users
+          setFetchedReviews([])
+        }
+      } catch (error) {
+        console.log('Failed to fetch profile:', error.message)
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    fetchProfileData()
+  }, [passedCandidate?.userId, passedCandidate?.id])
+
+  // Build candidate object from fetched data, falling back to passed data, then minimal defaults
+  const candidate = useMemo(() => {
+    const defaults = {
+      username: 'User',
+      avatar: null,
+      party: 'Independent',
+      followers: '0',
+      following: '0',
+      cpPoints: 0,
+      change: '+0.00',
+      races: [],
+      bio: '',
+      sparklineData: [],
+      postImages: [],
+      isFollowing: false,
+      isFavorited: false,
+    }
+
+    // Use fetched profile data if available
+    if (fetchedProfile) {
+      // Merge race data with points to get position info
+      const racesCompetingWithPoints = (fetchedProfile.racesCompeting || []).map(race => {
+        const pointData = fetchedProfile.points?.find(p => p.raceId === race.id)
+        return {
+          ...race,
+          points: pointData?.total || 0,
+          tier: pointData?.tier || null,
+        }
+      })
+
+      return {
+        ...defaults,
+        ...passedCandidate,
+        id: fetchedProfile.id,
+        username: fetchedProfile.username || passedCandidate?.username || defaults.username,
+        avatar: fetchedProfile.avatarUrl || passedCandidate?.avatar || defaults.avatar,
+        party: fetchedProfile.party || passedCandidate?.party || defaults.party,
+        bio: fetchedProfile.bio || passedCandidate?.bio || defaults.bio,
+        followers: fetchedProfile.followersCount?.toString() || passedCandidate?.followers || defaults.followers,
+        following: fetchedProfile.followingCount?.toString() || passedCandidate?.following || defaults.following,
+        cpPoints: fetchedProfile.points?.[0]?.total || passedCandidate?.score || defaults.cpPoints,
+        change: passedCandidate?.change || defaults.change,
+        races: fetchedProfile.points?.map(p => p.raceName) || passedCandidate?.races || defaults.races,
+        racesCompeting: racesCompetingWithPoints,
+        racesFollowing: fetchedProfile.racesFollowing || passedCandidate?.racesFollowing || [],
+        racesWon: fetchedProfile.racesWon || passedCandidate?.racesWon || [],
+        sparklineData: passedCandidate?.sparklineData || defaults.sparklineData,
+        postImages: fetchedPosts.map(p => p.thumbnailUrl || p.thumbnail).filter(Boolean),
+        posts: fetchedPosts,
+        reviews: fetchedReviews,
+        averageRating: fetchedProfile.averageRating || 0,
+        reviewsCount: fetchedProfile.reviewsCount || fetchedReviews.length || 0,
+        isFollowing: fetchedProfile.isFollowing ?? passedCandidate?.isFollowing ?? defaults.isFollowing,
+        isFavorited: fetchedProfile.isFavorited ?? passedCandidate?.isFavorited ?? defaults.isFavorited,
+        userType: fetchedProfile.userType,
+      }
+    }
+
+    // Fallback to passed candidate with minimal defaults (no mock data)
+    // Map 'score' from scoreboard to 'cpPoints' for consistency
+    // Map 'userId' from scoreboard to 'id' for consistency
+    return {
+      ...defaults,
+      ...passedCandidate,
+      id: passedCandidate?.userId || passedCandidate?.id,
+      cpPoints: passedCandidate?.score || passedCandidate?.cpPoints || defaults.cpPoints,
+      racesCompeting: passedCandidate?.racesCompeting || [],
+      racesFollowing: passedCandidate?.racesFollowing || [],
+      racesWon: passedCandidate?.racesWon || [],
+    }
+  }, [fetchedProfile, fetchedPosts, fetchedReviews, passedCandidate])
+
+  // ALL HOOKS MUST BE BEFORE ANY CONDITIONAL RETURNS
+  const profileRef = useRef(null)
+  const avatarInputRef = useRef(null)
+
+  const [activeTab, setActiveTab] = useState('bio')
+  const [selectedRace, setSelectedRace] = useState('CP')
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isNominated, setIsNominated] = useState(false)
+  const [nominatedRaces, setNominatedRaces] = useState({})
+  const [showNominateModal, setShowNominateModal] = useState(false)
+  const [hasSeenNewRaces, setHasSeenNewRaces] = useState(false)
+  const [showDotsMenu, setShowDotsMenu] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [isSilenced, setIsSilenced] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showCopiedToast, setShowCopiedToast] = useState(false)
+  const [isFavorited, setIsFavorited] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+  const [showEditBio, setShowEditBio] = useState(false)
+  const [showBioTextEdit, setShowBioTextEdit] = useState(false)
+  const [bioText, setBioText] = useState('')
+  const [editInitialSection, setEditInitialSection] = useState(null)
+  const [profileSections, setProfileSections] = useState(() => {
+    // Always show empty sections since we don't have icebreakers API yet
+    // Mock data should only be used when explicitly testing/developing
+    return emptyProfileSections
+  })
+  const [isLocalToCandidate] = useState(true)
+  const [guessState, setGuessState] = useState({
+    selected: null,
+    transitioning: false,
+    revealed: false
+  })
+  const [respondingTo, setRespondingTo] = useState(null)
+  const [responseText, setResponseText] = useState('')
+  const [reviewResponses, setReviewResponses] = useState({})
+  const [showSinglePost, setShowSinglePost] = useState(false)
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [selectedPeriod, setSelectedPeriod] = useState('1M')
+  const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
+  const [cpCardExpanded, setCpCardExpanded] = useState(false)
+  const [showFollowingModal, setShowFollowingModal] = useState(false)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [showRacesModal, setShowRacesModal] = useState(false)
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewRating, setReviewRating] = useState(0)
+  const [communityReviews, setCommunityReviews] = useState([])
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [followersState, setFollowersState] = useState([])
+  const [followingState, setFollowingState] = useState([])
+  const [isLoadingFollowers, setIsLoadingFollowers] = useState(false)
+  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false)
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [dragOverItem, setDragOverItem] = useState(null)
+  const [icebreakersOrder, setIcebreakersOrder] = useState([])
+  const [dropPosition, setDropPosition] = useState(null)
+  const [localFollowerCount, setLocalFollowerCount] = useState(null)
+  const [isFollowLoading, setIsFollowLoading] = useState(false)
+
+  // Scroll to top when candidate changes
+  useEffect(() => {
+    if (profileRef.current) {
+      profileRef.current.scrollTo(0, 0)
+    }
+  }, [passedCandidate?.username])
+
+  // Sync following/favorited state with candidate data
+  useEffect(() => {
+    setIsFollowing(candidate.isFollowing || false)
+    setIsFavorited(candidate.isFavorited || false)
+    setLocalFollowerCount(null) // Reset local count when candidate changes
+  }, [candidate.isFollowing, candidate.isFavorited])
+
+  // Handle follow/unfollow with API call
+  const handleFollowToggle = async () => {
+    const userId = candidate.id || candidate.userId
+    if (isFollowLoading || !userId) {
+      console.error('Cannot follow: missing user ID or already loading')
+      return
+    }
+
+    setIsFollowLoading(true)
+    const wasFollowing = isFollowing
+
+    // Optimistic update
+    setIsFollowing(!wasFollowing)
+    const currentFollowers = localFollowerCount ?? (parseInt(candidate.followers) || 0)
+    setLocalFollowerCount(wasFollowing ? currentFollowers - 1 : currentFollowers + 1)
+
+    try {
+      if (wasFollowing) {
+        await usersApi.unfollowUser(userId)
+      } else {
+        await usersApi.followUser(userId)
+      }
+      // Notify parent about follow change with new follower count for global cache update
+      const newFollowerCount = wasFollowing ? currentFollowers - 1 : currentFollowers + 1
+      onFollowChange?.(!wasFollowing, newFollowerCount)
+    } catch (error) {
+      // Revert on error
+      console.error('Follow toggle failed:', error)
+      setIsFollowing(wasFollowing)
+      setLocalFollowerCount(currentFollowers)
+    } finally {
+      setIsFollowLoading(false)
+    }
+  }
+
+  // Handle favorite/unfavorite with API call
+  const handleFavoriteToggle = async () => {
+    const userId = candidate.id || candidate.userId
+    if (!userId) {
+      console.error('Cannot favorite: missing user ID')
+      return
+    }
+
+    const wasFavorited = isFavorited
+
+    // Optimistic update
+    setIsFavorited(!wasFavorited)
+
+    try {
+      if (wasFavorited) {
+        await favoritesApi.removeFavorite(userId)
+      } else {
+        await favoritesApi.addFavorite(userId)
+      }
+      // Notify parent about favorite change for global cache/scoreboard update
+      onFavoriteChange?.(!wasFavorited)
+    } catch (error) {
+      // Revert on error
+      console.error('Favorite toggle failed:', error)
+      setIsFavorited(wasFavorited)
+    }
+  }
+
+  // Fetch followers from API
+  const fetchFollowers = async () => {
+    const userId = candidate.id || candidate.userId
+    if (!userId || isLoadingFollowers) return
+
+    setIsLoadingFollowers(true)
+    try {
+      const response = await usersApi.getFollowers(userId)
+      const data = response.data || response
+      const followers = data.followers || []
+      setFollowersState(followers.map(f => ({
+        id: f.id,
+        username: f.username,
+        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        party: f.party?.name || f.partyName || null,
+        isFollowing: f.isFollowing || false,
+      })))
+    } catch (error) {
+      console.error('Failed to fetch followers:', error)
+      setFollowersState([])
+    } finally {
+      setIsLoadingFollowers(false)
+    }
+  }
+
+  // Fetch following from API
+  const fetchFollowing = async () => {
+    const userId = candidate.id || candidate.userId
+    if (!userId || isLoadingFollowing) return
+
+    setIsLoadingFollowing(true)
+    try {
+      const response = await usersApi.getFollowing(userId)
+      const data = response.data || response
+      const following = data.following || []
+      setFollowingState(following.map(f => ({
+        id: f.id,
+        username: f.username,
+        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        party: f.party?.name || f.partyName || null,
+        isFollowing: f.isFollowing || false,
+      })))
+    } catch (error) {
+      console.error('Failed to fetch following:', error)
+      setFollowingState([])
+    } finally {
+      setIsLoadingFollowing(false)
+    }
+  }
+
+  // Update community reviews when fetched data arrives
+  useEffect(() => {
+    if (fetchedReviews && fetchedReviews.length > 0) {
+      const transformedReviews = fetchedReviews.map(r => ({
+        id: r.id,
+        user: {
+          username: r.reviewer?.username || 'Anonymous',
+          avatar: r.reviewer?.avatarUrl || null,
+          party: r.reviewer?.party || null,
+        },
+        text: r.content || '',
+        rating: r.rating || 0,
+        timestamp: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently',
+        media: null,
+        isPaid: false,
+        tag: null,
+      }))
+      setCommunityReviews(transformedReviews)
+    }
+  }, [fetchedReviews])
+
+  // Sync bioText with fetched profile bio
+  useEffect(() => {
+    if (fetchedProfile?.bio) {
+      setBioText(fetchedProfile.bio)
+    } else if (passedCandidate?.bio) {
+      setBioText(passedCandidate.bio)
+    }
+  }, [fetchedProfile?.bio, passedCandidate?.bio])
+
+  // Initialize icebreakers order
+  useEffect(() => {
+    const buildIcebreakersArray = (sections) => {
+      const items = []
+      sections.customWritten?.forEach((item, index) => {
+        items.push({ type: 'written', index, data: item, id: `written-${index}` })
+      })
+      sections.customSliders?.forEach((item, index) => {
+        items.push({ type: 'slider', index, data: item, id: `slider-${index}` })
+      })
+      if (sections.topicsThatEnergize?.tags?.length > 0) {
+        items.push({ type: 'tags', index: 0, data: sections.topicsThatEnergize, id: 'tags-0' })
+      }
+      if (sections.guessWhichTrue?.options?.some(o => o?.trim())) {
+        items.push({ type: 'game', index: 0, data: sections.guessWhichTrue, id: 'game-0' })
+      }
+      return items
+    }
+    // Always use empty sections since we don't have icebreakers API yet
+    const initialOrder = buildIcebreakersArray(emptyProfileSections).map(item => item.id)
+    setIcebreakersOrder(initialOrder)
+  }, [])
+
+  // Handle avatar file selection for own profile
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file && onAvatarChange) {
+      const imageUrl = URL.createObjectURL(file)
+      onAvatarChange(imageUrl)
+    }
+  }
 
   // If user is blocked, show unavailable message
   if (passedCandidate?.isBlocked) {
@@ -379,68 +783,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     )
   }
 
-  const profileRef = useRef(null)
-  const avatarInputRef = useRef(null)
-
-  // Handle avatar file selection for own profile
-  const handleAvatarFileChange = (e) => {
-    const file = e.target.files?.[0]
-    if (file && onAvatarChange) {
-      const imageUrl = URL.createObjectURL(file)
-      onAvatarChange(imageUrl)
-    }
+  // Show loading state while fetching profile data
+  if (isLoadingProfile && !fetchedProfile) {
+    return (
+      <div className="candidate-profile loading-profile">
+        <div className="loading-content">
+          <div className="loading-spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    )
   }
-
-  // Scroll to top when candidate changes
-  useEffect(() => {
-    if (profileRef.current) {
-      profileRef.current.scrollTo(0, 0)
-    }
-  }, [passedCandidate?.username])
-
-  const [activeTab, setActiveTab] = useState('bio')
-  const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter
-  const [isFollowing, setIsFollowing] = useState(candidate.isFollowing)
-  const [isNominated, setIsNominated] = useState(false)
-  const [nominatedRaces, setNominatedRaces] = useState({}) // { raceName: true/false }
-  const [showNominateModal, setShowNominateModal] = useState(false)
-  const [hasSeenNewRaces, setHasSeenNewRaces] = useState(false)
-  const [showDotsMenu, setShowDotsMenu] = useState(false)
-  const [isBlocked, setIsBlocked] = useState(false)
-  const [isSilenced, setIsSilenced] = useState(false)
-  const [showReportModal, setShowReportModal] = useState(false)
-  const [showCopiedToast, setShowCopiedToast] = useState(false)
-  const [isFavorited, setIsFavorited] = useState(candidate.isFavorited)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
-  const [showEditBio, setShowEditBio] = useState(false)
-  const [showBioTextEdit, setShowBioTextEdit] = useState(false) // Simple bio text editor modal
-  const [bioText, setBioText] = useState(passedCandidate?.bio || '')
-  const [editInitialSection, setEditInitialSection] = useState(null)
-  const [profileSections, setProfileSections] = useState(isStarter ? emptyProfileSections : initialProfileSections)
-  const [isLocalToCandidate] = useState(true) // TODO: determine from user/candidate location
-  const [guessState, setGuessState] = useState({
-    selected: null,
-    transitioning: false,
-    revealed: false // Once true, correct answer stays green forever
-  })
-  const [respondingTo, setRespondingTo] = useState(null) // nomination being responded to
-  const [responseText, setResponseText] = useState('')
-  const [reviewResponses, setReviewResponses] = useState({}) // { nominationId: responseText }
-  const [showSinglePost, setShowSinglePost] = useState(false)
-  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
-  const [selectedPeriod, setSelectedPeriod] = useState('1M')
-  const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
-  const [cpCardExpanded, setCpCardExpanded] = useState(false)
-  const [showFollowingModal, setShowFollowingModal] = useState(false)
-  const [showFollowersModal, setShowFollowersModal] = useState(false)
-  const [showRacesModal, setShowRacesModal] = useState(false)
-  const [showPaywall, setShowPaywall] = useState(false)
-  const [showReviewModal, setShowReviewModal] = useState(false)
-  const [reviewText, setReviewText] = useState('')
-  const [reviewRating, setReviewRating] = useState(0)
-  const [communityReviews, setCommunityReviews] = useState(regularNominations)
-  const [showShareModal, setShowShareModal] = useState(false)
 
   // Mock data for stat modals
   const mockFollowing = [
@@ -459,17 +812,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     { id: 'fol-5', username: 'foodie.voter', avatar: 'https://i.pravatar.cc/40?img=36', party: null, isFollowing: false },
     { id: 'fol-6', username: 'nyc.politics', avatar: 'https://i.pravatar.cc/40?img=38', party: 'Democrat', isFollowing: true },
   ]
-
-  const mockUserRaces = [
-    { id: 'race-won-1', name: 'Brooklyn District 5 Primary', position: 1, percentile: null, isWon: true, isRunning: true, isFollowing: false },
-    { id: 'race-1', name: 'NYC Mayor 2024', position: 3, percentile: '2.1%', isWon: false, isRunning: true, isFollowing: false, color: '#FF2A55' },
-    { id: 'race-2', name: 'City Council District 5', position: 7, percentile: '5.3%', isWon: false, isRunning: true, isFollowing: false, color: '#00F2EA' },
-    { id: 'race-3', name: 'State Assembly', position: 12, percentile: '8.7%', isWon: false, isRunning: true, isFollowing: false, color: '#FFB800' },
-    { id: 'race-4', name: 'Public Advocate', position: null, percentile: null, isWon: false, isRunning: false, isFollowing: true },
-    { id: 'race-5', name: 'Borough President', position: null, percentile: null, isWon: false, isRunning: false, isFollowing: true },
-  ]
-
-  const [followersState, setFollowersState] = useState(mockFollowers)
 
   // Convert posts to reel format for SinglePostView with variable engagement scores
   const trends = ['up', 'down', 'stable']
@@ -530,14 +872,14 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     ? [...candidate.posts, ...defaultPostsAsReels]
     : defaultPostsAsReels
 
+  // Reposts fetched from API
+  const allReposts = fetchedReposts || []
+
   // Handle post click to open SinglePostView
   const handlePostClick = (index) => {
     setSelectedPostIndex(index)
     setShowSinglePost(true)
   }
-  const [draggedItem, setDraggedItem] = useState(null)
-  const [dragOverItem, setDragOverItem] = useState(null)
-
   // Build unified icebreakers array for drag-and-drop ordering
   const buildIcebreakersArray = (sections) => {
     const items = []
@@ -555,10 +897,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     }
     return items
   }
-
-  const [icebreakersOrder, setIcebreakersOrder] = useState(() =>
-    buildIcebreakersArray(isStarter ? emptyProfileSections : initialProfileSections).map(item => item.id)
-  )
 
   // Get ordered icebreakers based on current order
   const getOrderedIcebreakers = () => {
@@ -582,8 +920,6 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   }
 
   // Drag handlers
-  const [dropPosition, setDropPosition] = useState(null) // 'above' or 'below'
-
   const handleDragStart = (e, itemId) => {
     setDraggedItem(itemId)
     e.dataTransfer.effectAllowed = 'move'
@@ -717,6 +1053,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const tabs = [
     { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
+    { name: 'Reposts', icon: '/icons/profile/userprofile/tags-icons.svg' },
     { name: 'Details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
@@ -748,7 +1085,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {!isOwnProfile && (
           <button
             className={`favorite-star ${isFavorited ? 'active' : ''}`}
-            onClick={() => setIsFavorited(!isFavorited)}
+            onClick={handleFavoriteToggle}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? 'url(#grayGradient)' : 'none'} stroke={isFavorited ? 'none' : '#777777'} strokeWidth="2">
               <defs>
@@ -811,37 +1148,36 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
           <div className="profile-right">
             <div className="profile-stats-grid">
-              <div className="stat-item clickable" onClick={() => setShowFollowingModal(true)}>
+              <div className="stat-item clickable" onClick={() => { setShowFollowingModal(true); fetchFollowing(); }}>
                 <span className="stat-number">{candidate.following || '0'}</span>
                 <span className="stat-label">Following</span>
               </div>
-              <div className="stat-item clickable" onClick={() => setShowFollowersModal(true)}>
-                <span className="stat-number">{candidate.followers || '0'}</span>
+              <div className="stat-item clickable" onClick={() => { setShowFollowersModal(true); fetchFollowers(); }}>
+                <span className="stat-number">{localFollowerCount ?? candidate.followers ?? '0'}</span>
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
-                <span className="stat-number">{candidate.races?.length || '1'}</span>
+                <span className="stat-number">
+                  {((candidate.racesCompeting?.length || 0) +
+                    (candidate.racesFollowing?.length || 0) +
+                    (candidate.racesWon?.length || 0)) ||
+                    candidate.races?.length || '1'}
+                </span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
-                {isStarter ? (
-                  <>
-                    <span className="stat-number starter-tier">
-                      <img src="/icons/tiers/dark/bronze.svg" alt="Bronze" className="stat-tier-icon" />
-                    </span>
-                    <span className="stat-label">Bronze</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="stat-number">
-                      {candidate.ranking || '.3%'}
-                      <svg className="ranking-crown" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-                        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" />
-                      </svg>
-                    </span>
-                    <span className="stat-label">ranking</span>
-                  </>
-                )}
+                {/* Always show actual tier based on CP points */}
+                {(() => {
+                  const tier = getCurrentTier(candidate.cpPoints || 0)
+                  return (
+                    <>
+                      <span className="stat-number starter-tier">
+                        <img src={tier.icon} alt={tier.name} className="stat-tier-icon" />
+                      </span>
+                      <span className="stat-label">{tier.name}</span>
+                    </>
+                  )
+                })()}
               </div>
             </div>
             {isOwnProfile ? (
@@ -917,8 +1253,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 )}
               </div>
               <button
-                className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
-                onClick={() => setIsFollowing(!isFollowing)}
+                className={`profile-action-btn follow ${isFollowing ? 'following' : ''} ${isFollowLoading ? 'loading' : ''}`}
+                onClick={handleFollowToggle}
+                disabled={isFollowLoading}
               >
                 {isFollowing ? 'following' : 'follow'}
               </button>
@@ -958,7 +1295,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         </div>
 
         {/* Tabs */}
-        <div className={`profile-tabs ${activeTab === 'posts' || activeTab === 'details' ? 'posts-active' : ''}`}>
+        <div className={`profile-tabs ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'details' ? 'posts-active' : ''}`}>
           {tabs.map((tab) => (
             <button
               key={tab.name}
@@ -973,7 +1310,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       </div>
 
       {/* Content - dark background */}
-      <div className={`profile-content ${activeTab === 'posts' || activeTab === 'details' ? 'posts-active' : ''}`}>
+      <div className={`profile-content ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'details' ? 'posts-active' : ''}`}>
         {/* Posts Tab */}
         {activeTab === 'posts' && (
           <div className="posts-grid">
@@ -1001,6 +1338,56 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           </div>
         )}
 
+        {/* Reposts Tab */}
+        {activeTab === 'reposts' && (
+          <div className="posts-grid">
+            {allReposts.length > 0 ? (
+              allReposts.map((repost, index) => (
+                <div
+                  key={repost.id || index}
+                  className="post-item repost-item"
+                  onClick={() => {
+                    // Open the reposted reel in SinglePostView
+                    setSelectedPostIndex(index)
+                    setShowSinglePost(true)
+                  }}
+                >
+                  <div className="repost-indicator">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 1l4 4-4 4" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <path d="M7 23l-4-4 4-4" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  </div>
+                  {repost.videoUrl ? (
+                    <video
+                      src={repost.videoUrl}
+                      className={repost.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
+                  )}
+                  {repost.author && (
+                    <div className="repost-author">
+                      <span>@{repost.author.username}</span>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="empty-reposts">
+                <p>No reposts yet</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Bio Tab */}
         {activeTab === 'bio' && (
           <>
@@ -1021,10 +1408,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
         {/* CoolPeople Points Card */}
         {(() => {
-          // For starter profiles, use candidate's cpPoints; otherwise use race-specific data
-          const currentRaceData = raceData[selectedRace] || raceData['CP']
-          const cpPoints = isStarter ? candidate.cpPoints : currentRaceData.cpPoints
-          const raceChange = isStarter ? candidate.change : currentRaceData.change
+          // Always use candidate's real cpPoints from API
+          const cpPoints = candidate.cpPoints || 0
+          const raceChange = candidate.change || '+0.00'
           const currentTier = getCurrentTier(cpPoints)
           const nextTier = getNextTier(cpPoints)
 
@@ -1352,14 +1738,14 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             <span className="cp-section-label verified">VERIFIED REVIEWS</span>
           </div>
 
-          {/* Starter Profile - No Reviews Yet */}
-          {isStarter ? (
-            <p className="starter-no-reviews">0 reviews yet</p>
+          {/* No Reviews State - show when no real reviews exist */}
+          {(isStarter || communityReviews.length === 0) ? (
+            <p className="starter-no-reviews">{candidate.reviewsCount || 0} reviews yet</p>
           ) : (
             <>
               {/* Rating Badge */}
               <div className="chart-rating-badge below-verified">
-                <span className="rating-value">3.2</span>
+                <span className="rating-value">{candidate.averageRating?.toFixed(1) || '0.0'}</span>
                 <div className="rating-star-circle">
                   <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -1367,8 +1753,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 </div>
               </div>
 
-              {/* Paid Nominations */}
-              {(showAllVerifiedReviews ? paidNominations : paidNominations.slice(0, 3)).map((nomination, index) => (
+              {/* Reviews - from API */}
+              {(showAllVerifiedReviews ? communityReviews : communityReviews.slice(0, 3)).map((nomination, index) => (
             <div key={nomination.id} className="nomination-item paid">
               <div className="nomination-header">
                 <div className="nomination-user">
@@ -1409,7 +1795,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           ))}
 
               {/* Load More / Load Less Verified Reviews */}
-              {paidNominations.length > 3 && (
+              {communityReviews.length > 3 && (
                 <div
                   className="load-more-buttons verified-reviews"
                   onClick={() => setShowAllVerifiedReviews(!showAllVerifiedReviews)}
@@ -1722,8 +2108,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </button>
           )}
 
-          {/* Recent Post - only show if not starter */}
-          {!isStarter && (
+          {/* Recent Post - only show if not starter and recentPost exists */}
+          {!isStarter && profileSections.recentPost && (
           <div className="profile-section post">
             <div className="post-header">
               <span className="post-username">{profileSections.recentPost.username}</span>
@@ -1742,8 +2128,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {/* Details Tab */}
         {activeTab === 'details' && (
           <div className="activity-feed">
-            {/* Show real user activity first, then fill with mock data */}
-            {[...userActivity, ...activityFeed].map((activity) => {
+            {/* Show real user activity only - no mock data */}
+            {userActivity.length > 0 ? userActivity.map((activity) => {
               const config = activityConfig[activity.type]
               const video = activity.video
               const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
@@ -1815,7 +2201,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                   </div>
                 </div>
               )
-            })}
+            }) : (
+              <div className="empty-activity">
+                <p>No activity yet</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2029,7 +2419,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       )}
 
       {/* Following Modal */}
-      {showFollowingModal && (
+      {showFollowingModal && createPortal(
         <div className="stat-modal-overlay" onClick={() => setShowFollowingModal(false)}>
           <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
             <div className="stat-modal-header">
@@ -2041,33 +2431,40 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               </button>
             </div>
             <div className="stat-modal-content">
-              {mockFollowing.map((user) => (
-                <div
-                  key={user.id}
-                  className="stat-modal-row clickable"
-                  onClick={() => { setShowFollowingModal(false); onUserClick?.(user); }}
-                >
-                  <div className="stat-row-user">
-                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(user.party) }}>
-                      <img src={user.avatar} alt={user.username} className="stat-row-avatar" />
+              {isLoadingFollowing ? (
+                <div className="stat-modal-loading">Loading...</div>
+              ) : followingState.length === 0 ? (
+                <div className="stat-modal-empty">Not following anyone yet</div>
+              ) : (
+                followingState.map((user) => (
+                  <div
+                    key={user.id}
+                    className="stat-modal-row clickable"
+                    onClick={() => { setShowFollowingModal(false); onUserClick?.(user); }}
+                  >
+                    <div className="stat-row-user">
+                      <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(user.party) }}>
+                        <img src={user.avatar} alt={user.username} className="stat-row-avatar" />
+                      </div>
+                      <div className="stat-row-info">
+                        <span className="stat-row-username">{user.username}</span>
+                        <span className="stat-row-meta">{user.party || 'Independent'}</span>
+                      </div>
                     </div>
-                    <div className="stat-row-info">
-                      <span className="stat-row-username">{user.username}</span>
-                      <span className="stat-row-meta">{user.party || 'Independent'}</span>
-                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Followers Modal */}
-      {showFollowersModal && (
+      {showFollowersModal && createPortal(
         <div className="stat-modal-overlay" onClick={() => setShowFollowersModal(false)}>
           <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
             <div className="stat-modal-header">
@@ -2079,36 +2476,57 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               </button>
             </div>
             <div className="stat-modal-content">
-              {followersState.map((follower) => (
-                <div key={follower.id} className="stat-modal-row">
-                  <div
-                    className="stat-row-user clickable"
-                    onClick={() => { setShowFollowersModal(false); onUserClick?.(follower); }}
-                  >
-                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(follower.party) }}>
-                      <img src={follower.avatar} alt={follower.username} className="stat-row-avatar" />
+              {isLoadingFollowers ? (
+                <div className="stat-modal-loading">Loading...</div>
+              ) : followersState.length === 0 ? (
+                <div className="stat-modal-empty">No followers yet</div>
+              ) : (
+                followersState.map((follower) => (
+                  <div key={follower.id} className="stat-modal-row">
+                    <div
+                      className="stat-row-user clickable"
+                      onClick={() => { setShowFollowersModal(false); onUserClick?.(follower); }}
+                    >
+                      <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(follower.party) }}>
+                        <img src={follower.avatar} alt={follower.username} className="stat-row-avatar" />
+                      </div>
+                      <span className="stat-row-username">{follower.username}</span>
                     </div>
-                    <span className="stat-row-username">{follower.username}</span>
+                    <button
+                      className={`stat-row-follow-btn ${follower.isFollowing ? 'following' : ''}`}
+                      onClick={async () => {
+                        const wasFollowing = follower.isFollowing
+                        // Optimistic update
+                        setFollowersState(prev => prev.map(f =>
+                          f.id === follower.id ? { ...f, isFollowing: !f.isFollowing } : f
+                        ))
+                        try {
+                          if (wasFollowing) {
+                            await usersApi.unfollowUser(follower.id)
+                          } else {
+                            await usersApi.followUser(follower.id)
+                          }
+                        } catch (error) {
+                          // Revert on error
+                          setFollowersState(prev => prev.map(f =>
+                            f.id === follower.id ? { ...f, isFollowing: wasFollowing } : f
+                          ))
+                        }
+                      }}
+                    >
+                      {follower.isFollowing ? 'following' : 'follow'}
+                    </button>
                   </div>
-                  <button
-                    className={`stat-row-follow-btn ${follower.isFollowing ? 'following' : ''}`}
-                    onClick={() => {
-                      setFollowersState(prev => prev.map(f =>
-                        f.id === follower.id ? { ...f, isFollowing: !f.isFollowing } : f
-                      ))
-                    }}
-                  >
-                    {follower.isFollowing ? 'following' : 'follow'}
-                  </button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Races Modal */}
-      {showRacesModal && (
+      {showRacesModal && createPortal(
         <div className="stat-modal-overlay" onClick={() => setShowRacesModal(false)}>
           <div className="stat-modal races" onClick={(e) => e.stopPropagation()}>
             <div className="stat-modal-header">
@@ -2121,30 +2539,30 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             </div>
             <div className="stat-modal-content">
               {/* Won Races - at the top, green */}
-              {mockUserRaces.filter(r => r.isWon).map((race) => (
+              {(candidate.racesWon || []).map((race) => (
                 <div key={race.id} className="stat-modal-row race-row won">
                   <div className="race-row-info">
                     <div className="race-row-indicator won"></div>
-                    <span className="race-row-name">{race.name}</span>
+                    <span className="race-row-name">{race.title || race.name}</span>
                   </div>
                   <span className="race-row-position won">Winner</span>
                 </div>
               ))}
 
-              {/* Running Races - color coded */}
-              {mockUserRaces.filter(r => r.isRunning && !r.isWon).map((race) => (
+              {/* Competing Races */}
+              {(candidate.racesCompeting || []).map((race) => (
                 <div
                   key={race.id}
                   className="stat-modal-row race-row clickable"
                   onClick={() => { setShowRacesModal(false); /* TODO: navigate to race */ }}
                 >
                   <div className="race-row-info">
-                    <div className="race-row-indicator" style={{ backgroundColor: race.color }}></div>
-                    <span className="race-row-name">{race.name}</span>
+                    <div className="race-row-indicator competing"></div>
+                    <span className="race-row-name">{race.title || race.name}</span>
                   </div>
                   <div className="race-row-stats">
-                    <span className="race-row-position">#{race.position}</span>
-                    {race.percentile && <span className="race-row-percentile">{race.percentile}</span>}
+                    {race.points > 0 && <span className="race-row-points">{race.points} pts</span>}
+                    {race.tier && <span className="race-row-tier">{race.tier}</span>}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
                       <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
@@ -2153,12 +2571,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               ))}
 
               {/* Following Races - only for own profile */}
-              {isOwnProfile && mockUserRaces.filter(r => r.isFollowing && !r.isRunning).length > 0 && (
+              {isOwnProfile && (candidate.racesFollowing || []).length > 0 && (
                 <>
                   <div className="race-section-divider">
                     <span>Following</span>
                   </div>
-                  {mockUserRaces.filter(r => r.isFollowing && !r.isRunning).map((race) => (
+                  {(candidate.racesFollowing || []).map((race) => (
                     <div
                       key={race.id}
                       className="stat-modal-row race-row clickable"
@@ -2166,7 +2584,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     >
                       <div className="race-row-info">
                         <div className="race-row-indicator following"></div>
-                        <span className="race-row-name">{race.name}</span>
+                        <span className="race-row-name">{race.title || race.name}</span>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
                         <polyline points="9 18 15 12 9 6"></polyline>
@@ -2175,9 +2593,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                   ))}
                 </>
               )}
+
+              {/* Empty state */}
+              {(candidate.racesWon || []).length === 0 &&
+               (candidate.racesCompeting || []).length === 0 &&
+               (!isOwnProfile || (candidate.racesFollowing || []).length === 0) && (
+                <div className="stat-modal-empty">No races yet</div>
+              )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Paywall Modal */}

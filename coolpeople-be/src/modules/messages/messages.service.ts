@@ -173,8 +173,21 @@ export const sendMessage = async (
     const io = getIO();
     if (io) {
       const ids = [senderId, receiverId].sort();
-      io.to(`user:${receiverId}`).emit('dm:message', {
+      const senderInfo = await prisma.user.findUnique({
+        where: { id: senderId },
+        select: { id: true, username: true, displayName: true, avatarUrl: true },
+      });
+
+      // Emit to receiver's personal room for conversation list update
+      io.to(`user:${receiverId}`).emit('message:new', {
         conversationId: `${ids[0]}:${ids[1]}`,
+        senderId,
+        sender: senderInfo,
+        message: { id: message.id, senderId, content, createdAt: message.createdAt },
+      });
+
+      // Emit to conversation room for real-time chat view
+      io.to(`conversation:${ids[0]}:${ids[1]}`).emit('conversation:message', {
         message: { id: message.id, senderId, content, createdAt: message.createdAt },
       });
     }

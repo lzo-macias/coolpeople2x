@@ -75,6 +75,25 @@ export const getPartyReels = async (req: Request, res: Response): Promise<void> 
 };
 
 // -----------------------------------------------------------------------------
+// GET /api/reels/user/:userId/reposts
+// -----------------------------------------------------------------------------
+
+export const getUserReposts = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.params.userId as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await reelsService.getUserReposts(
+    userId,
+    req.user?.userId,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.reels, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/reels/feed
 // -----------------------------------------------------------------------------
 

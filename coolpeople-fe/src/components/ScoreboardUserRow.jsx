@@ -9,7 +9,7 @@ const RANK_COLORS = {
   3: '#a67c52', // bronze
 }
 
-function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand }) {
+function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand, isOwnProfile = false }) {
   const score = user.score ?? 0
   const change = user.change ?? 0
   const isPositive = change >= 0
@@ -67,13 +67,15 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
         <span className={`user-change ${isPositive ? 'positive' : 'negative'}`}>
           {isPositive ? '+' : ''}{change.toFixed(2)}
         </span>
-        <span
-          className={`user-favorited ${user.isFavorited ? 'active' : ''}`}
-          onClick={() => onToggleFavorite?.(user.userId)}
-        >
-          {user.isFavorited && 'Favorited'}
-          <span className="star-icon">★</span>
-        </span>
+        {!isOwnProfile && (
+          <span
+            className={`user-favorited ${user.isFavorited ? 'active' : ''}`}
+            onClick={() => onToggleFavorite?.(user.userId)}
+          >
+            {user.isFavorited && 'Favorited'}
+            <span className="star-icon">★</span>
+          </span>
+        )}
       </div>
 
       {/* Load more buttons - shown on last row when there are more */}

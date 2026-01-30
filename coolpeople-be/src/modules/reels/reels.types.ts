@@ -8,12 +8,26 @@
 
 export interface ReelResponse {
   id: string;
+
+  // User info (frontend format)
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatar: string | null;
+    avatarUrl: string | null;
+    party: string | null;
+    isParticipant: boolean;
+  };
+
+  // Creator (backwards compatibility)
   creator: {
     id: string;
     username: string;
     displayName: string;
     avatarUrl: string | null;
   };
+
   party?: {
     id: string;
     name: string;
@@ -23,12 +37,15 @@ export interface ReelResponse {
   // Media
   videoUrl: string;
   thumbnailUrl: string | null;
+  thumbnail: string | null; // Alias for frontend compatibility
   selfieOverlayUrl: string | null;
   duration: number;
+  isMirrored: boolean; // Default false, for frontend compatibility
 
   // Metadata
   title: string | null;
   description: string | null;
+  caption: string | null; // Alias for description (frontend uses 'caption')
 
   // Engagement counts
   likeCount: number;
@@ -37,6 +54,16 @@ export interface ReelResponse {
   saveCount: number;
   repostCount: number;
   viewCount: number;
+
+  // Stats (frontend format)
+  stats: {
+    likes: string;
+    comments: string;
+    shares: string;
+    saves: string;
+    votes: string;
+    shazam: string;
+  };
 
   // Viewer context (when authenticated)
   isLiked?: boolean;
@@ -47,6 +74,7 @@ export interface ReelResponse {
   hashtags: string[];
   mentions: { id: string; username: string }[];
   raceTargets: { id: string; title: string }[];
+  targetRace: string | null; // First race target title (frontend uses this)
 
   // Quote parent
   quoteParent?: {
@@ -67,6 +95,7 @@ export interface CreateReelRequest {
   thumbnailUrl?: string;
   selfieOverlayUrl?: string;
   duration: number;
+  isMirrored?: boolean;
   title?: string;
   description?: string;
   partyId?: string;

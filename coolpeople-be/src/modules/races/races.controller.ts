@@ -141,11 +141,13 @@ export const getScoreboard = async (req: Request, res: Response): Promise<void> 
     cursor?: string;
     limit: string;
   };
+  const viewerId = req.user?.userId;
   const result = await racesService.getScoreboard(
     id,
     period,
     cursor,
-    parseInt(limit) || 20
+    parseInt(limit) || 20,
+    viewerId
   );
   sendPaginated(res, result.entries, {
     cursor: result.nextCursor ?? undefined,

@@ -47,6 +47,15 @@ router.get(
   reelsController.getUserReels
 );
 
+// GET /api/reels/user/:userId/reposts - Get user's reposts
+router.get(
+  '/user/:userId/reposts',
+  optionalAuth,
+  validate(userReelsParamSchema),
+  validate(cursorQuerySchema),
+  reelsController.getUserReposts
+);
+
 // GET /api/reels/party/:partyId - Get party's reels
 router.get(
   '/party/:partyId',

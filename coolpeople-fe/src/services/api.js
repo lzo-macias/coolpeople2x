@@ -136,6 +136,8 @@ export const reelsApi = {
 
   getUserReels: (userId, cursor) => apiFetch(`/api/reels/user/${userId}${cursor ? `?cursor=${cursor}` : ''}`),
 
+  getUserReposts: (userId, cursor) => apiFetch(`/api/reels/user/${userId}/reposts${cursor ? `?cursor=${cursor}` : ''}`),
+
   getPartyReels: (partyId, cursor) => apiFetch(`/api/reels/party/${partyId}${cursor ? `?cursor=${cursor}` : ''}`),
 
   createReel: (data) => apiFetch('/api/reels', {
@@ -424,16 +426,21 @@ export const searchApi = {
 // =============================================================================
 
 export const favoritesApi = {
-  getFavorites: () => apiFetch('/api/favorites'),
+  getFavorites: (cursor) => apiFetch(`/api/me/favorites${cursor ? `?cursor=${cursor}` : ''}`),
 
-  addFavorite: (data) => apiFetch('/api/favorites', {
+  addFavorite: (userId) => apiFetch(`/api/users/${userId}/favorite`, {
     method: 'POST',
-    body: JSON.stringify(data),
   }),
 
-  removeFavorite: (favoriteId) => apiFetch(`/api/favorites/${favoriteId}`, {
+  removeFavorite: (userId) => apiFetch(`/api/users/${userId}/favorite`, {
     method: 'DELETE',
   }),
+
+  // Check if a specific user is favorited
+  isFavorited: async (userId) => {
+    const response = await apiFetch('/api/me/favorites');
+    return response.favorites?.some(f => f.favoritedUser.id === userId) || false;
+  },
 };
 
 // =============================================================================

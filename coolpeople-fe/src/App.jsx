@@ -20,6 +20,7 @@ import Login from './components/Login'
 import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi } from './services/api'
+import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
 import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
@@ -50,6 +51,7 @@ function AppContent() {
   const [userFollowers, setUserFollowers] = useState('0') // Number of followers
   const [userRacesFollowing, setUserRacesFollowing] = useState([]) // Races user is following
   const [userRacesCompeting, setUserRacesCompeting] = useState([]) // Races user is competing in (candidates only)
+  const [userPoints, setUserPoints] = useState([]) // User's points per race (candidates only)
   const [reels, setReels] = useState([...mockReels]) // All posts in feed - fallback to mock
   const [userPosts, setUserPosts] = useState([]) // Current user's posts
   const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
@@ -58,6 +60,8 @@ function AppContent() {
   const [userActivity, setUserActivity] = useState([]) // Track all user actions for details page
   const [isLoading, setIsLoading] = useState(false)
   const [partyProfiles, setPartyProfiles] = useState({ ...mockPartyProfiles }) // Party profiles cache
+  const [userProfilesCache, setUserProfilesCache] = useState({}) // Centralized user profiles cache
+  const [scoreboardRefreshKey, setScoreboardRefreshKey] = useState(0) // Triggers scoreboard refetch when changed
   const [navHistory, setNavHistory] = useState([])
 
   // Refs must also be at the top
@@ -135,8 +139,9 @@ function AppContent() {
         if (profile.avatarUrl !== undefined) setCustomAvatar(profile.avatarUrl || null)
         if (profile.followersCount !== undefined) setUserFollowers(profile.followersCount?.toString() || '0')
         if (profile.followingCount !== undefined) setUserFollowing(profile.followingCount?.toString() || '0')
-        if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing.map(r => r.id || r))
-        if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting.map(r => r.id || r))
+        if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing)
+        if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting)
+        if (profile.points) setUserPoints(profile.points)
         if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
       } catch (error) {
         console.log('Using local state for profile:', error.message)
@@ -164,6 +169,30 @@ function AppContent() {
 
     loadUserPosts()
   }, [authUser?.id])
+
+  // Initialize socket for real-time updates
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    // Initialize socket connection
+    initializeSocket()
+
+    // Listen for follow updates to update follower count in real-time
+    const cleanupFollowListener = onFollowUpdate((data) => {
+      if (data.isFollowing) {
+        // Someone followed the current user - increase follower count
+        setUserFollowers(prev => (parseInt(prev) + 1).toString())
+      } else {
+        // Someone unfollowed the current user - decrease follower count
+        setUserFollowers(prev => Math.max(0, parseInt(prev) - 1).toString())
+      }
+    })
+
+    return () => {
+      cleanupFollowListener()
+      disconnectSocket()
+    }
+  }, [isAuthenticated])
 
   console.log('AppContent render - isAuthenticated:', isAuthenticated, 'user:', authUser)
 
@@ -223,6 +252,7 @@ function AppContent() {
     followers: userFollowers,
     racesFollowing: userRacesFollowing,
     racesCompeting: userRacesCompeting,
+    points: userPoints,
   }
 
   // Handle avatar change from MyProfile - saves to backend
@@ -364,6 +394,7 @@ function AppContent() {
           description: postData.caption || '', // Backend expects 'description' not 'caption'
           partyId: effectiveParty?.id || null,
           duration: 30, // Default duration
+          isMirrored: postData.isMirrored || false, // Track front camera mirror state
         }
         // Add raceIds if targeting a race (backend expects array of UUIDs)
         if (postData.targetRace) {
@@ -503,6 +534,21 @@ function AppContent() {
   }
 
   const handleOpenProfile = (candidate) => {
+    // Check if this is the current user
+    const isCurrentUser = candidate.username === currentUser.username ||
+                          candidate.id === currentUser.id ||
+                          candidate.id === authUser?.id
+
+    // If clicking on own profile, navigate to MyProfile page
+    if (isCurrentUser) {
+      setShowComments(false)
+      setShowProfile(false)
+      setShowPartyProfile(false)
+      setShowParticipantProfile(false)
+      setCurrentPage(5) // Profile page
+      return
+    }
+
     saveToHistory()
     setShowComments(false)
     setShowPartyProfile(false)
@@ -652,6 +698,18 @@ function AppContent() {
 
   // Handle clicking on a username in comments
   const handleCommentUsernameClick = (comment) => {
+    // Check if this is the current user
+    const isCurrentUser = comment.username === currentUser.username ||
+                          comment.id === currentUser.id ||
+                          comment.userId === authUser?.id
+
+    // If clicking on own profile, navigate to MyProfile page
+    if (isCurrentUser) {
+      setShowComments(false)
+      setCurrentPage(5) // Profile page
+      return
+    }
+
     saveToHistory()
     setShowComments(false)
 
@@ -711,6 +769,17 @@ function AppContent() {
 
   // Handle clicking on engagement score item in reels
   const handleEngagementClick = (score) => {
+    // Check if this is the current user
+    const isCurrentUser = score.username === currentUser.username ||
+                          score.id === currentUser.id ||
+                          score.id === authUser?.id
+
+    // If clicking on own profile, navigate to MyProfile page
+    if (isCurrentUser) {
+      setCurrentPage(5) // Profile page
+      return
+    }
+
     // Engagement scores are candidates (on the scoreboard)
     setActiveCandidate({
       username: score.username,
@@ -718,6 +787,126 @@ function AppContent() {
       party: score.party || 'The Pink Lady Party',
     })
     setShowProfile(true)
+  }
+
+  // Centralized user profile cache management
+  const updateUserProfileCache = (userId, profileData) => {
+    if (!userId) return
+    setUserProfilesCache(prev => ({
+      ...prev,
+      [userId]: {
+        ...prev[userId],
+        ...profileData,
+        lastUpdated: Date.now(),
+      }
+    }))
+  }
+
+  // Get user from cache by ID or username
+  const getCachedUserProfile = (identifier) => {
+    if (!identifier) return null
+    // Try by ID first
+    if (userProfilesCache[identifier]) {
+      return userProfilesCache[identifier]
+    }
+    // Try by username
+    const byUsername = Object.values(userProfilesCache).find(
+      u => u.username === identifier
+    )
+    return byUsername || null
+  }
+
+  // Centralized follow action handler - updates cache and activeCandidate
+  const handleFollowActionGlobal = (targetUserId, targetUsername, isNowFollowing, newFollowerCount) => {
+    // Update the cache
+    setUserProfilesCache(prev => {
+      const key = targetUserId || targetUsername
+      if (!key) return prev
+
+      // Find existing entry by ID or username
+      let existingKey = targetUserId
+      if (!prev[existingKey]) {
+        existingKey = Object.keys(prev).find(k => prev[k].username === targetUsername)
+      }
+
+      if (existingKey && prev[existingKey]) {
+        return {
+          ...prev,
+          [existingKey]: {
+            ...prev[existingKey],
+            isFollowing: isNowFollowing,
+            followersCount: newFollowerCount,
+            followers: newFollowerCount?.toString(),
+            lastUpdated: Date.now(),
+          }
+        }
+      }
+      return prev
+    })
+
+    // Update activeCandidate if it's the same user
+    if (activeCandidate && (activeCandidate.id === targetUserId || activeCandidate.userId === targetUserId || activeCandidate.username === targetUsername)) {
+      setActiveCandidate(prev => ({
+        ...prev,
+        isFollowing: isNowFollowing,
+        followersCount: newFollowerCount,
+        followers: newFollowerCount?.toString(),
+      }))
+    }
+
+    // Update activeParticipant if it's the same user
+    if (activeParticipant && (activeParticipant.id === targetUserId || activeParticipant.userId === targetUserId || activeParticipant.username === targetUsername)) {
+      setActiveParticipant(prev => ({
+        ...prev,
+        isFollowing: isNowFollowing,
+        followersCount: newFollowerCount,
+        followers: newFollowerCount?.toString(),
+      }))
+    }
+
+    // Update current user's following count
+    setUserFollowing(prev => {
+      const count = parseInt(prev) || 0
+      return (isNowFollowing ? count + 1 : Math.max(0, count - 1)).toString()
+    })
+  }
+
+  // Centralized favorite action handler - updates cache and triggers scoreboard refresh
+  const handleFavoriteActionGlobal = (targetUserId, targetUsername, isNowFavorited) => {
+    // Update the cache
+    setUserProfilesCache(prev => {
+      const key = targetUserId || targetUsername
+      if (!key) return prev
+
+      // Find existing entry by ID or username
+      let existingKey = targetUserId
+      if (!prev[existingKey]) {
+        existingKey = Object.keys(prev).find(k => prev[k].username === targetUsername)
+      }
+
+      if (existingKey && prev[existingKey]) {
+        return {
+          ...prev,
+          [existingKey]: {
+            ...prev[existingKey],
+            isFavorited: isNowFavorited,
+            lastUpdated: Date.now(),
+          }
+        }
+      }
+      return prev
+    })
+
+    // Update activeCandidate if it's the same user
+    if (activeCandidate && (activeCandidate.id === targetUserId || activeCandidate.userId === targetUserId || activeCandidate.username === targetUsername)) {
+      setActiveCandidate(prev => ({
+        ...prev,
+        isFavorited: isNowFavorited,
+      }))
+    }
+
+    // Trigger scoreboard refresh so it shows updated favorite state
+    setScoreboardRefreshKey(prev => prev + 1)
   }
 
   const handleNavClick = (page) => {
@@ -744,7 +933,29 @@ function AppContent() {
       >
         {/* Scoreboard Page */}
         <div className="page">
-          <Scoreboard onOpenProfile={handleOpenProfile} isActive={currentPage === 0} />
+          <Scoreboard
+            onOpenProfile={handleOpenProfile}
+            isActive={currentPage === 0}
+            refreshKey={scoreboardRefreshKey}
+            currentUserId={currentUser.id}
+            userRacesFollowing={userRacesFollowing}
+            userRacesCompeting={userRacesCompeting}
+            onFavoriteChange={(userId, username, isNowFavorited) => {
+              // Update cache when favorites change in scoreboard (no refresh needed - scoreboard has local state)
+              setUserProfilesCache(prev => {
+                const key = userId || username
+                if (!key || !prev[key]) return prev
+                return {
+                  ...prev,
+                  [key]: {
+                    ...prev[key],
+                    isFavorited: isNowFavorited,
+                    lastUpdated: Date.now(),
+                  }
+                }
+              })
+            }}
+          />
         </div>
 
         {/* Home Page - Now Reels */}
@@ -777,6 +988,9 @@ function AppContent() {
             conversations={conversations}
             setConversations={setConversations}
             userStories={userStories}
+            isCandidate={!currentUser.isParticipant}
+            userParty={userParty}
+            currentUser={currentUser}
           />
         </div>
 
@@ -876,7 +1090,24 @@ function AppContent() {
             onUserClick={handleOpenProfile}
             onOpenComments={handleOpenComments}
             userActivity={userActivity}
-            isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id}
+            isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id || activeCandidate?.userId === currentUser.id}
+            cachedProfile={getCachedUserProfile(activeCandidate?.id || activeCandidate?.userId || activeCandidate?.username)}
+            onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
+            onFollowChange={(isNowFollowing, newFollowerCount) => {
+              handleFollowActionGlobal(
+                activeCandidate?.id || activeCandidate?.userId,
+                activeCandidate?.username,
+                isNowFollowing,
+                newFollowerCount
+              )
+            }}
+            onFavoriteChange={(isNowFavorited) => {
+              handleFavoriteActionGlobal(
+                activeCandidate?.id || activeCandidate?.userId,
+                activeCandidate?.username,
+                isNowFavorited
+              )
+            }}
           />
         </div>
       )}
@@ -914,6 +1145,16 @@ function AppContent() {
               isOwnProfile={isOwnParticipantProfile}
               onPartyClick={handleOpenPartyProfile}
               onOptIn={handleOptIn}
+              cachedProfile={getCachedUserProfile(activeParticipant?.id || activeParticipant?.userId || activeParticipant?.username)}
+              onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
+              onFollowChange={(isNowFollowing, newFollowerCount) => {
+                handleFollowActionGlobal(
+                  activeParticipant?.id || activeParticipant?.userId,
+                  activeParticipant?.username,
+                  isNowFollowing,
+                  newFollowerCount
+                )
+              }}
             />
           </div>
         </div>

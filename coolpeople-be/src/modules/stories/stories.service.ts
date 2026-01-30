@@ -5,6 +5,7 @@
 
 import { prisma } from '../../lib/prisma.js';
 import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
+import { emitNewStory, emitStoryExpired } from '../../lib/socket.js';
 import type { StoryResponse, StoryFeedGroup, CreateStoryRequest } from './stories.types.js';
 
 // -----------------------------------------------------------------------------
@@ -64,6 +65,21 @@ export const createStory = async (
     },
     include: storyIncludes(userId),
   });
+
+  // Emit real-time story notification to followers
+  emitNewStory(userId, {
+    id: story.id,
+    videoUrl: story.videoUrl,
+    thumbnailUrl: story.thumbnailUrl ?? undefined,
+    createdAt: story.createdAt,
+    expiresAt: story.expiresAt,
+    user: {
+      id: story.user.id,
+      username: story.user.username,
+      displayName: story.user.displayName ?? undefined,
+      avatarUrl: story.user.avatarUrl ?? undefined,
+    },
+  }).catch(() => {}); // Fire and forget
 
   return formatStory(story, userId);
 };
@@ -213,6 +229,15 @@ export const viewStory = async (
 export const expireStories = async (): Promise<number> => {
   const now = new Date();
 
+  // First get the stories that will be expired so we can emit events
+  const expiringStories = await prisma.story.findMany({
+    where: {
+      expiresAt: { lte: now },
+      deletedAt: null,
+    },
+    select: { id: true, userId: true },
+  });
+
   const result = await prisma.story.updateMany({
     where: {
       expiresAt: { lte: now },
@@ -220,6 +245,11 @@ export const expireStories = async (): Promise<number> => {
     },
     data: { deletedAt: now },
   });
+
+  // Emit expiry events for each story
+  for (const story of expiringStories) {
+    emitStoryExpired(story.id, story.userId);
+  }
 
   return result.count;
 };

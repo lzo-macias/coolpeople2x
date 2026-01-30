@@ -515,10 +515,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     const finalTargetRace = postData.targetRace || (selectedMode === 'race' ? raceName : null)
 
     // Create the post with video and all data
+    // Use base64 version for persistence (blob URLs are temporary)
     if (onPostCreated) {
       onPostCreated({
         ...postData,
-        videoUrl: recordedVideoUrl,
+        videoUrl: recordedVideoBase64 || recordedVideoUrl, // Prefer base64 for persistence
         isMirrored: recordedWithFrontCamera,
         targetRace: finalTargetRace,
         isNomination: selectedMode === 'nominate',

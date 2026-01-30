@@ -162,6 +162,32 @@ export const unfollowUser = async (req: Request, res: Response): Promise<void> =
 };
 
 // -----------------------------------------------------------------------------
+// GET /api/users/:id/followers - Get user's followers
+// -----------------------------------------------------------------------------
+
+export const getFollowers = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const cursor = req.query.cursor as string | undefined;
+  const limit = parseInt(req.query.limit as string) || 20;
+
+  const result = await usersService.getFollowers(id, req.user?.userId, cursor, limit);
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/users/:id/following - Get user's following
+// -----------------------------------------------------------------------------
+
+export const getFollowing = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const cursor = req.query.cursor as string | undefined;
+  const limit = parseInt(req.query.limit as string) || 20;
+
+  const result = await usersService.getFollowing(id, req.user?.userId, cursor, limit);
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
 // POST /api/users/:id/become-candidate
 // -----------------------------------------------------------------------------
 

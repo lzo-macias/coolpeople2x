@@ -12,7 +12,7 @@ import path from 'path';
 import { env, isDev } from './config/env.js';
 import { connectDB, disconnectDB } from './lib/prisma.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
-import { initializeSocket } from './lib/socket.js';
+import { initializeSocket, closeSocket } from './lib/socket.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Route imports
@@ -33,10 +33,10 @@ import { notificationsRouter } from './modules/notifications/index.js';
 import { searchRouter } from './modules/search/index.js';
 
 // Jobs
-import { startStoryExpiryJob } from './jobs/storyExpiry.job.js';
-import { startPointDecayJob } from './jobs/pointDecay.job.js';
-import { startPointSnapshotJob } from './jobs/pointSnapshot.job.js';
-import { startBallotProcessJob } from './jobs/ballotProcess.job.js';
+import { startStoryExpiryJob, stopStoryExpiryJob } from './jobs/storyExpiry.job.js';
+import { startPointDecayJob, stopPointDecayJob } from './jobs/pointDecay.job.js';
+import { startPointSnapshotJob, stopPointSnapshotJob } from './jobs/pointSnapshot.job.js';
+import { startBallotProcessJob, stopBallotProcessJob } from './jobs/ballotProcess.job.js';
 
 // -----------------------------------------------------------------------------
 // Initialize Express App
@@ -168,9 +168,43 @@ const startServer = async (): Promise<void> => {
 
 const shutdown = async (signal: string): Promise<void> => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-  await disconnectRedis();
-  await disconnectDB();
-  process.exit(0);
+
+  // Force exit after 5 seconds if graceful shutdown hangs
+  const forceExitTimeout = setTimeout(() => {
+    console.error('Graceful shutdown timed out, forcing exit');
+    process.exit(1);
+  }, 5000);
+
+  try {
+    // Stop all background jobs first (clears setInterval timers)
+    stopStoryExpiryJob();
+    stopPointDecayJob();
+    stopPointSnapshotJob();
+    stopBallotProcessJob();
+
+    // Close Socket.io (disconnects all clients + closes Redis pub/sub)
+    await closeSocket();
+
+    // Close HTTP server (stop accepting new connections)
+    server.closeAllConnections(); // Force close active connections
+    await new Promise<void>((resolve) => {
+      server.close(() => {
+        console.log('HTTP server closed');
+        resolve();
+      });
+    });
+
+    // Close database connections
+    await disconnectRedis();
+    await disconnectDB();
+
+    clearTimeout(forceExitTimeout);
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during shutdown:', err);
+    clearTimeout(forceExitTimeout);
+    process.exit(1);
+  }
 };
 
 process.on('SIGINT', () => shutdown('SIGINT'));

@@ -429,6 +429,7 @@ model Reel {
   thumbnailUrl    String?
   selfieOverlayUrl String?  // Optional selfie overlay
   duration        Int       // Duration in seconds (15-90)
+  isMirrored      Boolean   @default(false)  // Front camera videos need horizontal flip
 
   // Metadata
   title           String?

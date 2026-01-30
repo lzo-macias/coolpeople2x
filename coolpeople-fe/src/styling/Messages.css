@@ -121,6 +121,34 @@
   flex-direction: column;
 }
 
+/* Empty State for Messages */
+.messages-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #666;
+}
+
+.messages-empty-state svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.messages-empty-state p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #888;
+  margin: 0 0 8px;
+}
+
+.messages-empty-state span {
+  font-size: 14px;
+  color: #666;
+}
+
 /* Message Item */
 .message-item {
   display: flex;
@@ -130,10 +158,38 @@
   border-bottom: 1px solid #1a1a1a;
   cursor: pointer;
   transition: background 0.2s;
+  position: relative;
 }
 
 .message-item:active {
   background: #111;
+}
+
+/* Pinned Message */
+.message-item.pinned {
+  background: rgba(255, 42, 85, 0.05);
+  border-left: 3px solid #FF2A55;
+}
+
+.message-pinned-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #FF2A55;
+  opacity: 0.7;
+}
+
+/* Avatar Placeholder */
+.message-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+  font-size: 20px;
+  color: #888;
+  font-weight: 600;
 }
 
 /* Avatar */
@@ -407,6 +463,25 @@
 .activity-icon.reviews {
   background: rgba(255, 193, 7, 0.2);
   color: #FFC107;
+}
+
+.activity-icon.reposts {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+}
+
+.activity-icon.nominates {
+  background: linear-gradient(135deg, rgba(0, 242, 234, 0.2), rgba(255, 42, 85, 0.2));
+  color: #FF2A55;
+}
+
+.activity-icon.nominates svg {
+  fill: url(#nominateGradient);
+}
+
+.activity-icon.ballots {
+  background: rgba(255, 152, 0, 0.2);
+  color: #FF9800;
 }
 
 .activity-info {
@@ -692,6 +767,35 @@
 /* Notifications list */
 .activity-notifications-list {
   padding: 0 16px 80px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.activity-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #666;
+}
+
+.activity-empty-state svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.activity-empty-state p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #888;
+  margin: 0 0 8px;
+}
+
+.activity-empty-state span {
+  font-size: 14px;
+  color: #666;
 }
 
 .activity-notification-item {
@@ -744,6 +848,21 @@
 .activity-notification-icon.review {
   background: #FFD700;
   color: #000;
+}
+
+.activity-notification-icon.repost {
+  background: #888;
+  color: #fff;
+}
+
+.activity-notification-icon.nominate {
+  background: linear-gradient(135deg, #00F2EA, #FF2A55);
+  color: #fff;
+}
+
+.activity-notification-icon.ballot {
+  background: #FF9800;
+  color: #fff;
 }
 
 .activity-notification-content {

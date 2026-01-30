@@ -64,6 +64,7 @@ export const createReelSchema = z.object({
       .max(600, 'Reel must be at most 10 minutes')
       .optional()
       .default(30),
+    isMirrored: z.boolean().optional().default(false),
     title: z.string().max(100, 'Title must be at most 100 characters').optional(),
     description: z.string().max(2000, 'Description must be at most 2000 characters').optional(),
     partyId: z.string().uuid('Invalid party ID').optional().nullable(),

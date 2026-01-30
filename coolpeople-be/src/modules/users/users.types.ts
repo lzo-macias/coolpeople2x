@@ -23,6 +23,17 @@ export interface PublicProfile {
   followersCount: number;
   followingCount: number;
 
+  // Party
+  party?: string | null;
+
+  // Viewer-specific fields
+  isFollowing?: boolean;
+  isFavorited?: boolean;
+
+  // Races (sitewide - available for all profiles)
+  racesFollowing?: { id: string; title: string }[];
+  racesCompeting?: { id: string; title: string }[];
+
   // Candidate-only fields
   points?: {
     total: number;

@@ -278,6 +278,11 @@ button.profile-bio.empty {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
+.profile-action-btn.follow.loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .profile-action-btn.nominate,
 .profile-action-btn.nominated {
   position: relative;
@@ -1689,6 +1694,72 @@ button.profile-bio.empty {
   transform: scaleX(-1);
 }
 
+/* Reposts Tab */
+.candidate-profile .repost-item {
+  position: relative;
+}
+
+.candidate-profile .repost-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.candidate-profile .repost-indicator svg {
+  stroke: #4CAF50;
+}
+
+.candidate-profile .repost-author {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 2;
+}
+
+.candidate-profile .repost-author span {
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.candidate-profile .empty-reposts {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666666;
+}
+
+.candidate-profile .empty-reposts p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.candidate-profile .empty-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666666;
+}
+
+.candidate-profile .empty-activity p {
+  font-size: 14px;
+  margin: 0;
+}
+
 /* Activity Feed - Details Tab */
 .activity-feed {
   display: flex;
@@ -2394,6 +2465,42 @@ video.activity-video-thumbnail.mirrored {
   background: #444444;
 }
 
+/* Loading Profile View */
+.candidate-profile.loading-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333333;
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-content p {
+  font-size: 14px;
+  color: #777777;
+  margin: 0;
+}
+
 /* Copied Toast */
 .copied-toast {
   position: fixed;
@@ -2498,6 +2605,16 @@ video.activity-video-thumbnail.mirrored {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+}
+
+.stat-modal-loading,
+.stat-modal-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #888;
+  font-size: 14px;
 }
 
 /* Stat Modal Row */
@@ -2611,6 +2728,10 @@ video.activity-video-thumbnail.mirrored {
   background: #10b981;
 }
 
+.race-row-indicator.competing {
+  background: #FF2A55;
+}
+
 .race-row-indicator.following {
   background: #666666;
 }
@@ -2641,6 +2762,17 @@ video.activity-video-thumbnail.mirrored {
 .race-row-percentile {
   font-size: 12px;
   color: #666666;
+}
+
+.race-row-points {
+  font-size: 13px;
+  color: #AAAAAA;
+}
+
+.race-row-tier {
+  font-size: 12px;
+  color: #888888;
+  text-transform: capitalize;
 }
 
 .race-section-divider {

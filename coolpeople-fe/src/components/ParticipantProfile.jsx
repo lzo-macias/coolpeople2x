@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import '../styling/ParticipantProfile.css'
+import '../styling/CandidateProfile.css' // For stat modal styles
 import { getPartyColor } from '../data/mockData'
+import { usersApi } from '../services/api'
 import EditBio from './EditBio'
 
 // CoolPeople Tier System
@@ -70,21 +73,93 @@ function ParticipantProfile({
   isOwnProfile = false,
   onPartyClick,
   onOptIn,
+  cachedProfile,
+  onProfileLoaded,
+  onFollowChange,
 }) {
-  // Merge passed participant with defaults
-  const participant = { ...mockParticipant, ...passedParticipant }
+  // Merge passed participant with defaults, preferring cached data
+  const participant = { ...mockParticipant, ...passedParticipant, ...cachedProfile }
 
   const [activeTab, setActiveTab] = useState('posts')
   const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter
-  const [isFollowing, setIsFollowing] = useState(participant.isFollowing)
+  const [isFollowing, setIsFollowing] = useState(cachedProfile?.isFollowing ?? participant.isFollowing)
   const [isFavorited, setIsFavorited] = useState(participant.isFavorited)
   const [showEditBio, setShowEditBio] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState('1M')
   const [cpCardExpanded, setCpCardExpanded] = useState(false)
+  const [localFollowerCount, setLocalFollowerCount] = useState(
+    cachedProfile?.followersCount ?? cachedProfile?.followers ?? participant.followers
+  )
+
+  // Stat modal states
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [showRacesModal, setShowRacesModal] = useState(false)
+  const [showNominationsModal, setShowNominationsModal] = useState(false)
+  const [followersState, setFollowersState] = useState([])
+  const [isLoadingFollowers, setIsLoadingFollowers] = useState(false)
+
+  const mockNominators = [
+    { id: 'nom-1', username: 'community.hero', avatar: 'https://i.pravatar.cc/40?img=22', party: 'Democrat', count: 5 },
+    { id: 'nom-2', username: 'local.activist', avatar: 'https://i.pravatar.cc/40?img=28', party: null, count: 3 },
+    { id: 'nom-3', username: 'voter.2024', avatar: 'https://i.pravatar.cc/40?img=31', party: 'Republican', count: 2 },
+    { id: 'nom-4', username: 'pink.supporter', avatar: 'https://i.pravatar.cc/40?img=45', party: 'The Pink Lady', count: 1 },
+  ]
+
+  // Fetch followers from API
+  const fetchFollowers = async () => {
+    const userId = participant.id || participant.userId
+    if (!userId || isLoadingFollowers) return
+
+    setIsLoadingFollowers(true)
+    try {
+      const response = await usersApi.getFollowers(userId)
+      const data = response.data || response
+      const followers = data.followers || []
+      setFollowersState(followers.map(f => ({
+        id: f.id,
+        username: f.username,
+        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        party: f.party?.name || f.partyName || null,
+        isFollowing: f.isFollowing || false,
+      })))
+    } catch (error) {
+      console.error('Failed to fetch followers:', error)
+      setFollowersState([])
+    } finally {
+      setIsLoadingFollowers(false)
+    }
+  }
 
   const hasParty = participant.party && participant.party !== 'Independent'
   const partyColor = hasParty ? getPartyColor(participant.party) : '#808080'
   const partyDisplay = hasParty ? participant.party : 'Independent'
+
+  // Handle follow/unfollow with cache update
+  const handleFollowToggle = async () => {
+    const wasFollowing = isFollowing
+    const currentFollowers = parseInt(localFollowerCount) || 0
+    const newFollowerCount = wasFollowing ? currentFollowers - 1 : currentFollowers + 1
+
+    // Optimistic update
+    setIsFollowing(!wasFollowing)
+    setLocalFollowerCount(newFollowerCount)
+
+    // Notify parent for global cache update
+    onFollowChange?.(!wasFollowing, newFollowerCount)
+
+    // TODO: Add actual API call here when backend supports participants
+    // try {
+    //   if (wasFollowing) {
+    //     await usersApi.unfollowUser(participant.id)
+    //   } else {
+    //     await usersApi.followUser(participant.id)
+    //   }
+    // } catch (error) {
+    //   // Revert on error
+    //   setIsFollowing(wasFollowing)
+    //   setLocalFollowerCount(currentFollowers)
+    // }
+  }
 
   const tabs = [
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
@@ -139,16 +214,20 @@ function ParticipantProfile({
 
           <div className="participant-right">
             <div className="participant-stats-grid">
-              <div className="stat-item">
+              <div className="stat-item clickable" onClick={() => setShowNominationsModal(true)}>
                 <span className="stat-number">{participant.nominations}</span>
                 <span className="stat-label">Nominations</span>
               </div>
-              <div className="stat-item">
-                <span className="stat-number">{participant.followers || '0'}</span>
+              <div className="stat-item clickable" onClick={() => { setShowFollowersModal(true); fetchFollowers(); }}>
+                <span className="stat-number">{localFollowerCount ?? participant.followers ?? '0'}</span>
                 <span className="stat-label">Followers</span>
               </div>
-              <div className="stat-item">
-                <span className="stat-number">{participant.races?.length || '0'}</span>
+              <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
+                <span className="stat-number">
+                  {((participant.racesFollowing?.length || 0) +
+                    (participant.racesWon?.length || 0)) ||
+                    participant.races?.length || '0'}
+                </span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
@@ -172,7 +251,7 @@ function ParticipantProfile({
             <button className="participant-action-btn nominate">nominate</button>
             <button
               className={`participant-action-btn follow ${isFollowing ? 'following' : ''}`}
-              onClick={() => setIsFollowing(!isFollowing)}
+              onClick={handleFollowToggle}
             >
               {isFollowing ? 'following' : 'follow'}
             </button>
@@ -544,6 +623,157 @@ function ParticipantProfile({
           </button>
           <EditBio />
         </div>
+      )}
+
+      {/* Nominations Modal */}
+      {showNominationsModal && createPortal(
+        <div className="stat-modal-overlay" onClick={() => setShowNominationsModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Nominations</h3>
+              <button className="stat-modal-close" onClick={() => setShowNominationsModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {mockNominators.map((nominator) => (
+                <div
+                  key={nominator.id}
+                  className="stat-modal-row clickable"
+                  onClick={() => { setShowNominationsModal(false); }}
+                >
+                  <div className="stat-row-user">
+                    <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(nominator.party) }}>
+                      <img src={nominator.avatar} alt={nominator.username} className="stat-row-avatar" />
+                    </div>
+                    <div className="stat-row-info">
+                      <span className="stat-row-username">{nominator.username}</span>
+                      <span className="stat-row-meta">{nominator.count} nomination{nominator.count > 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* Followers Modal */}
+      {showFollowersModal && createPortal(
+        <div className="stat-modal-overlay" onClick={() => setShowFollowersModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Followers</h3>
+              <button className="stat-modal-close" onClick={() => setShowFollowersModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {isLoadingFollowers ? (
+                <div className="stat-modal-loading">Loading...</div>
+              ) : followersState.length === 0 ? (
+                <div className="stat-modal-empty">No followers yet</div>
+              ) : (
+                followersState.map((follower) => (
+                  <div key={follower.id} className="stat-modal-row">
+                    <div
+                      className="stat-row-user clickable"
+                      onClick={() => { setShowFollowersModal(false); }}
+                    >
+                      <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(follower.party) }}>
+                        <img src={follower.avatar} alt={follower.username} className="stat-row-avatar" />
+                      </div>
+                      <span className="stat-row-username">{follower.username}</span>
+                    </div>
+                    <button
+                      className={`stat-row-follow-btn ${follower.isFollowing ? 'following' : ''}`}
+                      onClick={async () => {
+                        const wasFollowing = follower.isFollowing
+                        setFollowersState(prev => prev.map(f =>
+                          f.id === follower.id ? { ...f, isFollowing: !f.isFollowing } : f
+                        ))
+                        try {
+                          if (wasFollowing) {
+                            await usersApi.unfollowUser(follower.id)
+                          } else {
+                            await usersApi.followUser(follower.id)
+                          }
+                        } catch (error) {
+                          setFollowersState(prev => prev.map(f =>
+                            f.id === follower.id ? { ...f, isFollowing: wasFollowing } : f
+                          ))
+                        }
+                      }}
+                    >
+                      {follower.isFollowing ? 'following' : 'follow'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* Races Modal */}
+      {showRacesModal && createPortal(
+        <div className="stat-modal-overlay" onClick={() => setShowRacesModal(false)}>
+          <div className="stat-modal races" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Races</h3>
+              <button className="stat-modal-close" onClick={() => setShowRacesModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {/* Won Races */}
+              {(participant.racesWon || []).map((race) => (
+                <div key={race.id} className="stat-modal-row race-row won">
+                  <div className="race-row-info">
+                    <div className="race-row-indicator won"></div>
+                    <span className="race-row-name">{race.title || race.name}</span>
+                  </div>
+                  <span className="race-row-position won">Winner</span>
+                </div>
+              ))}
+
+              {/* Following Races */}
+              {(participant.racesFollowing || []).map((race) => (
+                <div
+                  key={race.id}
+                  className="stat-modal-row race-row clickable"
+                  onClick={() => { setShowRacesModal(false); }}
+                >
+                  <div className="race-row-info">
+                    <div className="race-row-indicator following"></div>
+                    <span className="race-row-name">{race.title || race.name}</span>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </div>
+              ))}
+
+              {/* Empty state */}
+              {(participant.racesWon || []).length === 0 &&
+               (participant.racesFollowing || []).length === 0 && (
+                <div className="stat-modal-empty">No races yet</div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
     </div>
   )

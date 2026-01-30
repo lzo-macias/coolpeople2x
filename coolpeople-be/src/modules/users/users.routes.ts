@@ -93,6 +93,22 @@ router.post(
   usersController.denyFollowRequest
 );
 
+// GET /api/users/:id/followers - Get user's followers list
+router.get(
+  '/:id/followers',
+  optionalAuth,
+  validate(userIdParamSchema),
+  usersController.getFollowers
+);
+
+// GET /api/users/:id/following - Get user's following list
+router.get(
+  '/:id/following',
+  optionalAuth,
+  validate(userIdParamSchema),
+  usersController.getFollowing
+);
+
 // POST /api/users/:id/follow - Follow user
 router.post(
   '/:id/follow',

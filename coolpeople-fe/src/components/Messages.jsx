@@ -2,103 +2,51 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { mockMessages, getPartyColor } from '../data/mockData'
 import { messagesApi, storiesApi, notificationsApi, searchApi } from '../services/api'
+import {
+  initializeSocket,
+  disconnectSocket,
+  onNewMessage,
+  onNewStory,
+  onStoryExpired,
+  onNewActivity,
+  onNotification,
+  onUserStatus,
+  onPartyMessage,
+  isConnected,
+} from '../services/socket'
 import Conversation from './Conversation'
 import CreateScreen from './CreateScreen'
 import '../styling/Messages.css'
 
-// Mock stories data with content
-const mockStories = [
-  { id: 'add', isAdd: true },
-  {
-    id: 1,
-    username: 'Pink Lady',
-    avatar: 'https://i.pravatar.cc/150?img=1',
-    hasUnread: true,
-    party: 'The Pink Lady Party',
-    stories: [
-      { id: 's1', image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&h=1000&fit=crop', timestamp: '2h ago' },
-      { id: 's2', image: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=600&h=1000&fit=crop', timestamp: '4h ago' },
-    ]
-  },
-  {
-    id: 2,
-    username: 'Lorem',
-    avatar: 'https://i.pravatar.cc/150?img=2',
-    hasUnread: true,
-    party: 'Democrat',
-    stories: [
-      { id: 's3', image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&h=1000&fit=crop', timestamp: '1h ago' },
-    ]
-  },
-  {
-    id: 3,
-    username: 'Jake.M',
-    avatar: 'https://i.pravatar.cc/150?img=3',
-    hasUnread: false,
-    party: 'Republican',
-    stories: [
-      { id: 's4', image: 'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=600&h=1000&fit=crop', timestamp: '6h ago' },
-      { id: 's5', image: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=600&h=1000&fit=crop', timestamp: '8h ago' },
-      { id: 's6', image: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=600&h=1000&fit=crop', timestamp: '10h ago' },
-    ]
-  },
-  {
-    id: 4,
-    username: 'Sarah',
-    avatar: 'https://i.pravatar.cc/150?img=4',
-    hasUnread: false,
-    party: null,
-    stories: [
-      { id: 's7', image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=600&h=1000&fit=crop', timestamp: '3h ago' },
-    ]
-  },
-  {
-    id: 5,
-    username: 'Marcus',
-    avatar: 'https://i.pravatar.cc/150?img=5',
-    hasUnread: false,
-    party: 'The Pink Lady Party',
-    stories: [
-      { id: 's8', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=1000&fit=crop', timestamp: '5h ago' },
-      { id: 's9', image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&h=1000&fit=crop', timestamp: '7h ago' },
-    ]
-  },
-]
+// Stories will come from API - followed users and party members
+const mockStories = []
 
 // Mock activity data
 const mockActivity = {
-  likes: 24,
-  comments: 8,
-  reviews: 3,
+  likes: 0,
+  comments: 0,
+  reposts: 0,
+  reviews: 0,
+  nominates: 0,
+  ballots: 0,
 }
 
-// Detailed activity notifications
+// Detailed activity notifications - empty, will be populated from API
 const mockActivityNotifications = {
-  likes: [
-    { id: 'l1', user: { username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: 'Democrat' }, content: 'liked your post', timestamp: '2m ago', postImage: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=100&h=100&fit=crop' },
-    { id: 'l2', user: { username: 'Jake.M', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Republican' }, content: 'liked your comment', timestamp: '15m ago' },
-    { id: 'l3', user: { username: 'Pink Lady', avatar: 'https://i.pravatar.cc/40?img=1', party: 'The Pink Lady Party' }, content: 'liked your post', timestamp: '1h ago', postImage: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=100&h=100&fit=crop' },
-    { id: 'l4', user: { username: 'Marcus', avatar: 'https://i.pravatar.cc/40?img=5', party: 'The Pink Lady Party' }, content: 'liked your story', timestamp: '2h ago' },
-    { id: 'l5', user: { username: 'Lorem', avatar: 'https://i.pravatar.cc/40?img=2', party: 'Democrat' }, content: 'liked your post', timestamp: '3h ago', postImage: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=100&h=100&fit=crop' },
-  ],
-  comments: [
-    { id: 'c1', user: { username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: 'Democrat' }, content: 'commented: "This is amazing!"', timestamp: '5m ago', postImage: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=100&h=100&fit=crop' },
-    { id: 'c2', user: { username: 'Jake.M', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Republican' }, content: 'replied to your comment', timestamp: '30m ago' },
-    { id: 'c3', user: { username: 'Sarah', avatar: 'https://i.pravatar.cc/40?img=4', party: null }, content: 'commented: "Great work!"', timestamp: '2h ago', postImage: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=100&h=100&fit=crop' },
-  ],
-  reviews: [
-    { id: 'r1', user: { username: 'Marcus', avatar: 'https://i.pravatar.cc/40?img=5', party: 'The Pink Lady Party' }, content: 'left you a 5-star review', timestamp: '1h ago', rating: 5 },
-    { id: 'r2', user: { username: 'Pink Lady', avatar: 'https://i.pravatar.cc/40?img=1', party: 'The Pink Lady Party' }, content: 'left you a 4-star review', timestamp: '4h ago', rating: 4 },
-    { id: 'r3', user: { username: 'Lorem', avatar: 'https://i.pravatar.cc/40?img=2', party: 'Democrat' }, content: 'left you a 5-star review', timestamp: '1d ago', rating: 5 },
-  ],
+  likes: [],
+  comments: [],
+  reposts: [],
+  reviews: [],
+  nominates: [],
+  ballots: [],
 }
 
-function Messages({ onConversationChange, conversations, setConversations, userStories }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
   const [showActivity, setShowActivity] = useState(false)
-  const [activityFilter, setActivityFilter] = useState('all') // 'all', 'likes', 'comments', 'reviews'
+  const [activityFilter, setActivityFilter] = useState('all') // 'all', 'likes', 'comments', 'reposts', 'reviews', 'nominates', 'ballots'
   const [showCompose, setShowCompose] = useState(false)
   const [composeSearch, setComposeSearch] = useState('')
   const [selectedRecipients, setSelectedRecipients] = useState([])
@@ -107,102 +55,412 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const storyTimerRef = useRef(null)
   const [storyProgress, setStoryProgress] = useState(0)
   const touchStartX = useRef(0)
-  const currentUsername = 'William.h.for.mayor'
+  const currentUsername = currentUser?.username || 'User'
 
-  // State for API data with mock fallbacks
-  const [messages, setMessages] = useState(mockMessages)
+  // State for API data
+  const [messages, setMessages] = useState([])
   const [stories, setStories] = useState([])
-  const [notifications, setNotifications] = useState({ likes: [], comments: [], reviews: [] })
-  const [activity, setActivity] = useState({ likes: 0, comments: 0, reviews: 0 })
+  const [notifications, setNotifications] = useState({ likes: [], comments: [], reposts: [], reviews: [], nominates: [], ballots: [] })
+  const [activity, setActivity] = useState({ likes: 0, comments: 0, reposts: 0, reviews: 0, nominates: 0, ballots: 0 })
   const [searchResults, setSearchResults] = useState([])
 
-  // Fetch messages from API
+  // ============================================================================
+  // REAL-TIME UPDATE HELPERS
+  // ============================================================================
+
+  // Check if a story is expired (older than 24 hours)
+  const isStoryExpired = (story) => {
+    if (!story.createdAt) return false
+    const createdAt = new Date(story.createdAt)
+    const now = new Date()
+    const hoursDiff = (now - createdAt) / (1000 * 60 * 60)
+    return hoursDiff >= 24
+  }
+
+  // Filter out expired stories
+  const filterExpiredStories = (storiesList) => {
+    return storiesList.filter(story => !isStoryExpired(story))
+  }
+
+  // Sort messages: party chat pinned first, then by most recent
+  const sortMessages = (messagesList) => {
+    return [...messagesList].sort((a, b) => {
+      // Pin party chat at top if user is in a party
+      if (userParty) {
+        const aIsPartyChat = a.isPartyChat || a.partyId === userParty.id
+        const bIsPartyChat = b.isPartyChat || b.partyId === userParty.id
+        if (aIsPartyChat && !bIsPartyChat) return -1
+        if (!aIsPartyChat && bIsPartyChat) return 1
+      }
+      // Then sort by most recent message
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt) : new Date(0)
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt) : new Date(0)
+      return bTime - aTime
+    })
+  }
+
+  // Add a new message to the list (for real-time updates)
+  const addNewMessage = (newMessage) => {
+    setMessages(prev => {
+      // Check if conversation already exists
+      const existingIndex = prev.findIndex(m => m.id === newMessage.conversationId || m.user?.id === newMessage.senderId)
+      if (existingIndex >= 0) {
+        // Update existing conversation
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          lastMessage: newMessage.text,
+          lastMessageAt: newMessage.createdAt,
+          timestamp: formatTimestamp(newMessage.createdAt),
+          hasUnread: newMessage.senderId !== currentUser?.id,
+          unreadCount: (updated[existingIndex].unreadCount || 0) + (newMessage.senderId !== currentUser?.id ? 1 : 0),
+        }
+        return sortMessages(updated)
+      }
+      // New conversation - add to list
+      return sortMessages([...prev, newMessage])
+    })
+  }
+
+  // Add a new story (for real-time updates)
+  const addNewStory = (newStory) => {
+    setStories(prev => {
+      // Check if we already have stories from this user
+      const existingIndex = prev.findIndex(s => s.userId === newStory.userId)
+      if (existingIndex >= 0) {
+        // Add story to existing user's stories
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          stories: [newStory, ...(updated[existingIndex].stories || [])],
+          hasUnread: true,
+        }
+        return updated
+      }
+      // New user story - add to beginning
+      return [newStory, ...prev]
+    })
+  }
+
+  // Add a new activity notification (for real-time updates)
+  const addNewActivity = (type, notification) => {
+    setNotifications(prev => ({
+      ...prev,
+      [type]: [notification, ...(prev[type] || [])],
+    }))
+    setActivity(prev => ({
+      ...prev,
+      [type]: (prev[type] || 0) + 1,
+    }))
+  }
+
+  // ============================================================================
+  // REAL-TIME UPDATES VIA SOCKET.IO
+  // ============================================================================
+
+  // Initialize socket connection and set up event listeners
   useEffect(() => {
-    const fetchMessages = async () => {
-      try {
-        const response = await messagesApi.getConversations()
-        if (response.data && response.data.length > 0) {
-          // Transform API response to match mock format
-          const transformedMessages = response.data.map(conv => ({
-            id: conv.id,
+    // Initialize socket connection
+    initializeSocket()
+
+    // Set up socket event listeners
+    const cleanupNewMessage = onNewMessage((data) => {
+      // Update conversation list with new message
+      setMessages(prev => {
+        const existingIndex = prev.findIndex(m =>
+          m.user?.id === data.senderId || m.id === data.conversationId
+        )
+
+        if (existingIndex >= 0) {
+          const updated = [...prev]
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            lastMessage: data.message.content,
+            lastMessageAt: data.message.createdAt,
+            timestamp: formatTimestamp(data.message.createdAt),
+            hasUnread: data.senderId !== currentUser?.id,
+            unreadCount: (updated[existingIndex].unreadCount || 0) + (data.senderId !== currentUser?.id ? 1 : 0),
+          }
+          return sortMessages(updated)
+        }
+
+        // New conversation
+        if (data.sender) {
+          return sortMessages([...prev, {
+            id: data.conversationId,
             user: {
+              id: data.sender.id,
+              username: data.sender.username || data.sender.displayName,
+              avatar: data.sender.avatarUrl,
+              party: data.sender.party,
+            },
+            lastMessage: data.message.content,
+            lastMessageAt: data.message.createdAt,
+            timestamp: formatTimestamp(data.message.createdAt),
+            unreadCount: 1,
+            hasUnread: true,
+            isOnline: false,
+          }])
+        }
+
+        return prev
+      })
+    })
+
+    const cleanupNewStory = onNewStory((story) => {
+      // Add new story to the stories list
+      setStories(prev => {
+        const existingIndex = prev.findIndex(s => s.user?.id === story.user.id)
+
+        if (existingIndex >= 0) {
+          const updated = [...prev]
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            stories: [story, ...(updated[existingIndex].stories || [])],
+            hasUnread: true,
+          }
+          return updated
+        }
+
+        // New user story
+        return [{
+          id: story.id,
+          userId: story.user.id,
+          username: story.user.username || story.user.displayName,
+          avatar: story.user.avatarUrl,
+          hasUnread: true,
+          party: story.user.party,
+          stories: [story],
+          createdAt: story.createdAt,
+        }, ...prev]
+      })
+    })
+
+    const cleanupStoryExpired = onStoryExpired(({ storyId, creatorId }) => {
+      // Remove expired story
+      setStories(prev => {
+        return prev.map(userStories => {
+          if (userStories.userId === creatorId || userStories.user?.id === creatorId) {
+            const filteredStories = (userStories.stories || []).filter(s => s.id !== storyId)
+            if (filteredStories.length === 0) return null
+            return { ...userStories, stories: filteredStories }
+          }
+          return userStories
+        }).filter(Boolean)
+      })
+    })
+
+    const cleanupNewActivity = onNewActivity((activity) => {
+      // Map activity type to notification category
+      const typeMap = {
+        LIKE: 'likes',
+        COMMENT: 'comments',
+        REPOST: 'reposts',
+        REVIEW: 'reviews',
+        NOMINATE: 'nominates',
+        BALLOT: 'ballots',
+      }
+      const category = typeMap[activity.type]
+
+      if (category) {
+        const notification = {
+          id: `${activity.type}-${Date.now()}`,
+          user: {
+            username: activity.actorUsername,
+            avatar: activity.actorAvatarUrl,
+            party: null,
+          },
+          content: getActivityContent(activity.type),
+          timestamp: formatTimestamp(activity.createdAt),
+        }
+
+        setNotifications(prev => ({
+          ...prev,
+          [category]: [notification, ...(prev[category] || [])],
+        }))
+
+        setActivity(prev => ({
+          ...prev,
+          [category]: (prev[category] || 0) + 1,
+        }))
+      }
+    })
+
+    const cleanupNotification = onNotification((notification) => {
+      // Handle general notifications (already handled by onNewActivity for activity types)
+      console.log('New notification:', notification)
+    })
+
+    const cleanupUserStatus = onUserStatus(({ userId, isOnline }) => {
+      // Update online status in messages list
+      setMessages(prev => prev.map(m => {
+        if (m.user?.id === userId) {
+          return { ...m, isOnline }
+        }
+        return m
+      }))
+    })
+
+    const cleanupPartyMessage = onPartyMessage(({ partyId, message }) => {
+      // Update party chat in messages list
+      setMessages(prev => {
+        const partyChat = prev.find(m => m.partyId === partyId || m.isPartyChat)
+        if (partyChat) {
+          return sortMessages(prev.map(m => {
+            if (m.partyId === partyId || m.isPartyChat) {
+              return {
+                ...m,
+                lastMessage: message.content,
+                lastMessageAt: message.createdAt,
+                timestamp: formatTimestamp(message.createdAt),
+                hasUnread: message.senderId !== currentUser?.id,
+                unreadCount: message.senderId !== currentUser?.id ? (m.unreadCount || 0) + 1 : m.unreadCount,
+              }
+            }
+            return m
+          }))
+        }
+        return prev
+      })
+    })
+
+    // Cleanup on unmount
+    return () => {
+      cleanupNewMessage()
+      cleanupNewStory()
+      cleanupStoryExpired()
+      cleanupNewActivity()
+      cleanupNotification()
+      cleanupUserStatus()
+      cleanupPartyMessage()
+    }
+  }, [currentUser?.id, userParty])
+
+  // Helper function to get activity content text
+  const getActivityContent = (type) => {
+    switch (type) {
+      case 'LIKE': return 'liked your post'
+      case 'COMMENT': return 'commented on your post'
+      case 'REPOST': return 'reposted your content'
+      case 'REVIEW': return 'left you a review'
+      case 'NOMINATE': return 'nominated you'
+      case 'BALLOT': return 'added you to their ballot'
+      default: return 'interacted with your content'
+    }
+  }
+
+  // Initial data fetch (one-time, not polling)
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        // Fetch conversations
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data && conversationsRes.data.length > 0) {
+          const transformedMessages = conversationsRes.data.map(conv => ({
+            id: conv.id,
+            partyId: conv.partyId,
+            isPartyChat: conv.isPartyChat || false,
+            user: {
+              id: conv.otherUser?.id,
               username: conv.otherUser?.username || conv.otherUser?.displayName,
               avatar: conv.otherUser?.avatarUrl,
               party: conv.otherUser?.party || null,
             },
             lastMessage: conv.lastMessage?.text || '',
+            lastMessageAt: conv.lastMessage?.createdAt,
             timestamp: formatTimestamp(conv.lastMessage?.createdAt),
             unreadCount: conv.unreadCount || 0,
             isOnline: conv.otherUser?.isOnline || false,
             hasUnread: conv.unreadCount > 0,
           }))
-          setMessages(transformedMessages)
+          setMessages(sortMessages(transformedMessages))
         }
       } catch (error) {
-        console.log('Using mock messages:', error.message)
+        console.log('Failed to fetch conversations:', error.message)
       }
-    }
-    fetchMessages()
-  }, [])
 
-  // Fetch stories from API
-  useEffect(() => {
-    const fetchStories = async () => {
       try {
-        const response = await storiesApi.getFeed()
-        if (response.data && response.data.length > 0) {
-          setStories(response.data)
+        // Fetch stories
+        const storiesRes = await storiesApi.getFeed()
+        if (storiesRes.data) {
+          const validStories = filterExpiredStories(storiesRes.data)
+          setStories(validStories)
         }
       } catch (error) {
-        console.log('Using mock stories:', error.message)
+        console.log('Failed to fetch stories:', error.message)
       }
-    }
-    fetchStories()
-  }, [])
 
-  // Fetch notifications from API
-  useEffect(() => {
-    const fetchNotifications = async () => {
       try {
-        const response = await notificationsApi.getNotifications()
-        if (response.data) {
-          // Group notifications by type
+        // Fetch notifications
+        const notificationsRes = await notificationsApi.getNotifications()
+        if (notificationsRes.data) {
           const grouped = {
-            likes: response.data.filter(n => n.type === 'LIKE').map(n => ({
+            likes: notificationsRes.data.filter(n => n.type === 'LIKE').map(n => ({
               id: n.id,
               user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
               content: 'liked your post',
               timestamp: formatTimestamp(n.createdAt),
               postImage: n.reel?.thumbnailUrl,
             })),
-            comments: response.data.filter(n => n.type === 'COMMENT').map(n => ({
+            comments: notificationsRes.data.filter(n => n.type === 'COMMENT').map(n => ({
               id: n.id,
               user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
               content: `commented: "${n.comment?.text || ''}"`,
               timestamp: formatTimestamp(n.createdAt),
               postImage: n.reel?.thumbnailUrl,
             })),
-            reviews: response.data.filter(n => n.type === 'REVIEW').map(n => ({
+            reposts: notificationsRes.data.filter(n => n.type === 'REPOST').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: 'reposted your content',
+              timestamp: formatTimestamp(n.createdAt),
+              postImage: n.reel?.thumbnailUrl,
+            })),
+            reviews: notificationsRes.data.filter(n => n.type === 'REVIEW').map(n => ({
               id: n.id,
               user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
               content: `left you a ${n.review?.rating || 5}-star review`,
               timestamp: formatTimestamp(n.createdAt),
               rating: n.review?.rating,
             })),
+            nominates: notificationsRes.data.filter(n => n.type === 'NOMINATE').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: 'nominated you',
+              timestamp: formatTimestamp(n.createdAt),
+              postImage: n.reel?.thumbnailUrl,
+            })),
+            ballots: notificationsRes.data.filter(n => n.type === 'BALLOT').map(n => ({
+              id: n.id,
+              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
+              content: 'added you to their ballot',
+              timestamp: formatTimestamp(n.createdAt),
+            })),
           }
           setNotifications(grouped)
           setActivity({
             likes: grouped.likes.length,
             comments: grouped.comments.length,
+            reposts: grouped.reposts.length,
             reviews: grouped.reviews.length,
+            nominates: grouped.nominates.length,
+            ballots: grouped.ballots.length,
           })
         }
       } catch (error) {
-        console.log('Using mock notifications:', error.message)
+        console.log('Failed to fetch notifications:', error.message)
       }
     }
-    fetchNotifications()
-  }, [])
+
+    fetchInitialData()
+
+    // Set up a timer to check for expired stories every minute (client-side expiry check)
+    const expiryCheckInterval = setInterval(() => {
+      setStories(prev => filterExpiredStories(prev))
+    }, 60000)
+
+    return () => clearInterval(expiryCheckInterval)
+  }, [userParty])
 
   // Handle compose search
   useEffect(() => {
@@ -250,11 +508,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     { id: 'requests', label: 'Requests', count: null },
   ]
 
-  const filteredMessages = messages.filter((msg) => {
+  // Filter and sort messages - party chat pinned at top, then by most recent
+  const filteredMessages = sortMessages(messages.filter((msg) => {
     if (activeFilter === 'unread') return msg.hasUnread
-    if (activeFilter === 'party') return msg.user.party === 'The Pink Lady Party'
+    if (activeFilter === 'party') return msg.isPartyChat || msg.partyId === userParty?.id
     return true
-  })
+  }))
 
   const handleOpenConversation = (message) => {
     setActiveConversation(message)
@@ -467,18 +726,25 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const renderActivityScreen = () => {
     if (!showActivity) return null
 
-    // Use API notifications with fallback to mock
+    // Use API notifications only - no mock fallback
     const activityNotifications = {
-      likes: notifications.likes.length > 0 ? notifications.likes : mockActivityNotifications.likes,
-      comments: notifications.comments.length > 0 ? notifications.comments : mockActivityNotifications.comments,
-      reviews: notifications.reviews.length > 0 ? notifications.reviews : mockActivityNotifications.reviews,
+      likes: notifications.likes || [],
+      comments: notifications.comments || [],
+      reposts: notifications.reposts || [],
+      reviews: notifications.reviews || [],
+      nominates: notifications.nominates || [],
+      ballots: notifications.ballots || [],
     }
 
     const allNotifications = [
       ...activityNotifications.likes.map(n => ({ ...n, type: 'like' })),
       ...activityNotifications.comments.map(n => ({ ...n, type: 'comment' })),
+      ...activityNotifications.reposts.map(n => ({ ...n, type: 'repost' })),
       ...activityNotifications.reviews.map(n => ({ ...n, type: 'review' })),
+      ...activityNotifications.nominates.map(n => ({ ...n, type: 'nominate' })),
+      ...activityNotifications.ballots.map(n => ({ ...n, type: 'ballot' })),
     ].sort((a, b) => {
+      // Sort by most recent first (smallest time value = most recent)
       const timeToMinutes = (t) => {
         if (!t) return 0
         if (t.includes('m')) return parseInt(t) || 0
@@ -489,13 +755,19 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       return timeToMinutes(a.timestamp) - timeToMinutes(b.timestamp)
     })
 
-    const filteredNotifications = activityFilter === 'all'
-      ? allNotifications
-      : activityFilter === 'likes'
-        ? activityNotifications.likes.map(n => ({ ...n, type: 'like' }))
-        : activityFilter === 'comments'
-          ? activityNotifications.comments.map(n => ({ ...n, type: 'comment' }))
-          : activityNotifications.reviews.map(n => ({ ...n, type: 'review' }))
+    const getFilteredNotifications = () => {
+      switch (activityFilter) {
+        case 'likes': return activityNotifications.likes.map(n => ({ ...n, type: 'like' }))
+        case 'comments': return activityNotifications.comments.map(n => ({ ...n, type: 'comment' }))
+        case 'reposts': return activityNotifications.reposts.map(n => ({ ...n, type: 'repost' }))
+        case 'reviews': return activityNotifications.reviews.map(n => ({ ...n, type: 'review' }))
+        case 'nominates': return activityNotifications.nominates.map(n => ({ ...n, type: 'nominate' }))
+        case 'ballots': return activityNotifications.ballots.map(n => ({ ...n, type: 'ballot' }))
+        default: return allNotifications
+      }
+    }
+
+    const filteredNotifications = getFilteredNotifications()
 
     return createPortal(
       <div className="activity-screen">
@@ -511,7 +783,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
         {/* Activity filters */}
         <div className="activity-filters">
-          {['all', 'likes', 'comments', 'reviews'].map(filter => (
+          {['all', 'likes', 'comments', 'reposts', 'reviews', 'nominates', 'ballots'].map(filter => (
             <button
               key={filter}
               className={`activity-filter-btn ${activityFilter === filter ? 'active' : ''}`}
@@ -524,51 +796,77 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
         {/* Notifications list */}
         <div className="activity-notifications-list">
-          {filteredNotifications.map(notification => {
-            const partyColor = getPartyColor(notification.user.party)
-            return (
-              <div key={notification.id} className="activity-notification-item">
-                <div className="activity-notification-avatar" style={{ borderColor: partyColor }}>
-                  <img src={notification.user.avatar} alt={notification.user.username} />
-                  <div className={`activity-notification-icon ${notification.type}`}>
-                    {notification.type === 'like' && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                    )}
-                    {notification.type === 'comment' && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                    )}
-                    {notification.type === 'review' && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                      </svg>
-                    )}
+          {filteredNotifications.length === 0 ? (
+            <div className="activity-empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="1.5">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <p>No activity yet</p>
+              <span>When people interact with your content, you'll see it here</span>
+            </div>
+          ) : (
+            filteredNotifications.map(notification => {
+              const partyColor = getPartyColor(notification.user?.party)
+              return (
+                <div key={notification.id} className="activity-notification-item">
+                  <div className="activity-notification-avatar" style={{ borderColor: partyColor }}>
+                    <img src={notification.user?.avatar} alt={notification.user?.username} />
+                    <div className={`activity-notification-icon ${notification.type}`}>
+                      {notification.type === 'like' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                      )}
+                      {notification.type === 'comment' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                      )}
+                      {notification.type === 'repost' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M7 17v-7h3l-4-4-4 4h3v9h10v-2H7zm10-10v7h-3l4 4 4-4h-3V5H9v2h8z"/>
+                        </svg>
+                      )}
+                      {notification.type === 'review' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                      )}
+                      {notification.type === 'nominate' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                      )}
+                      {notification.type === 'ballot' && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M18 13h-5v5c0 .55-.45 1-1 1s-1-.45-1-1v-5H6c-.55 0-1-.45-1-1s.45-1 1-1h5V6c0-.55.45-1 1-1s1 .45 1 1v5h5c.55 0 1 .45 1 1s-.45 1-1 1zm2-11H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                        </svg>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="activity-notification-content">
-                  <p>
-                    <strong>{notification.user.username}</strong> {notification.content}
-                  </p>
-                  <span className="activity-notification-time">{notification.timestamp}</span>
-                </div>
-                {notification.postImage && (
-                  <img src={notification.postImage} alt="" className="activity-notification-post" />
-                )}
-                {notification.rating && (
-                  <div className="activity-notification-stars">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <svg key={star} width="14" height="14" viewBox="0 0 24 24" fill={star <= notification.rating ? '#FFD700' : '#444'}>
-                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                      </svg>
-                    ))}
+                  <div className="activity-notification-content">
+                    <p>
+                      <strong>{notification.user?.username}</strong> {notification.content}
+                    </p>
+                    <span className="activity-notification-time">{notification.timestamp}</span>
                   </div>
-                )}
-              </div>
-            )
-          })}
+                  {notification.postImage && (
+                    <img src={notification.postImage} alt="" className="activity-notification-post" />
+                  )}
+                  {notification.rating && (
+                    <div className="activity-notification-stars">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <svg key={star} width="14" height="14" viewBox="0 0 24 24" fill={star <= notification.rating ? '#FFD700' : '#444'}>
+                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
       </div>,
       document.body
@@ -843,17 +1141,60 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               <span className="activity-label">Comments</span>
             </div>
           </div>
-          <div className="messages-activity-card" onClick={(e) => { e.stopPropagation(); setActivityFilter('reviews'); setShowActivity(true); }}>
-            <div className="activity-icon reviews">
+          <div className="messages-activity-card" onClick={(e) => { e.stopPropagation(); setActivityFilter('reposts'); setShowActivity(true); }}>
+            <div className="activity-icon reposts">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                <path d="M7 17v-7h3l-4-4-4 4h3v9h10v-2H7zm10-10v7h-3l4 4 4-4h-3V5H9v2h8z"/>
               </svg>
             </div>
             <div className="activity-info">
-              <span className="activity-count">{activity.reviews || mockActivity.reviews}</span>
-              <span className="activity-label">Reviews</span>
+              <span className="activity-count">{activity.reposts || mockActivity.reposts}</span>
+              <span className="activity-label">Reposts</span>
             </div>
           </div>
+          {isCandidate && (
+            <>
+              <div className="messages-activity-card" onClick={(e) => { e.stopPropagation(); setActivityFilter('reviews'); setShowActivity(true); }}>
+                <div className="activity-icon reviews">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                  </svg>
+                </div>
+                <div className="activity-info">
+                  <span className="activity-count">{activity.reviews || mockActivity.reviews}</span>
+                  <span className="activity-label">Reviews</span>
+                </div>
+              </div>
+              <div className="messages-activity-card" onClick={(e) => { e.stopPropagation(); setActivityFilter('nominates'); setShowActivity(true); }}>
+                <div className="activity-icon nominates">
+                  <svg width="20" height="20" viewBox="0 0 24 24">
+                    <defs>
+                      <linearGradient id="nominateGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#00F2EA" />
+                        <stop offset="100%" stopColor="#FF2A55" />
+                      </linearGradient>
+                    </defs>
+                    <path fill="url(#nominateGradient)" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                </div>
+                <div className="activity-info">
+                  <span className="activity-count">{activity.nominates || mockActivity.nominates}</span>
+                  <span className="activity-label">Nominates</span>
+                </div>
+              </div>
+              <div className="messages-activity-card" onClick={(e) => { e.stopPropagation(); setActivityFilter('ballots'); setShowActivity(true); }}>
+                <div className="activity-icon ballots">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 13h-5v5c0 .55-.45 1-1 1s-1-.45-1-1v-5H6c-.55 0-1-.45-1-1s.45-1 1-1h5V6c0-.55.45-1 1-1s1 .45 1 1v5h5c.55 0 1 .45 1 1s-.45 1-1 1zm2-11H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                  </svg>
+                </div>
+                <div className="activity-info">
+                  <span className="activity-count">{activity.ballots || mockActivity.ballots}</span>
+                  <span className="activity-label">Ballots</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -873,41 +1214,65 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
       {/* Messages List */}
       <div className="messages-list">
-        {filteredMessages.map((message) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            onClick={() => handleOpenConversation(message)}
-          />
-        ))}
+        {filteredMessages.length === 0 ? (
+          <div className="messages-empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <p>No messages yet</p>
+            <span>Start a conversation with someone</span>
+          </div>
+        ) : (
+          filteredMessages.map((message) => (
+            <MessageItem
+              key={message.id}
+              message={message}
+              isPinned={message.isPartyChat || message.partyId === userParty?.id}
+              onClick={() => handleOpenConversation(message)}
+            />
+          ))
+        )}
       </div>
     </div>
     </>
   )
 }
 
-function MessageItem({ message, onClick }) {
-  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread } = message
-  const partyColor = getPartyColor(user.party)
+function MessageItem({ message, isPinned, onClick }) {
+  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat } = message
+  const partyColor = getPartyColor(user?.party)
 
   return (
-    <div className="message-item" onClick={onClick}>
+    <div className={`message-item ${isPinned ? 'pinned' : ''}`} onClick={onClick}>
+      {isPinned && (
+        <div className="message-pinned-indicator">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+          </svg>
+        </div>
+      )}
       <div className="message-avatar-container">
         <div
           className="message-avatar"
           style={{ borderColor: partyColor }}
         >
-          <img src={user.avatar} alt={user.username} />
-          <span className="message-avatar-label">{user.username.split('.')[0]}</span>
+          {user?.avatar ? (
+            <img src={user.avatar} alt={user?.username} />
+          ) : (
+            <div className="message-avatar-placeholder">
+              {isPartyChat ? '🎉' : (user?.username?.[0] || '?')}
+            </div>
+          )}
+          <span className="message-avatar-label">{isPartyChat ? 'Party' : user?.username?.split('.')[0]}</span>
         </div>
       </div>
 
       <div className="message-content">
         <div className="message-username-row">
-          <span className="message-username">{user.username}</span>
+          <span className="message-username">{isPartyChat ? 'Party Chat' : user?.username}</span>
           {isOnline && <span className="message-online-dot" />}
         </div>
-        <span className="message-preview">{lastMessage}</span>
+        <span className="message-preview">{lastMessage || 'No messages yet'}</span>
       </div>
 
       <div className="message-meta">

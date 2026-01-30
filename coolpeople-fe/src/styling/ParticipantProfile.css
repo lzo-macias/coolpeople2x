@@ -147,6 +147,15 @@
   gap: 0;
 }
 
+.participant-profile .stat-item.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.participant-profile .stat-item.clickable:hover {
+  opacity: 0.7;
+}
+
 .participant-profile .stat-number {
   font-size: 17px;
   font-weight: 400;

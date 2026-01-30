@@ -253,7 +253,25 @@ export const leaveRace = async (
   });
   if (!competitor) throw new NotFoundError('Race competitor');
 
-  await prisma.raceCompetitor.delete({ where: { id: competitor.id } });
+  // Delete both competitor entry and point ledger
+  await prisma.$transaction([
+    prisma.raceCompetitor.delete({ where: { id: competitor.id } }),
+    prisma.pointLedger.deleteMany({ where: { userId, raceId } }),
+  ]);
+};
+
+// -----------------------------------------------------------------------------
+// Remove User from All Races (when userType changes to PARTICIPANT)
+// -----------------------------------------------------------------------------
+
+export const removeUserFromAllRaces = async (userId: string): Promise<void> => {
+  // Delete all race competitor entries for this user
+  await prisma.raceCompetitor.deleteMany({ where: { userId } });
+
+  // Delete all point ledger entries for this user
+  await prisma.pointLedger.deleteMany({ where: { userId } });
+
+  console.log(`Removed user ${userId} from all races`);
 };
 
 // -----------------------------------------------------------------------------
@@ -268,14 +286,24 @@ export const getCompetitors = async (
   const race = await prisma.race.findUnique({ where: { id: raceId } });
   if (!race) throw new NotFoundError('Race');
 
+  // For CANDIDATE_VS_CANDIDATE races, only show candidates
+  // For PARTY_VS_PARTY races, only show parties
+  const whereClause: any = { raceId };
+  if (race.raceType === 'CANDIDATE_VS_CANDIDATE') {
+    whereClause.user = { userType: 'CANDIDATE' };
+    whereClause.userId = { not: null };
+  } else if (race.raceType === 'PARTY_VS_PARTY') {
+    whereClause.partyId = { not: null };
+  }
+
   const ledgers = await prisma.pointLedger.findMany({
-    where: { raceId },
+    where: whereClause,
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { totalPoints: 'desc' },
     include: {
       user: {
-        select: { id: true, username: true, displayName: true, avatarUrl: true },
+        select: { id: true, username: true, displayName: true, avatarUrl: true, userType: true },
       },
       party: {
         select: { id: true, name: true, handle: true, avatarUrl: true },
@@ -313,7 +341,8 @@ export const getScoreboard = async (
   raceId: string,
   period: string = 'all',
   cursor?: string,
-  limit: number = 20
+  limit: number = 20,
+  viewerId?: string
 ): Promise<{ entries: ScoreboardEntry[]; nextCursor: string | null }> => {
   const { competitors, nextCursor } = await getCompetitors(raceId, cursor, limit);
 
@@ -339,9 +368,26 @@ export const getScoreboard = async (
     snapshotMap.set(snap.ledgerId, arr);
   }
 
+  // Get viewer's favorites to determine isFavorited for each entry
+  let favoritedUserIds = new Set<string>();
+  if (viewerId) {
+    const userIds = competitors.map((c) => c.user?.id).filter((id): id is string => !!id);
+    if (userIds.length > 0) {
+      const favorites = await prisma.favorite.findMany({
+        where: {
+          userId: viewerId,
+          favoritedUserId: { in: userIds },
+        },
+        select: { favoritedUserId: true },
+      });
+      favoritedUserIds = new Set(favorites.map((f) => f.favoritedUserId));
+    }
+  }
+
   const entries: ScoreboardEntry[] = competitors.map((c) => ({
     ...c,
     sparkline: snapshotMap.get(c.id) ?? [],
+    isFavorited: viewerId && c.user?.id ? favoritedUserIds.has(c.user.id) : false,
   }));
 
   return { entries, nextCursor };

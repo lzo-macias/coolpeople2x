@@ -33,8 +33,22 @@ const formatReel = (
   reel: any,
   viewerId?: string
 ): ReelResponse => {
+  // Get user's party from their membership (if any)
+  const userParty = reel.user.partyMemberships?.[0]?.party;
+
   return {
     id: reel.id,
+    // Use 'user' to match frontend expectations
+    user: {
+      id: reel.user.id,
+      username: reel.user.username,
+      displayName: reel.user.displayName,
+      avatar: reel.user.avatarUrl,
+      avatarUrl: reel.user.avatarUrl,
+      party: userParty?.name ?? null,
+      isParticipant: reel.user.userType === 'PARTICIPANT',
+    },
+    // Keep creator for backwards compatibility
     creator: {
       id: reel.user.id,
       username: reel.user.username,
@@ -46,22 +60,34 @@ const formatReel = (
       : null,
     videoUrl: reel.videoUrl,
     thumbnailUrl: reel.thumbnailUrl,
+    thumbnail: reel.thumbnailUrl, // Alias for frontend compatibility
     selfieOverlayUrl: reel.selfieOverlayUrl,
     duration: reel.duration,
     title: reel.title,
     description: reel.description,
+    caption: reel.description, // Frontend uses 'caption'
+    isMirrored: reel.isMirrored ?? false,
     likeCount: reel.likeCount,
     commentCount: reel.commentCount,
     shareCount: reel.shareCount,
     saveCount: reel.saveCount,
     repostCount: reel.repostCount,
     viewCount: reel.viewCount,
+    stats: {
+      likes: String(reel.likeCount || 0),
+      comments: String(reel.commentCount || 0),
+      shares: String(reel.shareCount || 0),
+      saves: String(reel.saveCount || 0),
+      votes: '0',
+      shazam: '0',
+    },
     isLiked: viewerId ? reel.likes?.some((l: any) => l.userId === viewerId) : undefined,
     isSaved: viewerId ? reel.saves?.some((s: any) => s.userId === viewerId) : undefined,
     isReposted: viewerId ? reel.reposts?.some((r: any) => r.userId === viewerId) : undefined,
     hashtags: reel.hashtags?.map((h: any) => h.hashtag.name) ?? [],
     mentions: reel.mentions?.map((m: any) => ({ id: m.user.id, username: m.user.username })) ?? [],
     raceTargets: reel.raceTargets?.map((t: any) => ({ id: t.race.id, title: t.race.title })) ?? [],
+    targetRace: reel.raceTargets?.[0]?.race?.title ?? null,
     quoteParent: reel.quoteParent
       ? {
           id: reel.quoteParent.id,
@@ -76,7 +102,21 @@ const formatReel = (
 // Standard includes for reel queries
 const reelIncludes = (viewerId?: string) => ({
   user: {
-    select: { id: true, username: true, displayName: true, avatarUrl: true },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      avatarUrl: true,
+      userType: true,
+      partyMemberships: {
+        take: 1,
+        include: {
+          party: {
+            select: { id: true, name: true, handle: true },
+          },
+        },
+      },
+    },
   },
   party: {
     select: { id: true, name: true, handle: true },
@@ -161,6 +201,7 @@ export const createReel = async (
       thumbnailUrl: data.thumbnailUrl,
       selfieOverlayUrl: data.selfieOverlayUrl,
       duration: data.duration,
+      isMirrored: data.isMirrored ?? false,
       title: data.title,
       description: data.description,
       quoteParentId: data.quoteParentId,
@@ -445,6 +486,40 @@ export const unrepostReel = async (
 };
 
 // -----------------------------------------------------------------------------
+// Get User Reposts
+// -----------------------------------------------------------------------------
+
+export const getUserReposts = async (
+  userId: string,
+  viewerId?: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ reels: ReelResponse[]; nextCursor: string | null }> => {
+  const reposts = await prisma.repost.findMany({
+    where: { userId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      reel: {
+        include: reelIncludes(viewerId),
+      },
+    },
+  });
+
+  const hasMore = reposts.length > limit;
+  const results = hasMore ? reposts.slice(0, -1) : reposts;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  // Filter out deleted reels and format
+  const reels = results
+    .filter((r) => r.reel && !r.reel.deletedAt)
+    .map((r) => formatReel(r.reel, viewerId));
+
+  return { reels, nextCursor };
+};
+
+// -----------------------------------------------------------------------------
 // Record Watch Event (View)
 // -----------------------------------------------------------------------------
 
@@ -518,8 +593,9 @@ export const hideUser = async (
 };
 
 // -----------------------------------------------------------------------------
-// Feed: Following Feed (MVP)
-// Weighted scoring: recency + favorite boost + affinity + popularity
+// Feed: For You Feed (MVP)
+// Shows ALL reels, weighted by: recency + favorite boost + affinity + popularity
+// Later: Add vector embeddings for personalized recommendations
 // -----------------------------------------------------------------------------
 
 export const getFollowingFeed = async (
@@ -530,21 +606,27 @@ export const getFollowingFeed = async (
   const offset = cursor ? parseInt(cursor, 10) : 0;
 
   // Raw SQL for weighted feed scoring
-  // Note: Prisma stores IDs as text (not uuid), column names are camelCase
+  // Shows ALL reels (global feed), prioritized by engagement signals
+  // Hidden/blocked users are filtered out
   const feedReels: any[] = await prisma.$queryRaw`
     SELECT r.id,
       GREATEST(0, 100 - EXTRACT(EPOCH FROM (NOW() - r."createdAt")) / 3600 * 2) as recency_score,
       CASE WHEN fav.id IS NOT NULL THEN 50 ELSE 0 END as favorite_boost,
       COALESCE(a.score, 0) * 20 as affinity_score,
       (r."likeCount" + r."commentCount" + r."shareCount") * 0.5 as popularity_score,
+      CASE WHEN r."userId" = ${userId} THEN 25 ELSE 0 END as own_post_boost,
+      CASE WHEN fo.id IS NOT NULL THEN 10 ELSE 0 END as following_boost,
       (
         GREATEST(0, 100 - EXTRACT(EPOCH FROM (NOW() - r."createdAt")) / 3600 * 2) +
         CASE WHEN fav.id IS NOT NULL THEN 50 ELSE 0 END +
         COALESCE(a.score, 0) * 20 +
-        (r."likeCount" + r."commentCount" + r."shareCount") * 0.5
+        (r."likeCount" + r."commentCount" + r."shareCount") * 0.5 +
+        CASE WHEN r."userId" = ${userId} THEN 25 ELSE 0 END +
+        CASE WHEN fo.id IS NOT NULL THEN 10 ELSE 0 END
       ) as total_score
     FROM "Reel" r
-    INNER JOIN "Follow" fo ON r."userId" = fo."followingId" AND fo."followerId" = ${userId}
+    JOIN "User" u ON r."userId" = u.id
+    LEFT JOIN "Follow" fo ON r."userId" = fo."followingId" AND fo."followerId" = ${userId}
     LEFT JOIN "Favorite" fav ON r."userId" = fav."favoritedUserId" AND fav."userId" = ${userId}
     LEFT JOIN "UserAffinity" a ON r."userId" = a."targetUserId" AND a."userId" = ${userId}
     LEFT JOIN "Hide" h ON (
@@ -553,7 +635,6 @@ export const getFollowingFeed = async (
     )
     LEFT JOIN "Block" b ON r."userId" = b."blockedId" AND b."blockerId" = ${userId}
     WHERE r."deletedAt" IS NULL
-      AND r."userId" != ${userId}
       AND h.id IS NULL
       AND b.id IS NULL
     ORDER BY total_score DESC, r."createdAt" DESC

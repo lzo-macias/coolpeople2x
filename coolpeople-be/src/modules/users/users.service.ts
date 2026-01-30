@@ -8,6 +8,8 @@ import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.j
 import { SYSTEM_RACES, POINT_WEIGHTS } from '../../config/constants.js';
 import { recordPointEvent } from '../points/points.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { removeUserFromAllRaces } from '../races/races.service.js';
+import { emitFollowUpdate } from '../../lib/socket.js';
 import type { PublicProfile, PrivateProfile, UpdateProfileRequest, FollowRequestResponse } from './users.types.js';
 
 // -----------------------------------------------------------------------------
@@ -18,7 +20,7 @@ import type { PublicProfile, PrivateProfile, UpdateProfileRequest, FollowRequest
 
 export const getPublicProfile = async (
   userId: string,
-  _viewerId?: string
+  viewerId?: string
 ): Promise<PublicProfile> => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -40,12 +42,65 @@ export const getPublicProfile = async (
       reviewsReceived: {
         select: { rating: true },
       },
+      partyMemberships: {
+        include: {
+          party: {
+            select: { id: true, name: true },
+          },
+        },
+        take: 1,
+      },
+      raceFollows: {
+        include: {
+          race: {
+            select: { id: true, title: true },
+          },
+        },
+      },
+      raceCompetitions: {
+        include: {
+          race: {
+            select: { id: true, title: true },
+          },
+        },
+      },
     },
   });
 
   if (!user) {
     throw new NotFoundError('User');
   }
+
+  // Check if viewer is following this user
+  let isFollowing = false;
+  if (viewerId && viewerId !== userId) {
+    const followRecord = await prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: viewerId,
+          followingId: userId,
+        },
+      },
+    });
+    isFollowing = !!followRecord;
+  }
+
+  // Check if viewer has favorited this user (only for candidates)
+  let isFavorited = false;
+  if (viewerId && viewerId !== userId && user.userType === 'CANDIDATE') {
+    const favoriteRecord = await prisma.favorite.findUnique({
+      where: {
+        userId_favoritedUserId: {
+          userId: viewerId,
+          favoritedUserId: userId,
+        },
+      },
+    });
+    isFavorited = !!favoriteRecord;
+  }
+
+  // Get primary party name if user is in a party
+  const primaryParty = user.partyMemberships[0]?.party?.name || null;
 
   const profile: PublicProfile = {
     id: user.id,
@@ -59,7 +114,20 @@ export const getPublicProfile = async (
     createdAt: user.createdAt,
     followersCount: user._count.followers,
     followingCount: user._count.following,
+    party: primaryParty,
+    isFollowing,
+    isFavorited,
   };
+
+  // Add race data for all users (sitewide)
+  profile.racesFollowing = user.raceFollows.map((f) => ({
+    id: f.race.id,
+    title: f.race.title,
+  }));
+  profile.racesCompeting = user.raceCompetitions.map((c) => ({
+    id: c.race.id,
+    title: c.race.title,
+  }));
 
   // Add candidate-only fields
   if (user.userType === 'CANDIDATE') {
@@ -509,7 +577,7 @@ export const followUser = async (
     // Send notification to the followed user
     const follower = await prisma.user.findUnique({
       where: { id: followerId },
-      select: { username: true },
+      select: { id: true, username: true, avatarUrl: true },
     });
     createNotification({
       userId: followingId,
@@ -518,6 +586,14 @@ export const followUser = async (
       body: `${follower?.username ?? 'Someone'} started following you`,
       data: { followerId },
     }).catch(() => {});
+    // Emit real-time follow update
+    if (follower) {
+      emitFollowUpdate(followingId, {
+        id: follower.id,
+        username: follower.username,
+        avatarUrl: follower.avatarUrl,
+      }, true);
+    }
   } catch (err: any) {
     if (err?.code === 'P2002') throw new ConflictError('Already following this user');
     throw err;
@@ -538,10 +614,161 @@ export const unfollowUser = async (
 
   if (!existing) throw new NotFoundError('Follow');
 
+  // Get follower info before deleting
+  const follower = await prisma.user.findUnique({
+    where: { id: followerId },
+    select: { id: true, username: true, avatarUrl: true },
+  });
+
   await prisma.follow.delete({ where: { id: existing.id } });
 
   // Deduct UNFOLLOW points from the unfollowed user
   awardUnfollowPoints(followerId, followingId).catch(() => {});
+
+  // Emit real-time unfollow update
+  if (follower) {
+    emitFollowUpdate(followingId, {
+      id: follower.id,
+      username: follower.username,
+      avatarUrl: follower.avatarUrl,
+    }, false);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Get Followers List
+// -----------------------------------------------------------------------------
+
+export interface FollowUser {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  party: string | null;
+  userType: string;
+  isFollowing: boolean; // Whether the viewer follows this user
+}
+
+export const getFollowers = async (
+  userId: string,
+  viewerId?: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ followers: FollowUser[]; nextCursor: string | null }> => {
+  const followers = await prisma.follow.findMany({
+    where: { followingId: userId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      follower: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          userType: true,
+          partyMemberships: {
+            include: { party: { select: { name: true } } },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  const hasMore = followers.length > limit;
+  const items = hasMore ? followers.slice(0, -1) : followers;
+  const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+  // Check which followers the viewer is following
+  let viewerFollowing: Set<string> = new Set();
+  if (viewerId) {
+    const viewerFollows = await prisma.follow.findMany({
+      where: {
+        followerId: viewerId,
+        followingId: { in: items.map(f => f.follower.id) },
+      },
+      select: { followingId: true },
+    });
+    viewerFollowing = new Set(viewerFollows.map(f => f.followingId));
+  }
+
+  return {
+    followers: items.map(f => ({
+      id: f.follower.id,
+      username: f.follower.username,
+      displayName: f.follower.displayName,
+      avatarUrl: f.follower.avatarUrl,
+      party: f.follower.partyMemberships[0]?.party?.name || null,
+      userType: f.follower.userType,
+      isFollowing: viewerFollowing.has(f.follower.id),
+    })),
+    nextCursor,
+  };
+};
+
+// -----------------------------------------------------------------------------
+// Get Following List
+// -----------------------------------------------------------------------------
+
+export const getFollowing = async (
+  userId: string,
+  viewerId?: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ following: FollowUser[]; nextCursor: string | null }> => {
+  const following = await prisma.follow.findMany({
+    where: { followerId: userId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      following: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          userType: true,
+          partyMemberships: {
+            include: { party: { select: { name: true } } },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  const hasMore = following.length > limit;
+  const items = hasMore ? following.slice(0, -1) : following;
+  const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+  // Check which users the viewer is following
+  let viewerFollowing: Set<string> = new Set();
+  if (viewerId) {
+    const viewerFollows = await prisma.follow.findMany({
+      where: {
+        followerId: viewerId,
+        followingId: { in: items.map(f => f.following.id) },
+      },
+      select: { followingId: true },
+    });
+    viewerFollowing = new Set(viewerFollows.map(f => f.followingId));
+  }
+
+  return {
+    following: items.map(f => ({
+      id: f.following.id,
+      username: f.following.username,
+      displayName: f.following.displayName,
+      avatarUrl: f.following.avatarUrl,
+      party: f.following.partyMemberships[0]?.party?.name || null,
+      userType: f.following.userType,
+      isFollowing: viewerFollowing.has(f.following.id),
+    })),
+    nextCursor,
+  };
 };
 
 // -----------------------------------------------------------------------------
@@ -654,16 +881,17 @@ export const revertToParticipant = async (userId: string): Promise<PrivateProfil
     throw new ConflictError('You are already a participant');
   }
 
-  // Update user to participant and freeze points
-  // Note: We keep the point ledgers and reviews but mark user as frozen
-  // isPrivate stays false — they can choose to go private later
+  // Update user to participant
   await prisma.user.update({
     where: { id: userId },
     data: {
       userType: 'PARTICIPANT',
-      isFrozen: true, // Points frozen, reviews persist
+      isFrozen: true,
     },
   });
+
+  // Remove from all races and scoreboards
+  await removeUserFromAllRaces(userId);
 
   return getPrivateProfile(userId);
 };
