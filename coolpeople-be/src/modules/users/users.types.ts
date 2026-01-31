@@ -23,8 +23,8 @@ export interface PublicProfile {
   followersCount: number;
   followingCount: number;
 
-  // Party
-  party?: string | null;
+  // Primary party affiliation
+  party?: { id: string; name: string } | null;
 
   // Viewer-specific fields
   isFollowing?: boolean;

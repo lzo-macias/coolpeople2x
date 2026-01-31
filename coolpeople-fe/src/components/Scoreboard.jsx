@@ -27,7 +27,7 @@ const frontRunners = [
   { id: 'fr-3', rank: 3, label: 'Third Place', nominations: '15,000', avatar: 'https://i.pravatar.cc/100?img=44', party: null },
 ]
 
-function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange, currentUserId, userRacesFollowing = [], userRacesCompeting = [] }) {
+function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 0, onFavoriteChange, currentUserId, userRacesFollowing = [], userRacesCompeting = [] }) {
   const [users, setUsers] = useState(mockScoreboard)
   const [parties, setParties] = useState(mockPartyScoreboard)
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
@@ -80,7 +80,9 @@ function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange,
                   partyName: entry.party?.name || entry.name,
                   color: entry.party?.color || '#e91e8c',
                   avatar: entry.party?.avatarUrl || entry.avatarUrl,
-                  score: entry.totalPoints,
+                  members: entry.party?.memberCount || entry.memberCount || 0,
+                  score: entry.totalPoints || 0,
+                  change: entry.change || 0,
                   sparklineData: entry.sparkline?.map(s => s.points) || [],
                   isFavorited: entry.isFavorited || false,
                 })))
@@ -91,7 +93,8 @@ function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange,
                   userId: entry.user?.id || entry.id,
                   username: entry.user?.username || entry.username,
                   avatar: entry.user?.avatarUrl || entry.avatarUrl,
-                  party: entry.user?.party || entry.party,
+                  party: entry.user?.party?.name || entry.party,
+                  partyId: entry.user?.party?.id || null,
                   score: entry.totalPoints,
                   sparklineData: entry.sparkline?.map(s => s.points) || [],
                   isFavorited: entry.isFavorited || false,
@@ -544,7 +547,7 @@ function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange,
                       party={item}
                       rank={index + 1}
                       onToggleFavorite={handleTogglePartyFavorite}
-                      onOpenProfile={onOpenProfile}
+                      onOpenProfile={(party) => onOpenPartyProfile?.({ id: party.partyId, name: party.partyName || party.name })}
                       showLoadMore={hasMore && index === visibleItems.length - 1}
                       isExpanded={isExpanded}
                       onToggleExpand={() => setIsExpanded(!isExpanded)}
@@ -556,6 +559,7 @@ function Scoreboard({ onOpenProfile, isActive, refreshKey = 0, onFavoriteChange,
                       rank={index + 1}
                       onToggleFavorite={handleToggleFavorite}
                       onOpenProfile={onOpenProfile}
+                      onPartyClick={onOpenPartyProfile}
                       showLoadMore={hasMore && index === visibleItems.length - 1}
                       isExpanded={isExpanded}
                       onToggleExpand={() => setIsExpanded(!isExpanded)}

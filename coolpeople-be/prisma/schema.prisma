@@ -138,6 +138,11 @@ model User {
   isFrozen        Boolean   @default(false)  // Candidate reverted to participant
   isPrivate       Boolean   @default(false)  // Only applies to PARTICIPANT role
 
+  // Primary party affiliation (displayed on profile sitewide)
+  // Users can be members of multiple parties, but this is their PRIMARY affiliation
+  partyId         String?
+  party           Party?    @relation("PrimaryPartyMembers", fields: [partyId], references: [id])
+
   // OAuth
   googleId        String?   @unique
   appleId         String?   @unique
@@ -262,6 +267,9 @@ model Party {
   // -------------------------------------------------------------------------
   // Relations
   // -------------------------------------------------------------------------
+
+  // Primary affiliates (users who have this as their displayed party)
+  primaryMembers  User[]    @relation("PrimaryPartyMembers")
 
   // Members
   memberships     PartyMembership[]

@@ -22,7 +22,7 @@ import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
-import { mockReels, mockPartyProfiles, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
+import { mockReels, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
@@ -60,7 +60,7 @@ function AppContent() {
   const [conversations, setConversations] = useState({ ...mockConversations }) // Chat messages by conversation ID
   const [userActivity, setUserActivity] = useState([]) // Track all user actions for details page
   const [isLoading, setIsLoading] = useState(false)
-  const [partyProfiles, setPartyProfiles] = useState({ ...mockPartyProfiles }) // Party profiles cache
+  const [partyProfiles, setPartyProfiles] = useState({}) // Party profiles cache (populated from API)
   const [userProfilesCache, setUserProfilesCache] = useState({}) // Centralized user profiles cache
   const [scoreboardRefreshKey, setScoreboardRefreshKey] = useState(0) // Triggers scoreboard refetch when changed
   const [messageTargetUser, setMessageTargetUser] = useState(null) // User to start conversation with
@@ -147,6 +147,39 @@ function AppContent() {
         if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting)
         if (profile.points) setUserPoints(profile.points)
         if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
+
+        // Load user's party if they have one (from new partyId relation)
+        console.log('Profile party data:', profile.party)
+        if (profile.party && profile.party.id) {
+          console.log('Loading full party details for:', profile.party.id)
+          try {
+            const partyResponse = await partiesApi.getParty(profile.party.id)
+            const partyData = partyResponse.data?.party || partyResponse.party || partyResponse.data || partyResponse
+            if (partyData) {
+              const newUserParty = {
+                id: partyData.id,
+                name: partyData.name,
+                handle: partyData.handle,
+                bio: partyData.bio || partyData.description,
+                color: partyData.color || '#FF2A55',
+                photo: partyData.avatarUrl || partyData.avatar,
+                type: partyData.type || 'open',
+                privacy: partyData.privacy || 'public',
+                stats: partyData.stats,
+              }
+              console.log('Setting userParty to:', newUserParty)
+              setUserParty(newUserParty)
+            }
+          } catch (partyError) {
+            console.log('Could not load full party details:', partyError.message)
+            // At minimum, set the party info so profile shows it
+            setUserParty({ id: profile.party.id, name: profile.party.name })
+          }
+        } else if (profile.parties && profile.parties.length > 0) {
+          // Fallback: old memberships-based approach
+          const primaryPartyInfo = profile.parties[0]
+          setUserParty({ id: primaryPartyInfo.id, name: primaryPartyInfo.name, handle: primaryPartyInfo.handle })
+        }
       } catch (error) {
         console.log('Using local state for profile:', error.message)
       }
@@ -365,6 +398,7 @@ function AppContent() {
         caption: postData.caption || '',
         engagementScores: defaultEngagementScores,
         stats: { votes: '0', likes: '1', comments: '0', shazam: '0', shares: '0' },
+        isLiked: true, // Creator auto-likes their own post
         targetRace: postData.targetRace || null,
         createdAt: new Date().toISOString(),
         isMirrored: postData.isMirrored || false,
@@ -584,41 +618,34 @@ function AppContent() {
     setActiveCandidate(null)
   }
 
-  const handleOpenPartyProfile = (partyName) => {
+  // Helper to check if a string is a UUID
+  const isUUID = (str) => {
+    if (typeof str !== 'string') return false
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(str)
+  }
+
+  const handleOpenPartyProfile = (partyIdentifier) => {
+    // partyIdentifier can be: party name (string), party ID (UUID string), or object with {id, name}
+    const partyId = typeof partyIdentifier === 'object' ? partyIdentifier.id : (isUUID(partyIdentifier) ? partyIdentifier : null)
+    const partyName = typeof partyIdentifier === 'object' ? (partyIdentifier.name || partyIdentifier.partyName) : partyIdentifier
+    const cacheKey = partyId || partyName
+
     // First check if it's the user's created party
-    if (userParty && (partyName === userParty.name || partyName === userParty.handle)) {
-      // Build party profile data from user's party with their posts
-      const partyStats = userParty.stats || {
-        members: 1,
-        followers: 0,
-        posts: partyPosts.length,
-        cpPoints: 100,
-        tier: 'Bronze',
-        change: '+0.00',
-        chartChange: '+0.0%',
-        sparklineData: [100, 100, 100, 100, 100, 100, 100],
-        ranking: 'New'
-      }
+    if (userParty && (partyName === userParty.name || partyName === userParty.handle || partyId === userParty.id)) {
+      // Pass minimal party data - let PartyProfile fetch real stats from API
+      // IMPORTANT: Must include id so PartyProfile can fetch from API
       const userPartyProfile = {
+        id: userParty.id, // Critical for API fetch
         name: userParty.name,
         handle: userParty.handle,
         color: userParty.color,
         type: userParty.type,
-        avatar: userParty.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(userParty.name)}&background=${userParty.color.replace('#', '')}&color=fff&size=150`,
-        bio: userParty.bio || `Welcome to ${userParty.name}! A new political party making a difference.`,
-        // Top-level members/followers for compatibility with mockParty merge
-        members: partyStats.members,
-        followers: partyStats.followers,
-        cpPoints: partyStats.cpPoints,
-        stats: partyStats,
+        avatar: userParty.photo || userParty.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userParty.name)}&background=${userParty.color?.replace('#', '') || 'e91e8c'}&color=fff&size=150`,
+        bio: userParty.bio || userParty.description,
         posts: partyPosts,
         isUserParty: true,
-        // New party baseline data
-        isNewParty: userParty.isNewParty !== false, // Default to true for user parties
-        races: userParty.races || ['Best Party'],
-        testimonials: userParty.testimonials || { cpVerified: [], community: [] },
-        icebreakers: userParty.icebreakers || null,
-        reviews: userParty.reviews || [],
+        isNewParty: userParty.isNewParty !== false,
       }
       saveToHistory()
       setShowComments(false)
@@ -629,8 +656,8 @@ function AppContent() {
       return
     }
 
-    // Check cached party profiles first
-    const cachedParty = partyProfiles[partyName]
+    // Check cached party profiles first (by ID or name)
+    const cachedParty = partyProfiles[cacheKey] || (partyId && partyProfiles[partyId]) || partyProfiles[partyName]
     if (cachedParty) {
       saveToHistory()
       setShowComments(false)
@@ -644,29 +671,35 @@ function AppContent() {
     // Try to fetch from API
     const fetchPartyProfile = async () => {
       try {
-        // Try to find party by name in API
-        const response = await partiesApi.getParty(partyName)
-        if (response) {
-          // Cache the party profile
-          setPartyProfiles(prev => ({ ...prev, [partyName]: response }))
+        let response
+        // If we have a UUID, fetch by ID; otherwise fetch by handle/name
+        if (partyId) {
+          response = await partiesApi.getParty(partyId)
+        } else {
+          // Try to fetch by handle or name (backend searches both)
+          response = await partiesApi.getPartyByHandle(partyName)
+        }
+        // Backend returns { success: true, data: { party: {...} } }
+        const partyData = response?.data?.party || response?.party
+        if (partyData) {
+          // Cache the party profile by both ID and name
+          setPartyProfiles(prev => ({
+            ...prev,
+            [partyData.id]: partyData,
+            [partyData.name]: partyData,
+            [partyData.handle]: partyData,
+          }))
           saveToHistory()
           setShowComments(false)
           setShowProfile(false)
           setShowParticipantProfile(false)
-          setActiveParty(response)
+          setActiveParty(partyData)
           setShowPartyProfile(true)
         }
       } catch (error) {
-        // Fallback to mock data
-        const mockParty = mockPartyProfiles[partyName]
-        if (mockParty) {
-          saveToHistory()
-          setShowComments(false)
-          setShowProfile(false)
-          setShowParticipantProfile(false)
-          setActiveParty(mockParty)
-          setShowPartyProfile(true)
-        }
+        console.error('Party fetch error:', error.message)
+        // Don't fall back to mock data - it has fake stats
+        // PartyProfile will show loading/error state
       }
     }
     fetchPartyProfile()
@@ -986,6 +1019,7 @@ function AppContent() {
         <div className="page">
           <Scoreboard
             onOpenProfile={handleOpenProfile}
+            onOpenPartyProfile={handleOpenPartyProfile}
             isActive={currentPage === 0}
             refreshKey={scoreboardRefreshKey}
             currentUserId={currentUser.id}
@@ -1085,27 +1119,80 @@ function AppContent() {
         <div className="create-screen-container">
           <CreateScreen
             onClose={() => setShowCreateScreen(false)}
-            onPartyCreated={(partyData) => {
-              // Set the user's party
-              setUserParty(partyData)
+            onPartyCreated={async (partyData) => {
+              try {
+                // Create party in backend - this persists the party and updates user's affiliation
+                const createPayload = {
+                  name: partyData.name,
+                  handle: partyData.handle,
+                  description: partyData.bio || '',
+                  isPrivate: partyData.privacy === 'private',
+                  chatMode: partyData.type === 'closed' ? 'ADMIN_ONLY' : 'OPEN',
+                }
+                // Only include avatarUrl if it's a valid non-empty string
+                if (partyData.photo && typeof partyData.photo === 'string') {
+                  createPayload.avatarUrl = partyData.photo
+                }
+                console.log('Creating party with payload:', createPayload)
+                const response = await partiesApi.createParty(createPayload)
 
-              // If party has an intro video and post settings, create a post
-              if (partyData.introVideo && partyData.postSettings) {
-                const postToArray = Array.isArray(partyData.postSettings.postTo)
-                  ? partyData.postSettings.postTo
-                  : [partyData.postSettings.postTo || 'Your Feed']
+                // Get the created party with its ID from the response
+                // Backend returns { party: {...} } wrapped in { data: {...} } or { success: true, data: {...} }
+                const createdParty = response.data?.party || response.party || response.data || response
 
-                // Create the intro post, passing partyData so it can be added to party posts
-                handlePostCreated({
-                  videoUrl: partyData.introVideo,
-                  title: `Welcome to ${partyData.name}!`,
-                  caption: partyData.bio || '',
-                  postTo: postToArray,
-                  sendTo: partyData.postSettings.sendTo || [],
-                  targetRace: partyData.postSettings.target || null,
-                  isMirrored: partyData.introVideoMirrored || false,
-                }, partyData)
-              } else {
+                // Build full party data with all required fields for display
+                const fullPartyData = {
+                  id: createdParty.id,
+                  name: partyData.name,
+                  handle: partyData.handle,
+                  bio: partyData.bio,
+                  photo: partyData.photo,
+                  color: partyData.color,
+                  type: partyData.type,
+                  privacy: partyData.privacy,
+                  stats: partyData.stats,
+                  isNewParty: true,
+                }
+                console.log('Party created successfully, setting userParty:', fullPartyData)
+
+                // Update local state with the created party (including ID)
+                // This should immediately reflect in MyProfile's profile-party-btn
+                setUserParty(fullPartyData)
+
+                // If party has an intro video and post settings, create a post
+                if (partyData.introVideo && partyData.postSettings) {
+                  const postToArray = Array.isArray(partyData.postSettings.postTo)
+                    ? partyData.postSettings.postTo
+                    : [partyData.postSettings.postTo || 'Your Feed']
+
+                  // Create the intro post, passing partyData so it can be added to party posts
+                  handlePostCreated({
+                    videoUrl: partyData.introVideo,
+                    title: `Welcome to ${partyData.name}!`,
+                    caption: partyData.bio || '',
+                    postTo: postToArray,
+                    sendTo: partyData.postSettings.sendTo || [],
+                    targetRace: partyData.postSettings.target || null,
+                    isMirrored: partyData.introVideoMirrored || false,
+                  }, fullPartyData)
+                } else {
+                  setShowCreateScreen(false)
+                }
+              } catch (error) {
+                console.error('Failed to create party:', error)
+                // Still set local state as fallback with all required fields
+                const fallbackPartyData = {
+                  id: `temp-${Date.now()}`,
+                  name: partyData.name,
+                  handle: partyData.handle,
+                  bio: partyData.bio,
+                  photo: partyData.photo,
+                  color: partyData.color,
+                  type: partyData.type,
+                  privacy: partyData.privacy,
+                  isNewParty: true,
+                }
+                setUserParty(fallbackPartyData)
                 setShowCreateScreen(false)
               }
             }}
@@ -1114,6 +1201,7 @@ function AppContent() {
             userRacesFollowing={userRacesFollowing}
             userRacesCompeting={userRacesCompeting}
             conversations={conversations}
+            currentUserId={authUser?.id}
           />
         </div>
       )}

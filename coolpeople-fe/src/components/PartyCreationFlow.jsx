@@ -1,11 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import '../styling/PartyCreationFlow.css'
+import { usersApi, favoritesApi, messagesApi, partiesApi } from '../services/api'
 
-function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }) {
+function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVideoBase64, isMirrored, currentUserId, conversations = {} }) {
   // Basic Info
   const [partyHandle, setPartyHandle] = useState('')
   const [partyName, setPartyName] = useState('')
   const [partyBio, setPartyBio] = useState('')
+
+  // Name availability warnings
+  const [nameWarning, setNameWarning] = useState('')
+  const [handleWarning, setHandleWarning] = useState('')
+  const [isCheckingName, setIsCheckingName] = useState(false)
+  const [isCheckingHandle, setIsCheckingHandle] = useState(false)
   const [partyPhoto, setPartyPhoto] = useState(null)
   const [partyPhotoPreview, setPartyPhotoPreview] = useState(null)
   const [partyColor, setPartyColor] = useState('#FF2A55')
@@ -64,9 +72,199 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
 
   // Admin & Member Setup
   const [adminInvites, setAdminInvites] = useState([])
-  const [adminSearchQuery, setAdminSearchQuery] = useState('')
   const [memberInvites, setMemberInvites] = useState([])
-  const [memberSearchQuery, setMemberSearchQuery] = useState('')
+
+  // User picker modal state
+  const [showUserPicker, setShowUserPicker] = useState(false)
+  const [userPickerMode, setUserPickerMode] = useState('admin') // 'admin' or 'member'
+  const [userPickerSearch, setUserPickerSearch] = useState('')
+  const [suggestedUsers, setSuggestedUsers] = useState([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+  const userPickerSearchRef = useRef(null)
+
+  // Fetch and rank suggested users when picker opens
+  useEffect(() => {
+    console.log('User picker effect:', { showUserPicker, currentUserId })
+    if (!showUserPicker || !currentUserId) return
+
+    const fetchSuggestedUsers = async () => {
+      setIsLoadingUsers(true)
+      try {
+        // Fetch followers, following, and favorites in parallel
+        // API returns { success: true, data: [...] }
+        const [followersRes, followingRes, favoritesRes] = await Promise.all([
+          usersApi.getFollowers(currentUserId).catch((err) => { console.log('Followers error:', err); return { data: [] } }),
+          usersApi.getFollowing(currentUserId).catch((err) => { console.log('Following error:', err); return { data: [] } }),
+          favoritesApi.getFavorites().catch((err) => { console.log('Favorites error:', err); return { data: [] } })
+        ])
+
+        console.log('API responses:', { followersRes, followingRes, favoritesRes })
+
+        // Extract data arrays from API responses
+        // getFollowers returns { success, data: { followers: [...], nextCursor } }
+        // getFollowing returns { success, data: { following: [...], nextCursor } }
+        // getFavorites returns { success, data: [...] } (array directly via sendPaginated)
+        const followers = followersRes.data?.followers || followersRes.followers || []
+        const following = followingRes.data?.following || followingRes.following || []
+        const favorites = Array.isArray(favoritesRes.data) ? favoritesRes.data : (favoritesRes.favorites || [])
+
+        console.log('Parsed data:', { followers, following, favorites })
+
+        // Build a map of users with their priority scores
+        // Algorithm: Higher score = higher priority to invite
+        const userScores = new Map()
+
+        // Create sets for quick lookup
+        // API returns flat objects for followers/following: { id, username, displayName, ... }
+        // Favorites has nested structure: { id, favoritedUser: { id, username, ... } }
+        const followerIds = new Set(followers.map(f => f.id))
+        const followingIds = new Set(following.map(f => f.id))
+        const favoriteIds = new Set(favorites.map(f => f.favoritedUser?.id || f.id))
+
+        console.log('ID sets:', {
+          followerIds: [...followerIds],
+          followingIds: [...followingIds],
+          favoriteIds: [...favoriteIds]
+        })
+
+        // Get conversation partner IDs (users you've messaged)
+        const conversationUserIds = new Set(
+          Object.values(conversations)
+            .filter(c => c.participantId || c.userId)
+            .map(c => c.participantId || c.userId)
+        )
+
+        // Process all users and assign scores
+        const processUser = (user, source) => {
+          // Favorites have nested favoritedUser, followers/following are flat
+          const userId = user.favoritedUser?.id || user.id
+          if (!userId || userId === currentUserId) return
+
+          const userData = user.favoritedUser || user
+
+          if (!userScores.has(userId)) {
+            userScores.set(userId, {
+              user: {
+                id: userId,
+                username: userData.username,
+                name: userData.displayName || userData.name,
+                avatar: userData.avatarUrl || userData.avatar,
+                userType: userData.userType
+              },
+              score: 0,
+              reasons: []
+            })
+          }
+
+          const entry = userScores.get(userId)
+
+          // Score based on relationship type (higher = more likely to invite)
+          // Mutual = follow each other = highest priority
+          if (followerIds.has(userId) && followingIds.has(userId)) {
+            if (!entry.reasons.includes('mutual')) {
+              entry.score += 100
+              entry.reasons.push('mutual')
+            }
+          }
+
+          // Favorites = explicitly marked as important
+          if (favoriteIds.has(userId) && !entry.reasons.includes('favorite')) {
+            entry.score += 80
+            entry.reasons.push('favorite')
+          }
+
+          // Recent conversations = active engagement
+          if (conversationUserIds.has(userId) && !entry.reasons.includes('messaged')) {
+            entry.score += 60
+            entry.reasons.push('messaged')
+          }
+
+          // Followers = they're interested in you
+          if (followerIds.has(userId) && !entry.reasons.includes('follower')) {
+            entry.score += 40
+            entry.reasons.push('follower')
+          }
+
+          // Following = you're interested in them
+          if (followingIds.has(userId) && !entry.reasons.includes('following')) {
+            entry.score += 20
+            entry.reasons.push('following')
+          }
+        }
+
+        followers.forEach(f => processUser(f, 'follower'))
+        following.forEach(f => processUser(f, 'following'))
+        favorites.forEach(f => processUser(f, 'favorite'))
+
+        // Sort by score descending
+        const rankedUsers = Array.from(userScores.values())
+          .sort((a, b) => b.score - a.score)
+          .map(entry => ({
+            ...entry.user,
+            score: entry.score,
+            reasons: entry.reasons
+          }))
+
+        console.log('Ranked users:', rankedUsers)
+        setSuggestedUsers(rankedUsers)
+      } catch (error) {
+        console.error('Error fetching suggested users:', error)
+        setSuggestedUsers([])
+      } finally {
+        setIsLoadingUsers(false)
+      }
+    }
+
+    fetchSuggestedUsers()
+  }, [showUserPicker, currentUserId, conversations])
+
+  // Focus search input when picker opens
+  useEffect(() => {
+    if (showUserPicker && userPickerSearchRef.current) {
+      setTimeout(() => userPickerSearchRef.current?.focus(), 100)
+    }
+  }, [showUserPicker])
+
+  // Filter users based on search
+  const filteredPickerUsers = suggestedUsers.filter(user => {
+    // Only exclude if already in the current mode's list (can be both admin AND member)
+    if (userPickerMode === 'admin' && adminInvites.find(a => a.id === user.id)) return false
+    if (userPickerMode === 'member' && memberInvites.find(m => m.id === user.id)) return false
+
+    // Filter by search query
+    if (!userPickerSearch) return true
+    const query = userPickerSearch.toLowerCase()
+    return (
+      user.username?.toLowerCase().includes(query) ||
+      user.name?.toLowerCase().includes(query)
+    )
+  })
+
+  // Open user picker
+  const openUserPicker = (mode) => {
+    setUserPickerMode(mode)
+    setUserPickerSearch('')
+    setShowUserPicker(true)
+  }
+
+  // Add user from picker
+  const handlePickerAddUser = (user) => {
+    if (userPickerMode === 'admin') {
+      setAdminInvites([...adminInvites, user])
+    } else {
+      setMemberInvites([...memberInvites, user])
+    }
+  }
+
+  // Get reason badge text
+  const getReasonBadge = (reasons) => {
+    if (reasons.includes('mutual')) return 'Mutual'
+    if (reasons.includes('favorite')) return 'Favorite'
+    if (reasons.includes('messaged')) return 'Messaged'
+    if (reasons.includes('follower')) return 'Follows you'
+    if (reasons.includes('following')) return 'Following'
+    return null
+  }
 
   // Permissions
   const [adminPermissions, setAdminPermissions] = useState({
@@ -100,26 +298,6 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
   const targetRaces = ['Mayor Race', 'City Council', 'Governor', 'Senate']
   const sendToOptions = ['Mamas gaga', 'Sunday Canvassing', 'Local Activists']
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
-
-  // Users for search - will be fetched from backend API
-  // Empty for fresh start - users will be populated as they register
-  const mockUsers = []
-
-  const filteredAdminUsers = mockUsers.filter(user =>
-    !adminInvites.find(a => a.id === user.id) &&
-    !memberInvites.find(m => m.id === user.id) &&
-    adminSearchQuery &&
-    (user.username.toLowerCase().includes(adminSearchQuery.toLowerCase()) ||
-     user.name.toLowerCase().includes(adminSearchQuery.toLowerCase()))
-  )
-
-  const filteredMemberUsers = mockUsers.filter(user =>
-    !adminInvites.find(a => a.id === user.id) &&
-    !memberInvites.find(m => m.id === user.id) &&
-    memberSearchQuery &&
-    (user.username.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-     user.name.toLowerCase().includes(memberSearchQuery.toLowerCase()))
-  )
 
   const partyColors = [
     '#FF2A55', '#00F2EA', '#7C3AED', '#10B981', '#F59E0B', '#3B82F6',
@@ -225,18 +403,8 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     setPhotoPosition({ x: 0, y: 0 })
   }
 
-  const handleAddAdmin = (user) => {
-    setAdminInvites([...adminInvites, user])
-    setAdminSearchQuery('')
-  }
-
   const handleRemoveAdmin = (userId) => {
     setAdminInvites(adminInvites.filter(a => a.id !== userId))
-  }
-
-  const handleAddMember = (user) => {
-    setMemberInvites([...memberInvites, user])
-    setMemberSearchQuery('')
   }
 
   const handleRemoveMember = (userId) => {
@@ -305,7 +473,7 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
   }
 
   // Actually create the party after confirmation
-  const confirmCreateParty = () => {
+  const confirmCreateParty = async () => {
     setShowConfirmation(false)
     // Display name with "Party" suffix (strip if user already typed it, apply title case)
     const cleanName = formatPartyName(partyName)
@@ -315,13 +483,59 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     // Use uploaded photo preview (data URL) or capture a frame from the video
     const avatarPhoto = partyPhotoPreview || captureVideoFrame()
 
+    // Send invites to admins and members via messages
+    const sendInvites = async () => {
+      const allInvites = []
+
+      // Send admin invites
+      for (const admin of adminInvites) {
+        allInvites.push(
+          messagesApi.sendMessage({
+            receiverId: admin.id,
+            content: `🎉 You've been invited to join ${displayName} as an Admin!\n\nAs an admin, you'll be able to:\n• Add and manage posts\n• Approve new members\n• Help grow the party\n\nTap to accept the invite and join the party!`,
+            metadata: {
+              type: 'party_invite',
+              partyHandle: partyHandle,
+              partyName: displayName,
+              role: 'admin',
+              partyColor: partyColor
+            }
+          }).catch(err => console.log(`Failed to send admin invite to ${admin.username}:`, err))
+        )
+      }
+
+      // Send member invites
+      for (const member of memberInvites) {
+        allInvites.push(
+          messagesApi.sendMessage({
+            receiverId: member.id,
+            content: `🎉 You've been invited to join ${displayName}!\n\nJoin us and be part of something great. Tap to accept the invite!`,
+            metadata: {
+              type: 'party_invite',
+              partyHandle: partyHandle,
+              partyName: displayName,
+              role: 'member',
+              partyColor: partyColor
+            }
+          }).catch(err => console.log(`Failed to send member invite to ${member.username}:`, err))
+        )
+      }
+
+      // Send all invites in parallel
+      await Promise.all(allInvites)
+      console.log(`Sent ${adminInvites.length} admin invites and ${memberInvites.length} member invites`)
+    }
+
+    // Send invites (don't block party creation on this)
+    sendInvites()
+
     const partyData = {
       name: displayName,
       handle: partyHandle,
       bio: partyBio,
       photo: avatarPhoto,
       color: partyColor,
-      introVideo: recordedVideoUrl,
+      introVideo: recordedVideoBase64 || recordedVideoUrl, // Prefer base64 for persistence
       introVideoMirrored: isMirrored,
       type: partyType,
       privacy: partyPrivacy,
@@ -372,7 +586,68 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
     onComplete?.(partyData)
   }
 
-  const canCreate = partyHandle.trim().length >= 3
+  // Check party name availability on blur
+  const handleNameBlur = async () => {
+    const name = partyName.trim()
+    if (!name || name.length < 2) {
+      setNameWarning('')
+      return
+    }
+
+    setIsCheckingName(true)
+    try {
+      // Format name the same way we'll submit it
+      const formattedName = `${formatPartyName(name)} Party`
+      const result = await partiesApi.checkName(formattedName, null)
+      if (!result.available && result.takenBy === 'name') {
+        setNameWarning('Party name taken')
+      } else {
+        setNameWarning('')
+      }
+    } catch (error) {
+      console.error('Error checking party name:', error)
+      setNameWarning('')
+    } finally {
+      setIsCheckingName(false)
+    }
+  }
+
+  // Check party handle availability on blur
+  const handleHandleBlur = async () => {
+    const handle = partyHandle.trim()
+    if (!handle || handle.length < 3) {
+      setHandleWarning('')
+      return
+    }
+
+    setIsCheckingHandle(true)
+    try {
+      const result = await partiesApi.checkName(null, handle)
+      if (!result.available && result.takenBy === 'handle') {
+        setHandleWarning('Handle taken')
+      } else {
+        setHandleWarning('')
+      }
+    } catch (error) {
+      console.error('Error checking party handle:', error)
+      setHandleWarning('')
+    } finally {
+      setIsCheckingHandle(false)
+    }
+  }
+
+  // Clear warnings when input changes
+  const handleNameChange = (e) => {
+    setPartyName(e.target.value)
+    if (nameWarning) setNameWarning('')
+  }
+
+  const handleHandleChange = (e) => {
+    setPartyHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+    if (handleWarning) setHandleWarning('')
+  }
+
+  const canCreate = partyHandle.trim().length >= 3 && !nameWarning && !handleWarning
 
   return (
     <div className="party-screen">
@@ -468,25 +743,33 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
           <span className="party-handle-at">@</span>
           <input
             type="text"
-            className="party-handle-input"
+            className={`party-handle-input ${handleWarning ? 'has-warning' : ''}`}
             placeholder="partyhandle"
             value={partyHandle}
-            onChange={(e) => setPartyHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            onChange={handleHandleChange}
+            onBlur={handleHandleBlur}
             maxLength={20}
           />
+          {handleWarning && (
+            <span className="party-input-warning">{handleWarning}</span>
+          )}
         </div>
 
         {/* Party Name */}
         <div className="party-name-row">
           <input
             type="text"
-            className="party-name-input"
+            className={`party-name-input ${nameWarning ? 'has-warning' : ''}`}
             placeholder="Party Name"
             value={partyName}
-            onChange={(e) => setPartyName(e.target.value)}
+            onChange={handleNameChange}
+            onBlur={handleNameBlur}
             maxLength={30}
           />
           <span className="party-name-suffix">Party</span>
+          {nameWarning && (
+            <span className="party-input-warning">{nameWarning}</span>
+          )}
         </div>
 
         {/* Bio */}
@@ -539,33 +822,13 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
         {/* Invite Admins */}
         <div className="party-option-row stacked">
           <span className="party-option-label">Invite Admins</span>
-          <div className="party-admin-search">
+          <button className="party-admin-search clickable" onClick={() => openUserPicker('admin')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/>
               <path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={adminSearchQuery}
-              onChange={(e) => setAdminSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {filteredAdminUsers.length > 0 && (
-            <div className="party-search-results">
-              {filteredAdminUsers.map(user => (
-                <button key={user.id} className="party-user-row" onClick={() => handleAddAdmin(user)}>
-                  <img src={user.avatar} alt={user.name} />
-                  <div className="party-user-info">
-                    <span className="party-user-name">{user.name}</span>
-                    <span className="party-user-handle">@{user.username}</span>
-                  </div>
-                  <span className="party-add-text">+ Add</span>
-                </button>
-              ))}
-            </div>
-          )}
+            <span className="party-search-placeholder">Search users...</span>
+          </button>
 
           {adminInvites.length > 0 && (
             <div className="party-admin-list">
@@ -583,33 +846,13 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
         {/* Invite Members */}
         <div className="party-option-row stacked">
           <span className="party-option-label">Invite Members</span>
-          <div className="party-admin-search">
+          <button className="party-admin-search clickable" onClick={() => openUserPicker('member')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/>
               <path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={memberSearchQuery}
-              onChange={(e) => setMemberSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {filteredMemberUsers.length > 0 && (
-            <div className="party-search-results">
-              {filteredMemberUsers.map(user => (
-                <button key={user.id} className="party-user-row" onClick={() => handleAddMember(user)}>
-                  <img src={user.avatar} alt={user.name} />
-                  <div className="party-user-info">
-                    <span className="party-user-name">{user.name}</span>
-                    <span className="party-user-handle">@{user.username}</span>
-                  </div>
-                  <span className="party-add-text">+ Add</span>
-                </button>
-              ))}
-            </div>
-          )}
+            <span className="party-search-placeholder">Search users...</span>
+          </button>
 
           {memberInvites.length > 0 && (
             <div className="party-admin-list">
@@ -926,6 +1169,147 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, isMirrored }
             </button>
           </div>
         </div>
+      )}
+
+      {/* User Picker Modal */}
+      {showUserPicker && createPortal(
+        <div className="user-picker-overlay" onClick={() => setShowUserPicker(false)}>
+          <div className="user-picker-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Drag handle */}
+            <div className="user-picker-handle" />
+
+            {/* Header */}
+            <div className="user-picker-header">
+              <button className="user-picker-close" onClick={() => setShowUserPicker(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+              <h3 className="user-picker-title">
+                {userPickerMode === 'admin' ? 'Invite Admins' : 'Invite Members'}
+              </h3>
+              <button
+                className="user-picker-done"
+                onClick={() => setShowUserPicker(false)}
+              >
+                Done
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div className="user-picker-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                ref={userPickerSearchRef}
+                type="text"
+                placeholder="Search users..."
+                value={userPickerSearch}
+                onChange={(e) => setUserPickerSearch(e.target.value)}
+              />
+              {userPickerSearch && (
+                <button className="user-picker-clear" onClick={() => setUserPickerSearch('')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M15 9l-6 6M9 9l6 6" stroke="white" strokeWidth="2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Algorithm explanation */}
+            {!userPickerSearch && (
+              <div className="user-picker-algo-hint">
+                Suggested based on mutual connections, favorites, and recent activity
+              </div>
+            )}
+
+            {/* User list */}
+            <div className="user-picker-list">
+              {isLoadingUsers ? (
+                <div className="user-picker-loading">
+                  <div className="user-picker-spinner" />
+                  <span>Loading suggestions...</span>
+                </div>
+              ) : filteredPickerUsers.length === 0 ? (
+                <div className="user-picker-empty">
+                  {userPickerSearch ? (
+                    <>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="M21 21l-4.35-4.35" />
+                      </svg>
+                      <span>No users found for "{userPickerSearch}"</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      <span>Follow some users to see suggestions</span>
+                    </>
+                  )}
+                </div>
+              ) : (
+                filteredPickerUsers.map(user => (
+                  <button
+                    key={user.id}
+                    className="user-picker-row"
+                    onClick={() => handlePickerAddUser(user)}
+                  >
+                    <img
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${user.username}&background=random`}
+                      alt={user.name || user.username}
+                      className="user-picker-avatar"
+                    />
+                    <div className="user-picker-info">
+                      <div className="user-picker-name-row">
+                        <span className="user-picker-name">{user.name || user.username}</span>
+                        {user.userType === 'CANDIDATE' && (
+                          <span className="user-picker-candidate-badge">Candidate</span>
+                        )}
+                      </div>
+                      <span className="user-picker-handle">@{user.username}</span>
+                    </div>
+                    {user.reasons && getReasonBadge(user.reasons) && (
+                      <span className={`user-picker-reason ${user.reasons[0]}`}>
+                        {getReasonBadge(user.reasons)}
+                      </span>
+                    )}
+                    <span className="user-picker-add">+ Add</span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Selected users preview */}
+            {((userPickerMode === 'admin' && adminInvites.length > 0) ||
+              (userPickerMode === 'member' && memberInvites.length > 0)) && (
+              <div className="user-picker-selected">
+                <span className="user-picker-selected-label">
+                  {userPickerMode === 'admin' ? 'Admins' : 'Members'} to invite:
+                </span>
+                <div className="user-picker-selected-list">
+                  {(userPickerMode === 'admin' ? adminInvites : memberInvites).map(user => (
+                    <div key={user.id} className="user-picker-selected-chip">
+                      <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.username}&background=random`} alt={user.username} />
+                      <span>@{user.username}</span>
+                      <button onClick={() => userPickerMode === 'admin' ? handleRemoveAdmin(user.id) : handleRemoveMember(user.id)}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

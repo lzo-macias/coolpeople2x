@@ -25,7 +25,7 @@ const mockContacts = [
   { id: 106, phone: '+1 (555) 678-9012', name: 'Work - John', isOnPlatform: false },
 ]
 
-function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {} }) {
+function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, currentUserId }) {
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
   const [showAddSound, setShowAddSound] = useState(false)
@@ -1327,7 +1327,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onClose={handleClosePartyCreationFlow}
           onComplete={handlePartyCreated}
           recordedVideoUrl={recordedVideoUrl}
+          recordedVideoBase64={recordedVideoBase64}
           isMirrored={recordedWithFrontCamera}
+          currentUserId={currentUserId}
+          conversations={conversations}
         />
       )}
 

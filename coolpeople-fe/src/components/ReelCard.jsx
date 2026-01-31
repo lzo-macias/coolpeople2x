@@ -245,7 +245,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     if (isVisible && reel?.id) {
       const recordView = async () => {
         try {
-          await reelsApi.recordView(reel.id, { watchDuration: 0, completed: false })
+          await reelsApi.recordView(reel.id, { watchPercent: 0 })
         } catch (error) {
           // Silent fail for view tracking
         }

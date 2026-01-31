@@ -10,6 +10,7 @@ import { requireAuth, optionalAuth } from '../../middleware/auth.js';
 import { requirePartyPermission } from './parties.middleware.js';
 import {
   partyIdParamSchema,
+  partyHandleParamSchema,
   partyMemberParamSchema,
   joinRequestParamSchema,
   chatMessageParamSchema,
@@ -25,6 +26,28 @@ import {
 } from './parties.schemas.js';
 
 const router = Router();
+
+// =============================================================================
+// PARTY NAME/HANDLE AVAILABILITY CHECK
+// =============================================================================
+
+// GET /api/parties/check-name - Check if party name/handle is available
+router.get(
+  '/check-name',
+  optionalAuth,
+  partiesController.checkPartyName
+);
+
+// =============================================================================
+// ORPHANED PARTY CLEANUP
+// =============================================================================
+
+// POST /api/parties/cleanup-orphaned - Clean up orphaned parties (maintenance)
+router.post(
+  '/cleanup-orphaned',
+  requireAuth,
+  partiesController.cleanupOrphanedParties
+);
 
 // =============================================================================
 // PARTY CRUD
@@ -44,6 +67,14 @@ router.get(
   optionalAuth,
   validate(listPartiesQuerySchema),
   partiesController.listParties
+);
+
+// GET /api/parties/by-handle/:handle - Get party by handle (must be before /:id)
+router.get(
+  '/by-handle/:handle',
+  optionalAuth,
+  validate(partyHandleParamSchema),
+  partiesController.getPartyByHandle
 );
 
 // GET /api/parties/:id - Get party details
@@ -216,6 +247,54 @@ router.delete(
   validate(chatReactionParamSchema),
   requirePartyPermission('view'),
   partiesController.removeReaction
+);
+
+// =============================================================================
+// FOLLOWERS
+// =============================================================================
+
+// GET /api/parties/:id/followers - List followers
+router.get(
+  '/:id/followers',
+  optionalAuth,
+  validate(listMembersQuerySchema),
+  partiesController.listFollowers
+);
+
+// =============================================================================
+// PARTY RACES
+// =============================================================================
+
+// GET /api/parties/:id/races - Get races party is competing in
+router.get(
+  '/:id/races',
+  optionalAuth,
+  validate(partyIdParamSchema),
+  partiesController.listPartyRaces
+);
+
+// =============================================================================
+// PARTY REVIEWS
+// =============================================================================
+
+// GET /api/parties/:id/reviews - List reviews for party
+router.get(
+  '/:id/reviews',
+  optionalAuth,
+  validate(listMembersQuerySchema),
+  partiesController.listPartyReviews
+);
+
+// =============================================================================
+// FULL PARTY PROFILE
+// =============================================================================
+
+// GET /api/parties/:id/profile - Get full party profile data
+router.get(
+  '/:id/profile',
+  optionalAuth,
+  validate(partyIdParamSchema),
+  partiesController.getFullPartyProfile
 );
 
 export default router;

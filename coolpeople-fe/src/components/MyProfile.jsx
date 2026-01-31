@@ -418,7 +418,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       id: currentUser?.id || currentUser?.userId, // Use actual user ID for API calls
       username: profileData.username,
       avatar: displayAvatar,
-      party: null, // Still Independent
+      party: userParty?.name || null, // Use user's party if they have one
       bio: currentUser?.bio || bioText, // Use persisted bio from currentUser, fallback to local state
       nominations: '0',
       following: currentUser?.following || profileData.following,

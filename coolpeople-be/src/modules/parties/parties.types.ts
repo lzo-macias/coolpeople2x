@@ -97,3 +97,76 @@ export interface UpdatePartyRequest {
 export interface UpdateMemberPermissionsRequest {
   permissions: string[];
 }
+
+// -----------------------------------------------------------------------------
+// Party Follower Response
+// -----------------------------------------------------------------------------
+
+export interface PartyFollowerResponse {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  partyName: string | null;
+  isFollowing?: boolean;
+  createdAt: Date;
+}
+
+// -----------------------------------------------------------------------------
+// Party Race Response
+// -----------------------------------------------------------------------------
+
+export interface PartyRaceResponse {
+  id: string;
+  raceId: string;
+  raceName: string;
+  raceType: string;
+  position: number | null;
+  totalPoints: number;
+  tier: string;
+  change: string;
+  isSystemRace: boolean;
+}
+
+// -----------------------------------------------------------------------------
+// Party Review Response
+// -----------------------------------------------------------------------------
+
+export interface PartyReviewResponse {
+  id: string;
+  author: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    partyName: string | null;
+  };
+  rating: number;
+  content: string | null;
+  createdAt: Date;
+  replies: {
+    id: string;
+    userId: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    content: string;
+    createdAt: Date;
+  }[];
+}
+
+// -----------------------------------------------------------------------------
+// Full Party Profile Response
+// -----------------------------------------------------------------------------
+
+export interface FullPartyProfileResponse extends PartyResponse {
+  stats: {
+    cpPoints: number;
+    tier: string;
+    change: string;
+    raceCount: number;
+  };
+  averageRating: number | null;
+  reviewCount: number;
+}

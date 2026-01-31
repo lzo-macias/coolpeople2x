@@ -15,6 +15,16 @@ export const partyIdParamSchema = z.object({
 });
 
 // -----------------------------------------------------------------------------
+// Party Handle Param (for lookup by handle)
+// -----------------------------------------------------------------------------
+
+export const partyHandleParamSchema = z.object({
+  params: z.object({
+    handle: z.string().min(1, 'Handle is required'),
+  }),
+});
+
+// -----------------------------------------------------------------------------
 // Party + Member Params
 // -----------------------------------------------------------------------------
 
@@ -73,8 +83,8 @@ export const createPartySchema = z.object({
       .max(30, 'Handle must be at most 30 characters')
       .regex(/^[a-zA-Z0-9_]+$/, 'Handle can only contain letters, numbers, and underscores'),
     description: z.string().max(500).optional(),
-    avatarUrl: z.string().url('Invalid avatar URL').optional(),
-    bannerUrl: z.string().url('Invalid banner URL').optional(),
+    avatarUrl: z.string().optional().nullable(),
+    bannerUrl: z.string().optional().nullable(),
     isPrivate: z.boolean().default(false),
     chatMode: z.enum(['OPEN', 'ADMIN_ONLY', 'CYCLE']).default('OPEN'),
   }),
@@ -96,8 +106,8 @@ export const updatePartySchema = z.object({
       .regex(/^[a-zA-Z0-9_]+$/, 'Handle can only contain letters, numbers, and underscores')
       .optional(),
     description: z.string().max(500).optional(),
-    avatarUrl: z.string().url('Invalid avatar URL').optional(),
-    bannerUrl: z.string().url('Invalid banner URL').optional(),
+    avatarUrl: z.string().optional().nullable(),
+    bannerUrl: z.string().optional().nullable(),
     isPrivate: z.boolean().optional(),
     chatMode: z.enum(['OPEN', 'ADMIN_ONLY', 'CYCLE']).optional(),
   }),

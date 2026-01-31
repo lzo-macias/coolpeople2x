@@ -42,13 +42,9 @@ export const getPublicProfile = async (
       reviewsReceived: {
         select: { rating: true },
       },
-      partyMemberships: {
-        include: {
-          party: {
-            select: { id: true, name: true },
-          },
-        },
-        take: 1,
+      // Primary party affiliation (via partyId field)
+      party: {
+        select: { id: true, name: true },
       },
       raceFollows: {
         include: {
@@ -99,8 +95,10 @@ export const getPublicProfile = async (
     isFavorited = !!favoriteRecord;
   }
 
-  // Get primary party name if user is in a party
-  const primaryParty = user.partyMemberships[0]?.party?.name || null;
+  // Get primary party from the partyId relation (displayed sitewide)
+  const primaryParty = user.party
+    ? { id: user.party.id, name: user.party.name }
+    : null;
 
   const profile: PublicProfile = {
     id: user.id,
@@ -193,6 +191,10 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
       reviewsReceived: {
         select: { rating: true },
       },
+      // Primary party affiliation (via partyId field)
+      party: {
+        select: { id: true, name: true },
+      },
       partyMemberships: {
         include: {
           party: {
@@ -221,6 +223,11 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
     throw new NotFoundError('User');
   }
 
+  // Get primary party from the partyId relation (displayed sitewide)
+  const primaryParty = user.party
+    ? { id: user.party.id, name: user.party.name }
+    : null;
+
   const profile: PrivateProfile = {
     id: user.id,
     email: user.email,
@@ -236,6 +243,7 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
     createdAt: user.createdAt,
     followersCount: user._count.followers,
     followingCount: user._count.following,
+    party: primaryParty,
     parties: user.partyMemberships.map((m) => ({
       id: m.party.id,
       name: m.party.name,

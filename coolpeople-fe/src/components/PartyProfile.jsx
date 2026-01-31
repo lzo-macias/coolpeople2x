@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import '../styling/PartyProfile.css'
 import { getPartyColor } from '../data/mockData'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
+import { partiesApi, reelsApi } from '../services/api'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -23,166 +24,159 @@ const getNextTier = (points) => {
   return currentIndex < CP_TIERS.length - 1 ? CP_TIERS[currentIndex + 1] : null
 }
 
-// Mock data for the party profile
-const mockParty = {
-  id: 'party-1',
-  name: 'The Pink Lady',
-  avatar: 'https://i.pravatar.cc/150?img=12',
-  color: '#e91e8c',
-  members: '9,999',
-  followers: '1M',
-  change: '+301.26',
-  cpPoints: 8750, // Party CP points
-  isFollowing: false,
-  isFavorited: false,
-  // Races the party participates in
-  races: ['Best Party', 'Best in Brooklyn', 'Best in Queens'],
-  // bio: 'A progressive party focused on equality, justice, and community empowerment.',
+// Helper to format numbers for display
+const formatNumber = (num) => {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+  return num.toString()
 }
 
-// Race data for CP filtering - party-specific performance
-const raceData = {
-  'Best Party': {
-    cpPoints: 8750,
-    change: '+187.50',
-    tier: 'Diamond'
-  },
-  'Best in Brooklyn': {
-    cpPoints: 6200,
-    change: '+92.30',
-    tier: 'Diamond'
-  },
-  'Best in Queens': {
-    cpPoints: 4500,
-    change: '-25.20',
-    tier: 'Gold'
-  },
+// Helper to format relative time
+const formatRelativeTime = (dateStr) => {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now - date
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return 'today'
+  if (diffDays === 1) return '1 day ago'
+  if (diffDays < 7) return `${diffDays} days ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+  return `${Math.floor(diffDays / 365)} years ago`
 }
 
-// CP paid member testimonials (verified paid reviews)
-const paidMemberTestimonials = [
-  {
-    id: 'member-1',
-    user: {
-      username: 'Sara.playa',
-      avatar: 'https://i.pravatar.cc/40?img=23',
-      party: 'The Pink Lady',
-    },
-    text: 'William went to my college absolutely stand out gentleman',
-    rating: 3,
-    timestamp: '2 weeks ago',
-    media: null,
-    isPaid: true,
-    tag: 'honesty',
-  },
-  {
-    id: 'member-2',
-    user: {
-      username: 'hi.its.mario',
-      avatar: 'https://i.pravatar.cc/40?img=33',
-      party: 'The Pink Lady',
-    },
-    text: 'William went to my college absolutely stand out gentleman',
-    rating: 3,
-    timestamp: '1 day ago',
-    media: null,
-    isPaid: true,
-    tag: 'generosity',
-  },
-  {
-    id: 'member-3',
-    user: {
-      username: 'lolo.macias',
-      avatar: 'https://i.pravatar.cc/40?img=44',
-      party: 'The Pink Lady',
-    },
-    text: '',
-    rating: 4,
-    timestamp: '1 day ago',
-    media: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=200&fit=crop',
-    isPaid: true,
-    tag: 'humour',
-  },
-  {
-    id: 'member-paid-4',
-    user: {
-      username: 'alex.jones',
-      avatar: 'https://i.pravatar.cc/40?img=52',
-      party: 'The Pink Lady',
-    },
-    text: 'This party really cares about the community and shows up when it matters',
-    rating: 5,
-    timestamp: '3 days ago',
-    media: null,
-    isPaid: true,
-    tag: 'leadership',
-  },
-]
-
-// Regular member testimonials (community reviews)
-const regularMemberTestimonials = [
-  {
-    id: 'member-4',
-    user: {
-      username: 'Sara.playa',
-      avatar: 'https://i.pravatar.cc/40?img=23',
-      party: 'The Pink Lady',
-    },
-    text: 'William went to my college absolutely stand out gentleman',
-    rating: 3,
-    timestamp: '2 weeks ago',
-    media: null,
-    isPaid: false,
-    tag: 'police',
-  },
-  {
-    id: 'member-5',
-    user: {
-      username: 'alex.jones',
-      avatar: 'https://i.pravatar.cc/40?img=55',
-      party: 'The Pink Lady',
-    },
-    text: 'Great party with a clear vision for our community',
-    rating: 4,
-    timestamp: '3 days ago',
-    media: null,
-    isPaid: false,
-    tag: 'honesty',
-  },
-]
-
+// eslint-disable-next-line no-unused-vars
 function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false }) {
-  // Merge passed party with defaults for missing properties
-  const party = { ...mockParty, ...passedParty }
+  // State for fetched data
+  const [partyData, setPartyData] = useState(null)
+  const [members, setMembers] = useState([])
+  const [followers, setFollowers] = useState([])
+  const [races, setRaces] = useState([])
+  const [reviews, setReviews] = useState([])
+  const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [averageRating, setAverageRating] = useState(null)
+
+  // Fetch all party data on mount
+  useEffect(() => {
+    const fetchPartyData = async () => {
+      if (!passedParty?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+
+        // Fetch all data in parallel
+        const [profileRes, membersRes, followersRes, racesRes, reviewsRes, postsRes] = await Promise.all([
+          partiesApi.getFullProfile(passedParty.id).catch(() => null),
+          partiesApi.getMembers(passedParty.id).catch(() => ({ data: [] })),
+          partiesApi.getFollowers(passedParty.id).catch(() => ({ data: [] })),
+          partiesApi.getRaces(passedParty.id).catch(() => ({ data: { races: [] } })),
+          partiesApi.getReviews(passedParty.id).catch(() => ({ data: [], averageRating: null })),
+          reelsApi.getPartyReels(passedParty.id).catch(() => ({ data: [] })),
+        ])
+
+        if (profileRes?.data?.party) {
+          setPartyData(profileRes.data.party)
+        }
+
+        setMembers(membersRes?.data || [])
+        setFollowers(followersRes?.data || [])
+        setRaces(racesRes?.data?.races || [])
+        setReviews(reviewsRes?.data || [])
+        setAverageRating(reviewsRes?.averageRating || null)
+        setPosts(postsRes?.data || [])
+      } catch (err) {
+        console.error('Error fetching party data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPartyData()
+  }, [passedParty?.id])
+
+  // Merge fetched data with passed party, prefer fetched data
+  const party = {
+    ...passedParty,
+    ...(partyData || {}),
+    avatar: partyData?.avatarUrl || passedParty?.avatar || passedParty?.avatarUrl,
+  }
 
   // Check if this is a new party (just created)
-  // Detect new party by flag, by having baseline stats, or by being a user party without established data
   const isNewParty = party.isNewParty ||
-    (party.stats && party.stats.members === 1 && party.stats.followers === 0) ||
-    (party.testimonials && party.testimonials.cpVerified?.length === 0 && party.testimonials.community?.length === 0) ||
-    (party.isUserParty && !party.raceData) // User's own party without race data is new
+    (partyData?.memberCount === 1 && partyData?.followerCount === 0) ||
+    (members.length <= 1 && followers.length === 0 && reviews.length === 0)
 
-  // Get CP points from party stats (for new parties) or use legacy cpPoints
-  const partyCpPoints = party.stats?.cpPoints ?? party.cpPoints ?? 100
+  // Get CP points from fetched stats
+  const partyCpPoints = partyData?.stats?.cpPoints ?? party.stats?.cpPoints ?? party.cpPoints ?? 0
 
-  // Get party testimonials (empty for new parties)
-  const partyVerifiedTestimonials = party.testimonials?.cpVerified || (isNewParty ? [] : paidMemberTestimonials)
-  const initialCommunityTestimonials = party.testimonials?.community || (isNewParty ? [] : regularMemberTestimonials)
-
-  // Build race data from party - for new parties, only Best Party with baseline stats
-  const partyRaceData = isNewParty ? {
-    'Best Party': {
-      cpPoints: partyCpPoints,
-      change: party.stats?.change || '+0.00',
-      tier: 'Bronze'
+  // Build race data from fetched races
+  const partyRaceData = races.reduce((acc, race) => {
+    acc[race.raceName] = {
+      cpPoints: race.totalPoints,
+      change: race.change,
+      tier: race.tier.charAt(0) + race.tier.slice(1).toLowerCase()
     }
-  } : (party.raceData || raceData)
+    return acc
+  }, {})
+
+  // Ensure Best Party exists with default values if no races
+  if (!partyRaceData['Best Party'] && Object.keys(partyRaceData).length === 0) {
+    partyRaceData['Best Party'] = {
+      cpPoints: partyCpPoints,
+      change: partyData?.stats?.change || '+0.00',
+      tier: partyData?.stats?.tier?.charAt(0) + (partyData?.stats?.tier?.slice(1).toLowerCase() || '') || 'Bronze'
+    }
+  }
+
+  // Get race names for pills
+  const raceNames = races.length > 0 ? races.map(r => r.raceName) : ['Best Party']
+
+  // Format members for display
+  const formattedMembers = members.map(m => ({
+    id: m.id,
+    username: m.username,
+    avatar: m.avatarUrl || 'https://i.pravatar.cc/40',
+    party: party.name,
+    role: m.permissions?.includes('admin') ? 'Admin' : m.permissions?.includes('moderate') ? 'Moderator' : 'Member',
+    joinedAt: formatRelativeTime(m.joinedAt),
+  }))
+
+  // Format races for display
+  const formattedRaces = races.map(r => ({
+    id: r.id,
+    name: r.raceName,
+    position: r.position,
+    percentile: r.position ? `${(r.position / 100).toFixed(1)}%` : null,
+    isWon: r.position === 1,
+    isRunning: true,
+    isFollowing: false,
+    color: r.isSystemRace ? '#FF2A55' : '#00F2EA',
+  }))
 
   const [activeTab, setActiveTab] = useState('bio')
-  const [selectedRace, setSelectedRace] = useState('Best Party') // currently selected race filter
-  const [isFollowing, setIsFollowing] = useState(party.isFollowing)
-  const [isFavorited, setIsFavorited] = useState(party.isFavorited)
-  const [hasJoined, setHasJoined] = useState(false)
+  const [selectedRace, setSelectedRace] = useState(raceNames[0] || 'Best Party') // currently selected race filter
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isFavorited, setIsFavorited] = useState(party.isFavorited || false)
+
+  // Sync isFollowing with fetched data
+  useEffect(() => {
+    if (partyData?.isFollowing !== undefined) {
+      setIsFollowing(partyData.isFollowing)
+    }
+  }, [partyData?.isFollowing])
+  const [hasJoined, setHasJoined] = useState(partyData?.isMember || false)
+
+  // Sync hasJoined with fetched data
+  useEffect(() => {
+    if (partyData?.isMember !== undefined) {
+      setHasJoined(partyData.isMember)
+    }
+  }, [partyData?.isMember])
   const [searchQuery, setSearchQuery] = useState('')
   const [showEditBio, setShowEditBio] = useState(false)
   const [editInitialSection, setEditInitialSection] = useState(null)
@@ -198,38 +192,55 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [reviewText, setReviewText] = useState('')
   const [reviewRating, setReviewRating] = useState(0)
-  const [communityTestimonials, setCommunityTestimonials] = useState(initialCommunityTestimonials)
+  const [communityTestimonials, setCommunityTestimonials] = useState([])
+
+  // Update community testimonials when reviews load
+  useEffect(() => {
+    // Format reviews for display
+    const formatted = reviews.map(r => ({
+      id: r.id,
+      user: {
+        id: r.author.id,
+        username: r.author.username,
+        avatar: r.author.avatarUrl || 'https://i.pravatar.cc/40',
+        party: r.author.partyName,
+      },
+      text: r.content,
+      rating: r.rating,
+      timestamp: formatRelativeTime(r.createdAt),
+      media: null,
+      isPaid: false,
+      replies: r.replies || [],
+    }))
+    setCommunityTestimonials(formatted)
+  }, [reviews])
   const [respondingTo, setRespondingTo] = useState(null)
   const [responseText, setResponseText] = useState('')
-  const [reviewResponses, setReviewResponses] = useState({})
+  // eslint-disable-next-line no-unused-vars
+  const [reviewResponses, setReviewResponses] = useState({}) // Used by response modal
 
-  // Mock data for stat modals
-  const mockPartyMembers = [
-    { id: 'mem-1', username: 'Sara.playa', avatar: 'https://i.pravatar.cc/40?img=23', party: party.name, role: 'Admin', joinedAt: '2 months ago' },
-    { id: 'mem-2', username: 'hi.its.mario', avatar: 'https://i.pravatar.cc/40?img=33', party: party.name, role: 'Moderator', joinedAt: '1 month ago' },
-    { id: 'mem-3', username: 'lolo.macias', avatar: 'https://i.pravatar.cc/40?img=44', party: party.name, role: 'Member', joinedAt: '3 weeks ago' },
-    { id: 'mem-4', username: 'alex.jones', avatar: 'https://i.pravatar.cc/40?img=52', party: party.name, role: 'Member', joinedAt: '2 weeks ago' },
-    { id: 'mem-5', username: 'maya.2024', avatar: 'https://i.pravatar.cc/40?img=55', party: party.name, role: 'Member', joinedAt: '1 week ago' },
-  ]
+  // Use real data for modals, with fallbacks for empty states
+  const partyMembers = formattedMembers.length > 0 ? formattedMembers : []
+  const partyRacesList = formattedRaces.length > 0 ? formattedRaces : []
 
-  const mockPartyFollowers = [
-    { id: 'pfol-1', username: 'politico.daily', avatar: 'https://i.pravatar.cc/40?img=60', party: null, isFollowing: true },
-    { id: 'pfol-2', username: 'community.voice', avatar: 'https://i.pravatar.cc/40?img=61', party: 'Democrat', isFollowing: false },
-    { id: 'pfol-3', username: 'alex.votes', avatar: 'https://i.pravatar.cc/40?img=62', party: 'Republican', isFollowing: true },
-    { id: 'pfol-4', username: 'nyc.politics', avatar: 'https://i.pravatar.cc/40?img=38', party: 'Democrat', isFollowing: false },
-  ]
+  const [partyFollowersState, setPartyFollowersState] = useState([])
 
-  const [partyFollowersState, setPartyFollowersState] = useState(mockPartyFollowers)
+  // Update followers state when data loads
+  useEffect(() => {
+    // Format followers for display
+    const formatted = followers.map(f => ({
+      id: f.id,
+      userId: f.userId,
+      username: f.username,
+      avatar: f.avatarUrl || 'https://i.pravatar.cc/40',
+      party: f.partyName,
+      isFollowing: f.isFollowing || false,
+    }))
+    setPartyFollowersState(formatted)
+  }, [followers])
 
-  const mockPartyRaces = [
-    { id: 'prace-won-1', name: 'Best Party Brooklyn 2023', position: 1, percentile: null, isWon: true, isRunning: true, isFollowing: false },
-    { id: 'prace-1', name: 'Best Party', position: 2, percentile: '1.5%', isWon: false, isRunning: true, isFollowing: false, color: '#FF2A55' },
-    { id: 'prace-2', name: 'Best in Brooklyn', position: 5, percentile: '3.2%', isWon: false, isRunning: true, isFollowing: false, color: '#00F2EA' },
-    { id: 'prace-3', name: 'Best in Queens', position: 8, percentile: '6.1%', isWon: false, isRunning: true, isFollowing: false, color: '#FFB800' },
-  ]
-
-  // Get all posts for this party (either passed or empty)
-  const allPosts = party.posts || []
+  // Get all posts for this party (fetched or passed)
+  const allPosts = posts.length > 0 ? posts : (party.posts || [])
 
   // Handle post click to open SinglePostView
   const handlePostClick = (index) => {
@@ -450,6 +461,18 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     )
   }
 
+  // Show loading skeleton while fetching
+  if (loading && !passedParty?.name) {
+    return (
+      <div className="party-profile">
+        <div className="profile-loading">
+          <div className="loading-spinner"></div>
+          <p>Loading party...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="party-profile">
       {/* Header */}
@@ -481,15 +504,15 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           <div className="profile-right">
             <div className="profile-stats-grid">
               <div className="stat-item clickable" onClick={() => setShowMembersModal(true)}>
-                <span className="stat-number">{isNewParty ? (party.stats?.members || 1) : party.members}</span>
+                <span className="stat-number">{formatNumber(partyData?.memberCount || members.length || 1)}</span>
                 <span className="stat-label">Members</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowFollowersModal(true)}>
-                <span className="stat-number">{isNewParty ? (party.stats?.followers || 0) : party.followers}</span>
+                <span className="stat-number">{formatNumber(partyData?.followerCount || followers.length || 0)}</span>
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
-                <span className="stat-number">{mockPartyRaces.filter(r => r.isRunning).length}</span>
+                <span className="stat-number">{partyData?.stats?.raceCount || races.length || 1}</span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
@@ -530,12 +553,34 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           ) : (
             // Not a member
             <>
-              <button className="profile-action-btn join" onClick={() => setHasJoined(true)}>
+              <button className="profile-action-btn join" onClick={async () => {
+                if (party.id) {
+                  try {
+                    await partiesApi.joinParty(party.id)
+                    setHasJoined(true)
+                  } catch (err) {
+                    console.error('Failed to join party:', err)
+                  }
+                }
+              }}>
                 join
               </button>
               <button
                 className={`profile-action-btn follow ${isFollowing ? 'following' : ''}`}
-                onClick={() => setIsFollowing(!isFollowing)}
+                onClick={async () => {
+                  if (party.id) {
+                    try {
+                      if (isFollowing) {
+                        await partiesApi.unfollowParty(party.id)
+                      } else {
+                        await partiesApi.followParty(party.id)
+                      }
+                      setIsFollowing(!isFollowing)
+                    } catch (err) {
+                      console.error('Failed to toggle follow:', err)
+                    }
+                  }
+                }}
               >
                 {isFollowing ? 'following' : 'follow'}
               </button>
@@ -913,10 +958,10 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
         })()}
 
         {/* Race Pills - only show if party is in 2+ races */}
-        {party.races && party.races.length > 1 && (
+        {raceNames.length > 1 && (
           <div className="tag-pills-container">
             <div className="tag-pills">
-              {party.races.map((race) => (
+              {raceNames.map((race) => (
                 <button
                   key={race}
                   className={`tag-pill ${selectedRace === race ? 'active' : ''}`}
@@ -945,9 +990,9 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
             <span className="cp-section-label verified">VERIFIED REVIEWS</span>
           </div>
 
-          {partyVerifiedTestimonials.length > 0 && (
+          {averageRating && (
             <div className="chart-rating-badge below-verified">
-              <span className="rating-value">3.2</span>
+              <span className="rating-value">{averageRating.toFixed(1)}</span>
               <div className="rating-star-circle">
                 <svg className="rating-star" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -957,12 +1002,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           )}
 
           {/* Testimonials - or empty state for new parties */}
-          {partyVerifiedTestimonials.length === 0 && (
+          {communityTestimonials.length === 0 && !loading && (
             <div className="empty-reviews-state">
               <span className="empty-reviews-text">0 reviews yet</span>
             </div>
           )}
-          {partyVerifiedTestimonials.length > 0 && (showAllVerifiedReviews ? partyVerifiedTestimonials : partyVerifiedTestimonials.slice(0, 3)).map((testimonial) => (
+          {communityTestimonials.length > 0 && (showAllVerifiedReviews ? communityTestimonials : communityTestimonials.slice(0, 3)).map((testimonial) => (
             <div
               key={testimonial.id}
               className="member-item paid"
@@ -1006,7 +1051,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           ))}
 
           {/* Load More / Load Less Verified Reviews */}
-          {partyVerifiedTestimonials.length > 3 && (
+          {communityTestimonials.length > 3 && (
             <div
               className="load-more-buttons verified-reviews"
               onClick={() => setShowAllVerifiedReviews(!showAllVerifiedReviews)}
@@ -1049,84 +1094,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
             Leave a Verified Review
           </button>
 
-          {/* Community Members Section Header - hide for new parties with no reviews */}
-          {communityTestimonials.length > 0 && (
-            <>
-          <div className="cp-section-header">
-            <div className="cp-divider-section community">
-              <div className="member-divider community"></div>
-              <div className="cp-badge community">
-                <div className="cp-badge-circle">
-                  <span className="cp-badge-c">C</span>
-                  <span className="cp-badge-p">P</span>
-                </div>
-              </div>
-            </div>
-            <span className="cp-section-label community">Community Reviews</span>
-          </div>
-
-          {/* Regular Member Testimonials */}
-          {communityTestimonials.map((testimonial) => (
-            <div
-              key={testimonial.id}
-              className="member-item clickable"
-              onClick={() => setRespondingTo(testimonial)}
-            >
-              <div className="member-header">
-                <div className="member-user">
-                  <div
-                    className="member-avatar-ring"
-                    style={{ borderColor: partyColor }}
-                  >
-                    <img
-                      src={testimonial.user.avatar}
-                      alt={testimonial.user.username}
-                      className="member-avatar"
-                    />
-                  </div>
-                  <span className="member-username">{testimonial.user.username}</span>
-                </div>
-                <span className="member-time">{testimonial.timestamp}</span>
-              </div>
-
-              {testimonial.text && (
-                <p className="member-text">{testimonial.text}</p>
-              )}
-
-              {testimonial.media ? (
-                <div className="member-media">
-                  <img src={testimonial.media} alt="Member media" />
-                  <div className="member-rating overlay">
-                    {renderStars(testimonial.rating)}
-                  </div>
-                </div>
-              ) : (
-                <div className="member-rating">
-                  {renderStars(testimonial.rating)}
-                </div>
-              )}
-
-              {/* Display response if exists */}
-              {reviewResponses[testimonial.id] && (
-                <>
-                  <div className="member-response">
-                    <div className="response-header">
-                      <img src={party.avatar} alt={party.name} className="response-avatar" />
-                      <span className="response-author">{party.name}</span>
-                    </div>
-                    <p className="response-text">{reviewResponses[testimonial.id]}</p>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-          </>
-          )}
-
-          {/* Leave a Review - for community reviews */}
-          {communityTestimonials.length > 0 && (
-            <p className="leave-review-text" onClick={() => setShowReviewModal(true)} style={{ cursor: 'pointer' }}>Leave a Review</p>
-          )}
+          {/* Leave a Review link - shown when there are reviews */}
+          <p className="leave-review-text" onClick={() => setShowReviewModal(true)} style={{ cursor: 'pointer' }}>Leave a Review</p>
         </div>
 
         {/* Load More Button */}
@@ -1384,7 +1353,9 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               </button>
             </div>
             <div className="stat-modal-content">
-              {mockPartyMembers.map((member) => (
+              {partyMembers.length === 0 ? (
+                <div className="stat-modal-empty">No members yet</div>
+              ) : partyMembers.map((member) => (
                 <div
                   key={member.id}
                   className="stat-modal-row clickable"
@@ -1422,7 +1393,9 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               </button>
             </div>
             <div className="stat-modal-content">
-              {partyFollowersState.map((follower) => (
+              {partyFollowersState.length === 0 ? (
+                <div className="stat-modal-empty">No followers yet</div>
+              ) : partyFollowersState.map((follower) => (
                 <div key={follower.id} className="stat-modal-row">
                   <div
                     className="stat-row-user clickable"
@@ -1463,8 +1436,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               </button>
             </div>
             <div className="stat-modal-content">
+              {partyRacesList.length === 0 ? (
+                <div className="stat-modal-empty">Not competing in any races yet</div>
+              ) : null}
               {/* Won Races - at the top, green */}
-              {mockPartyRaces.filter(r => r.isWon).map((race) => (
+              {partyRacesList.filter(r => r.isWon).map((race) => (
                 <div key={race.id} className="stat-modal-row race-row won">
                   <div className="race-row-info">
                     <div className="race-row-indicator won"></div>
@@ -1475,7 +1451,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               ))}
 
               {/* Running Races - color coded */}
-              {mockPartyRaces.filter(r => r.isRunning && !r.isWon).map((race) => (
+              {partyRacesList.filter(r => r.isRunning && !r.isWon).map((race) => (
                 <div
                   key={race.id}
                   className="stat-modal-row race-row clickable"

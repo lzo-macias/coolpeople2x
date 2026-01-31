@@ -165,15 +165,89 @@ async function main() {
 }
 
 // -----------------------------------------------------------------------------
+// Cleanup orphaned parties
+// Parties with 0 members that weren't properly deleted
+// -----------------------------------------------------------------------------
+
+async function cleanupOrphanedParties() {
+  console.log('\nCleaning up orphaned parties...');
+
+  // Find all parties that are not deleted
+  const activeParties = await prisma.party.findMany({
+    where: { deletedAt: null },
+    include: {
+      _count: { select: { memberships: true } },
+    },
+  });
+
+  // Filter to parties with 0 members
+  const orphanedParties = activeParties.filter((p) => p._count.memberships === 0);
+
+  if (orphanedParties.length === 0) {
+    console.log('  No orphaned parties found.');
+    return;
+  }
+
+  console.log(`  Found ${orphanedParties.length} orphaned parties:`);
+
+  for (const party of orphanedParties) {
+    console.log(`    - "${party.name}" (${party.id})`);
+
+    // Clean up related data and soft-delete the party
+    await prisma.$transaction(async (tx) => {
+      // Clear partyId from any users who have this as their primary party
+      await tx.user.updateMany({
+        where: { partyId: party.id },
+        data: { partyId: null },
+      });
+
+      // Delete related data
+      await tx.partyFollow.deleteMany({ where: { partyId: party.id } });
+      await tx.partyJoinRequest.deleteMany({ where: { partyId: party.id } });
+      await tx.groupChat.deleteMany({ where: { partyId: party.id } });
+
+      // Remove from race competitions and point ledgers
+      await tx.pointLedger.deleteMany({ where: { partyId: party.id } });
+      await tx.raceCompetitor.deleteMany({ where: { partyId: party.id } });
+
+      // Soft delete the party
+      await tx.party.update({
+        where: { id: party.id },
+        data: { deletedAt: new Date() },
+      });
+    });
+
+    console.log(`      Deleted.`);
+  }
+
+  console.log(`  Cleaned up ${orphanedParties.length} orphaned parties.`);
+}
+
+// -----------------------------------------------------------------------------
 // Execute
 // -----------------------------------------------------------------------------
 
-main()
-  .catch((e) => {
-    console.error('Seed failed:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+const command = process.argv[2];
+
+if (command === 'cleanup-parties') {
+  cleanupOrphanedParties()
+    .catch((e) => {
+      console.error('Cleanup failed:', e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+      await pool.end();
+    });
+} else {
+  main()
+    .then(() => cleanupOrphanedParties())
+    .catch((e) => {
+      console.error('Seed failed:', e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+      await pool.end();
+    });
+}

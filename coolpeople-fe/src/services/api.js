@@ -332,6 +332,23 @@ export const racesApi = {
 export const partiesApi = {
   getParty: (partyId) => apiFetch(`/api/parties/${partyId}`),
 
+  getPartyByHandle: (handle) => apiFetch(`/api/parties/by-handle/${encodeURIComponent(handle)}`),
+
+  // Check if party name or handle is available
+  checkName: (name, handle) => {
+    const params = new URLSearchParams();
+    if (name) params.append('name', name);
+    if (handle) params.append('handle', handle);
+    return apiFetch(`/api/parties/check-name?${params.toString()}`);
+  },
+
+  // Clean up orphaned parties (maintenance)
+  cleanupOrphaned: () => apiFetch('/api/parties/cleanup-orphaned', {
+    method: 'POST',
+  }),
+
+  getFullProfile: (partyId) => apiFetch(`/api/parties/${partyId}/profile`),
+
   createParty: (data) => apiFetch('/api/parties', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -348,12 +365,18 @@ export const partiesApi = {
 
   getMembers: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/members${cursor ? `?cursor=${cursor}` : ''}`),
 
+  getFollowers: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/followers${cursor ? `?cursor=${cursor}` : ''}`),
+
+  getRaces: (partyId) => apiFetch(`/api/parties/${partyId}/races`),
+
+  getReviews: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/reviews${cursor ? `?cursor=${cursor}` : ''}`),
+
   joinParty: (partyId) => apiFetch(`/api/parties/${partyId}/join`, {
     method: 'POST',
   }),
 
   leaveParty: (partyId) => apiFetch(`/api/parties/${partyId}/leave`, {
-    method: 'POST',
+    method: 'DELETE',
   }),
 
   followParty: (partyId) => apiFetch(`/api/parties/${partyId}/follow`, {

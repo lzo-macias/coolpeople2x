@@ -33,8 +33,8 @@ const formatReel = (
   reel: any,
   viewerId?: string
 ): ReelResponse => {
-  // Get user's party from their membership (if any)
-  const userParty = reel.user.partyMemberships?.[0]?.party;
+  // Get user's primary party from their partyId relation (displayed sitewide)
+  const userParty = reel.user.party;
 
   return {
     id: reel.id,
@@ -108,13 +108,9 @@ const reelIncludes = (viewerId?: string) => ({
       displayName: true,
       avatarUrl: true,
       userType: true,
-      partyMemberships: {
-        take: 1,
-        include: {
-          party: {
-            select: { id: true, name: true, handle: true },
-          },
-        },
+      // Primary party from partyId relation (displayed sitewide)
+      party: {
+        select: { id: true, name: true, handle: true },
       },
     },
   },
@@ -340,29 +336,32 @@ export const likeReel = async (
 ): Promise<void> => {
   const reel = await prisma.reel.findUnique({ where: { id: reelId } });
   if (!reel || reel.deletedAt) throw new NotFoundError('Reel');
-  if (reel.userId === userId) throw new ForbiddenError('Cannot like your own reel');
 
   try {
     await prisma.$transaction([
       prisma.like.create({ data: { userId, reelId } }),
       prisma.reel.update({ where: { id: reelId }, data: { likeCount: { increment: 1 } } }),
     ]);
-    // Update affinity asynchronously
-    updateAffinity(userId, reel.userId, 1).catch(() => {});
-    // Award points to reel creator
-    recordReelEngagementPoints(reelId, reel.userId, userId, 'LIKE').catch(() => {});
-    // Notification for reel creator
-    const liker = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true },
-    });
-    createNotification({
-      userId: reel.userId,
-      type: 'LIKE',
-      title: 'New like',
-      body: `${liker?.username ?? 'Someone'} liked your reel`,
-      data: { reelId, userId },
-    }).catch(() => {});
+
+    // Skip affinity, points, and notifications for self-likes
+    if (reel.userId !== userId) {
+      // Update affinity asynchronously
+      updateAffinity(userId, reel.userId, 1).catch(() => {});
+      // Award points to reel creator
+      recordReelEngagementPoints(reelId, reel.userId, userId, 'LIKE').catch(() => {});
+      // Notification for reel creator
+      const liker = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      });
+      createNotification({
+        userId: reel.userId,
+        type: 'LIKE',
+        title: 'New like',
+        body: `${liker?.username ?? 'Someone'} liked your reel`,
+        data: { reelId, userId },
+      }).catch(() => {});
+    }
   } catch (err: any) {
     if (err?.code === 'P2002') throw new ConflictError('Already liked');
     throw err;

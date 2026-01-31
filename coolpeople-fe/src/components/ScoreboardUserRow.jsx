@@ -9,7 +9,7 @@ const RANK_COLORS = {
   3: '#a67c52', // bronze
 }
 
-function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLoadMore, isExpanded, onToggleExpand, isOwnProfile = false }) {
+function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, onPartyClick, showLoadMore, isExpanded, onToggleExpand, isOwnProfile = false }) {
   const score = user.score ?? 0
   const change = user.change ?? 0
   const isPositive = change >= 0
@@ -41,7 +41,19 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, showLo
       {/* User info */}
       <div className="user-info">
         <span className="user-name">{user.username}</span>
-        <span className="user-party">{user.party || 'Independent'}</span>
+        {user.party ? (
+          <span
+            className="user-party clickable"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPartyClick?.({ id: user.partyId, name: user.party })
+            }}
+          >
+            {user.party}
+          </span>
+        ) : (
+          <span className="user-party">Independent</span>
+        )}
       </div>
 
       {/* Sparkline */}

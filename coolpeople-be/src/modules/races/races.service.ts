@@ -303,10 +303,23 @@ export const getCompetitors = async (
     orderBy: { totalPoints: 'desc' },
     include: {
       user: {
-        select: { id: true, username: true, displayName: true, avatarUrl: true, userType: true },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          userType: true,
+          party: { select: { id: true, name: true } },
+        },
       },
       party: {
-        select: { id: true, name: true, handle: true, avatarUrl: true },
+        select: {
+          id: true,
+          name: true,
+          handle: true,
+          avatarUrl: true,
+          _count: { select: { memberships: true } },
+        },
       },
     },
   });
@@ -323,10 +336,16 @@ export const getCompetitors = async (
     totalPoints: l.totalPoints,
     tier: l.tier,
     user: l.user
-      ? { id: l.user.id, username: l.user.username, displayName: l.user.displayName, avatarUrl: l.user.avatarUrl }
+      ? {
+          id: l.user.id,
+          username: l.user.username,
+          displayName: l.user.displayName,
+          avatarUrl: l.user.avatarUrl,
+          party: l.user.party ? { id: l.user.party.id, name: l.user.party.name } : undefined,
+        }
       : undefined,
     party: l.party
-      ? { id: l.party.id, name: l.party.name, handle: l.party.handle, avatarUrl: l.party.avatarUrl }
+      ? { id: l.party.id, name: l.party.name, handle: l.party.handle, avatarUrl: l.party.avatarUrl, memberCount: (l.party as any)._count?.memberships ?? 0 }
       : undefined,
   }));
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelActions.css'
 import { getPartyColor } from '../data/mockData'
@@ -22,7 +22,7 @@ const recentContacts = [
 
 function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const partyColor = getPartyColor(user?.party)
-  const [isLiked, setIsLiked] = useState(false)
+  const [isLiked, setIsLiked] = useState(reel?.isLiked || false)
   const [likeCount, setLikeCount] = useState(stats?.likes || '9,999')
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -30,15 +30,24 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const [createGroupExpanded, setCreateGroupExpanded] = useState(false)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
 
+  // Sync liked state when reel changes (e.g., scrolling to different reel or reload)
+  useEffect(() => {
+    setIsLiked(reel?.isLiked || false)
+  }, [reel?.id, reel?.isLiked])
+
   const handleLike = async () => {
     // Optimistic update
     const wasLiked = isLiked
+    const currentCount = parseInt(likeCount.replace(/,/g, '')) || 0
+
     if (wasLiked) {
-      const num = parseInt(likeCount.replace(/,/g, '')) - 1
-      setLikeCount(num.toLocaleString())
+      // Unliking - ensure count doesn't go below 0
+      const newCount = Math.max(0, currentCount - 1)
+      setLikeCount(newCount.toLocaleString())
     } else {
-      const num = parseInt(likeCount.replace(/,/g, '')) + 1
-      setLikeCount(num.toLocaleString())
+      // Liking - increment count
+      const newCount = currentCount + 1
+      setLikeCount(newCount.toLocaleString())
       if (onTrackActivity && reel) {
         onTrackActivity('like', reel)
       }
@@ -58,8 +67,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
       // Revert on error
       console.log('Like error:', error.message)
       setIsLiked(wasLiked)
-      const num = parseInt(likeCount.replace(/,/g, '')) + (wasLiked ? 1 : -1)
-      setLikeCount(num.toLocaleString())
+      const revertCount = parseInt(likeCount.replace(/,/g, '')) || 0
+      const revertedCount = Math.max(0, revertCount + (wasLiked ? 1 : -1))
+      setLikeCount(revertedCount.toLocaleString())
     }
   }
 

@@ -29,15 +29,29 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   // If in race mode, use the raceName; otherwise show races user follows/competes in
   const buildTargetRaces = () => {
     if (isRaceMode && raceName) return [raceName]
-    // Combine followed and competing races, remove duplicates
-    const allRaces = [...new Set([...userRacesFollowing, ...userRacesCompeting])]
-    // Filter out UUIDs (race IDs), "default", and empty values - only keep actual race names
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    return allRaces.filter(race =>
-      race &&
-      race !== 'default' &&
-      !uuidPattern.test(race)
-    )
+    // Combine followed and competing races, remove duplicates by id
+    const allRaces = [...userRacesFollowing, ...userRacesCompeting]
+    // Handle both object format {id, title} and legacy string format
+    const uniqueRaces = []
+    const seenIds = new Set()
+    for (const race of allRaces) {
+      if (!race) continue
+      // Handle object format
+      if (typeof race === 'object' && race.id) {
+        if (!seenIds.has(race.id)) {
+          seenIds.add(race.id)
+          uniqueRaces.push(race.title)
+        }
+      } else if (typeof race === 'string') {
+        // Legacy string format - filter out UUIDs and "default"
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (race !== 'default' && !uuidPattern.test(race) && !seenIds.has(race)) {
+          seenIds.add(race)
+          uniqueRaces.push(race)
+        }
+      }
+    }
+    return uniqueRaces
   }
   const targetRaces = buildTargetRaces()
 

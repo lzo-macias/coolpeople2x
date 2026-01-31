@@ -8,6 +8,27 @@ import * as partiesService from './parties.service.js';
 import { sendSuccess, sendCreated, sendNoContent, sendPaginated } from '../../lib/response.js';
 
 // =============================================================================
+// PARTY NAME/HANDLE AVAILABILITY
+// =============================================================================
+
+// GET /api/parties/check-name
+export const checkPartyName = async (req: Request, res: Response): Promise<void> => {
+  const { name, handle } = req.query as { name?: string; handle?: string };
+  const result = await partiesService.checkPartyNameAvailability(name, handle);
+  sendSuccess(res, result);
+};
+
+// =============================================================================
+// ORPHANED PARTY CLEANUP
+// =============================================================================
+
+// POST /api/parties/cleanup-orphaned (admin/maintenance endpoint)
+export const cleanupOrphanedParties = async (req: Request, res: Response): Promise<void> => {
+  const result = await partiesService.cleanupOrphanedParties();
+  sendSuccess(res, result);
+};
+
+// =============================================================================
 // PARTY CRUD
 // =============================================================================
 
@@ -42,6 +63,13 @@ export const listParties = async (req: Request, res: Response): Promise<void> =>
 export const getParty = async (req: Request, res: Response): Promise<void> => {
   const id = req.params.id as string;
   const party = await partiesService.getParty(id, req.user?.userId);
+  sendSuccess(res, { party });
+};
+
+// GET /api/parties/by-handle/:handle
+export const getPartyByHandle = async (req: Request, res: Response): Promise<void> => {
+  const handle = req.params.handle as string;
+  const party = await partiesService.getPartyByHandle(handle, req.user?.userId);
   sendSuccess(res, { party });
 };
 
@@ -224,4 +252,66 @@ export const removeReaction = async (req: Request, res: Response): Promise<void>
   const emoji = req.params.emoji as string;
   await partiesService.removeReaction(id, messageId, req.user!.userId, emoji);
   sendNoContent(res);
+};
+
+// =============================================================================
+// FOLLOWERS
+// =============================================================================
+
+// GET /api/parties/:id/followers
+export const listFollowers = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.listFollowers(
+    id,
+    cursor,
+    parseInt(limit) || 20,
+    req.user?.userId
+  );
+  sendPaginated(res, result.followers, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// =============================================================================
+// PARTY RACES
+// =============================================================================
+
+// GET /api/parties/:id/races
+export const listPartyRaces = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const races = await partiesService.listPartyRaces(id);
+  sendSuccess(res, { races });
+};
+
+// =============================================================================
+// PARTY REVIEWS
+// =============================================================================
+
+// GET /api/parties/:id/reviews
+export const listPartyReviews = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.listPartyReviews(
+    id,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.reviews, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+    averageRating: result.averageRating,
+  } as any);
+};
+
+// =============================================================================
+// FULL PARTY PROFILE
+// =============================================================================
+
+// GET /api/parties/:id/profile
+export const getFullPartyProfile = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const party = await partiesService.getFullPartyProfile(id, req.user?.userId);
+  sendSuccess(res, { party });
 };

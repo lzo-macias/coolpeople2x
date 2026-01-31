@@ -17,6 +17,10 @@ import type {
   CreatePartyRequest,
   UpdatePartyRequest,
   UpdateMemberPermissionsRequest,
+  PartyFollowerResponse,
+  PartyRaceResponse,
+  PartyReviewResponse,
+  FullPartyProfileResponse,
 } from './parties.types.js';
 
 // =============================================================================
@@ -76,6 +80,167 @@ const getMembershipOrThrow = async (userId: string, partyId: string) => {
   return membership;
 };
 
+/**
+ * Helper: Handle leaving user's current party when they join/create a new one.
+ * If user was the last member, the old party is soft-deleted and removed from races.
+ * Must be called within a transaction context (tx).
+ */
+const handleLeavePreviousParty = async (
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  userId: string
+): Promise<void> => {
+  // Check if user is currently in a party
+  const currentMembership = await tx.partyMembership.findFirst({
+    where: { userId },
+  });
+
+  if (!currentMembership) return;
+
+  const oldPartyId = currentMembership.partyId;
+
+  // Check member count of old party
+  const memberCount = await tx.partyMembership.count({
+    where: { partyId: oldPartyId },
+  });
+
+  // Remove user's membership from old party
+  await tx.partyMembership.delete({
+    where: { id: currentMembership.id },
+  });
+
+  // If this was the last member, soft-delete the old party
+  if (memberCount <= 1) {
+    // Clear partyId from any users who have this as their primary party
+    await tx.user.updateMany({
+      where: { partyId: oldPartyId },
+      data: { partyId: null },
+    });
+
+    // Delete related data
+    await tx.partyFollow.deleteMany({ where: { partyId: oldPartyId } });
+    await tx.partyJoinRequest.deleteMany({ where: { partyId: oldPartyId } });
+    await tx.groupChat.deleteMany({ where: { partyId: oldPartyId } });
+
+    // Remove from race competitions and point ledgers
+    await tx.pointLedger.deleteMany({ where: { partyId: oldPartyId } });
+    await tx.raceCompetitor.deleteMany({ where: { partyId: oldPartyId } });
+
+    // Soft delete the party
+    await tx.party.update({
+      where: { id: oldPartyId },
+      data: { deletedAt: new Date() },
+    });
+  }
+};
+
+// =============================================================================
+// PARTY NAME/HANDLE AVAILABILITY CHECK
+// =============================================================================
+
+/**
+ * Check if a party name or handle is already taken
+ * Returns { available: boolean, takenBy: 'name' | 'handle' | null }
+ */
+export const checkPartyNameAvailability = async (
+  name?: string,
+  handle?: string
+): Promise<{ available: boolean; takenBy: 'name' | 'handle' | null }> => {
+  // Check handle first (more specific)
+  if (handle) {
+    const existingByHandle = await prisma.party.findFirst({
+      where: {
+        handle: handle.toLowerCase(),
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (existingByHandle) {
+      return { available: false, takenBy: 'handle' };
+    }
+  }
+
+  // Check name (case-insensitive)
+  if (name) {
+    const existingByName = await prisma.party.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (existingByName) {
+      return { available: false, takenBy: 'name' };
+    }
+  }
+
+  return { available: true, takenBy: null };
+};
+
+// =============================================================================
+// ORPHANED PARTY DATA CLEANUP
+// =============================================================================
+
+/**
+ * Clean up orphaned party data:
+ * 1. Find parties with 0 members that aren't soft-deleted yet
+ * 2. Soft delete them and clean up related data (except posts)
+ * 3. Return count of cleaned up parties
+ */
+export const cleanupOrphanedParties = async (): Promise<{
+  cleanedCount: number;
+  orphanedPartyIds: string[];
+}> => {
+  // Find parties that have no members but aren't soft-deleted
+  const orphanedParties = await prisma.party.findMany({
+    where: {
+      deletedAt: null,
+      memberships: {
+        none: {},
+      },
+    },
+    select: { id: true, name: true },
+  });
+
+  const orphanedPartyIds = orphanedParties.map((p) => p.id);
+
+  if (orphanedPartyIds.length === 0) {
+    return { cleanedCount: 0, orphanedPartyIds: [] };
+  }
+
+  // Clean up each orphaned party
+  await prisma.$transaction(async (tx) => {
+    for (const partyId of orphanedPartyIds) {
+      // Clear partyId from any users who have this as their primary party
+      await tx.user.updateMany({
+        where: { partyId },
+        data: { partyId: null },
+      });
+
+      // Delete related data (NOT posts - they live on user profiles too)
+      await tx.partyFollow.deleteMany({ where: { partyId } });
+      await tx.partyJoinRequest.deleteMany({ where: { partyId } });
+      await tx.groupChat.deleteMany({ where: { partyId } });
+      await tx.pointLedger.deleteMany({ where: { partyId } });
+      await tx.raceCompetitor.deleteMany({ where: { partyId } });
+      await tx.icebreaker.deleteMany({ where: { partyId } });
+
+      // Note: Posts (Reels) are NOT deleted - they remain associated with the user
+      // The partyId on Reel is just for categorization, not ownership
+
+      // Soft delete the party
+      await tx.party.update({
+        where: { id: partyId },
+        data: { deletedAt: new Date() },
+      });
+    }
+  });
+
+  return {
+    cleanedCount: orphanedPartyIds.length,
+    orphanedPartyIds,
+  };
+};
+
 // =============================================================================
 // PARTY CRUD
 // =============================================================================
@@ -88,8 +253,11 @@ export const createParty = async (
   data: CreatePartyRequest,
   creatorId: string
 ): Promise<PartyResponse> => {
-  // Create party + creator membership + group chat in a transaction
+  // Create party + creator membership + group chat + update user affiliation in a transaction
   const party = await prisma.$transaction(async (tx) => {
+    // Handle leaving previous party (deletes it if user was last member)
+    await handleLeavePreviousParty(tx, creatorId);
+
     const newParty = await tx.party.create({
       data: {
         name: data.name,
@@ -116,22 +284,32 @@ export const createParty = async (
       data: { partyId: newParty.id },
     });
 
+    // Update creator's primary party affiliation (displayed sitewide on their profile)
+    // This changes their affiliation from Independent/previous party to this new party
+    await tx.user.update({
+      where: { id: creatorId },
+      data: { partyId: newParty.id },
+    });
+
     return newParty;
   });
 
-  // Auto-enroll in "Best Party" system race
+  // Auto-enroll in "Best Party" system race with starting bonus
   const bestPartyRace = await prisma.race.findFirst({
     where: { isSystemRace: true, raceType: 'PARTY_VS_PARTY' },
     select: { id: true },
   });
 
   if (bestPartyRace) {
+    // Give new parties a small starting bonus (10-50 points) to encourage engagement
+    const startingBonus = Math.floor(Math.random() * 41) + 10; // Random 10-50
+
     await prisma.$transaction([
       prisma.raceCompetitor.create({
         data: { raceId: bestPartyRace.id, partyId: party.id },
       }),
       prisma.pointLedger.create({
-        data: { partyId: party.id, raceId: bestPartyRace.id, totalPoints: 0, tier: 'BRONZE' },
+        data: { partyId: party.id, raceId: bestPartyRace.id, totalPoints: startingBonus, tier: 'BRONZE' },
       }),
     ]).catch(() => {}); // Don't fail party creation on race enrollment errors
   }
@@ -159,6 +337,53 @@ export const getParty = async (
   });
 
   if (!party || party.deletedAt) {
+    throw new NotFoundError('Party');
+  }
+
+  return formatParty(party, viewerId);
+};
+
+// -----------------------------------------------------------------------------
+// Get Party by Handle or Name
+// Searches by handle first, then by name (case-insensitive)
+// -----------------------------------------------------------------------------
+
+export const getPartyByHandle = async (
+  handleOrName: string,
+  viewerId?: string
+): Promise<PartyResponse> => {
+  // First try exact handle match
+  let party = await prisma.party.findFirst({
+    where: {
+      handle: handleOrName.toLowerCase(),
+      deletedAt: null,
+    },
+    include: partyIncludes(viewerId),
+  });
+
+  // If not found, try name match (case-insensitive)
+  if (!party) {
+    party = await prisma.party.findFirst({
+      where: {
+        name: { equals: handleOrName, mode: 'insensitive' },
+        deletedAt: null,
+      },
+      include: partyIncludes(viewerId),
+    });
+  }
+
+  // If still not found, try partial name match
+  if (!party) {
+    party = await prisma.party.findFirst({
+      where: {
+        name: { contains: handleOrName, mode: 'insensitive' },
+        deletedAt: null,
+      },
+      include: partyIncludes(viewerId),
+    });
+  }
+
+  if (!party) {
     throw new NotFoundError('Party');
   }
 
@@ -365,12 +590,23 @@ export const joinParty = async (
   }
 
   // Public party: join immediately
-  await prisma.partyMembership.create({
-    data: {
-      userId,
-      partyId,
-      permissions: DEFAULT_MEMBER_PERMISSIONS,
-    },
+  await prisma.$transaction(async (tx) => {
+    // Handle leaving previous party (deletes it if user was last member)
+    await handleLeavePreviousParty(tx, userId);
+
+    await tx.partyMembership.create({
+      data: {
+        userId,
+        partyId,
+        permissions: DEFAULT_MEMBER_PERMISSIONS,
+      },
+    });
+
+    // Update user's primary party affiliation (displayed sitewide on their profile)
+    await tx.user.update({
+      where: { id: userId },
+      data: { partyId },
+    });
   });
 
   return { joined: true, requested: false };
@@ -386,7 +622,40 @@ export const leaveParty = async (
 ): Promise<void> => {
   const membership = await getMembershipOrThrow(userId, partyId);
 
-  // Prevent the last admin from leaving
+  // Check total member count
+  const memberCount = await prisma.partyMembership.count({
+    where: { partyId },
+  });
+
+  // If this is the last member, delete the party entirely
+  if (memberCount <= 1) {
+    await prisma.$transaction(async (tx) => {
+      // Clear partyId from any users who have this as their primary party
+      await tx.user.updateMany({
+        where: { partyId },
+        data: { partyId: null },
+      });
+
+      // Delete related data
+      await tx.partyMembership.deleteMany({ where: { partyId } });
+      await tx.partyFollow.deleteMany({ where: { partyId } });
+      await tx.partyJoinRequest.deleteMany({ where: { partyId } });
+      await tx.groupChat.deleteMany({ where: { partyId } });
+
+      // Remove from race competitions and point ledgers
+      await tx.pointLedger.deleteMany({ where: { partyId } });
+      await tx.raceCompetitor.deleteMany({ where: { partyId } });
+
+      // Soft delete the party
+      await tx.party.update({
+        where: { id: partyId },
+        data: { deletedAt: new Date() },
+      });
+    });
+    return;
+  }
+
+  // Prevent the last admin from leaving (if there are other members)
   if (membership.permissions.includes('admin')) {
     const adminCount = await prisma.partyMembership.count({
       where: {
@@ -399,7 +668,14 @@ export const leaveParty = async (
     }
   }
 
-  await prisma.partyMembership.delete({ where: { id: membership.id } });
+  // Clear user's primary party affiliation if leaving their primary party
+  await prisma.$transaction([
+    prisma.partyMembership.delete({ where: { id: membership.id } }),
+    prisma.user.update({
+      where: { id: userId, partyId },
+      data: { partyId: null },
+    }),
+  ]);
 };
 
 // -----------------------------------------------------------------------------
@@ -581,19 +857,29 @@ export const approveJoinRequest = async (
     throw new ConflictError('Join request already processed');
   }
 
-  await prisma.$transaction([
-    prisma.partyJoinRequest.update({
+  await prisma.$transaction(async (tx) => {
+    // Handle leaving previous party (deletes it if user was last member)
+    await handleLeavePreviousParty(tx, request.userId);
+
+    await tx.partyJoinRequest.update({
       where: { id: requestId },
       data: { status: 'APPROVED' },
-    }),
-    prisma.partyMembership.create({
+    });
+
+    await tx.partyMembership.create({
       data: {
         userId: request.userId,
         partyId,
         permissions: DEFAULT_MEMBER_PERMISSIONS,
       },
-    }),
-  ]);
+    });
+
+    // Update user's primary party affiliation (displayed sitewide on their profile)
+    await tx.user.update({
+      where: { id: request.userId },
+      data: { partyId },
+    });
+  });
 
   // Notify the user that their request was approved
   const party = await prisma.party.findUnique({
@@ -861,6 +1147,313 @@ export const removeReaction = async (
   if (!reaction) throw new NotFoundError('Reaction');
 
   await prisma.chatReaction.delete({ where: { id: reaction.id } });
+};
+
+// =============================================================================
+// FOLLOWERS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// List Party Followers
+// -----------------------------------------------------------------------------
+
+export const listFollowers = async (
+  partyId: string,
+  cursor?: string,
+  limit: number = 20,
+  viewerId?: string
+): Promise<{ followers: PartyFollowerResponse[]; nextCursor: string | null }> => {
+  await getPartyOrThrow(partyId);
+
+  const follows = await prisma.partyFollow.findMany({
+    where: { partyId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          party: { select: { name: true } },
+          followers: viewerId ? { where: { followerId: viewerId }, take: 1 } : false,
+        },
+      },
+    },
+  });
+
+  const hasMore = follows.length > limit;
+  const results = hasMore ? follows.slice(0, -1) : follows;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return {
+    followers: results.map((f) => ({
+      id: f.id,
+      userId: f.user.id,
+      username: f.user.username,
+      displayName: f.user.displayName,
+      avatarUrl: f.user.avatarUrl,
+      partyName: f.user.party?.name || null,
+      isFollowing: viewerId ? (f.user.followers as any[])?.length > 0 : undefined,
+      createdAt: f.createdAt,
+    })),
+    nextCursor,
+  };
+};
+
+// =============================================================================
+// PARTY RACES
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// List Party Races (races the party is competing in with points data)
+// -----------------------------------------------------------------------------
+
+export const listPartyRaces = async (
+  partyId: string
+): Promise<PartyRaceResponse[]> => {
+  await getPartyOrThrow(partyId);
+
+  // Get all race competitions for this party
+  const competitions = await prisma.raceCompetitor.findMany({
+    where: { partyId },
+    include: {
+      race: {
+        select: {
+          id: true,
+          title: true,
+          raceType: true,
+          isSystemRace: true,
+        },
+      },
+    },
+  });
+
+  // Get point ledgers for each race
+  const raceResults: PartyRaceResponse[] = [];
+
+  for (const comp of competitions) {
+    const ledger = await prisma.pointLedger.findUnique({
+      where: { partyId_raceId: { partyId, raceId: comp.raceId } },
+    });
+
+    // Calculate position in this race
+    const position = ledger
+      ? await prisma.pointLedger.count({
+          where: {
+            raceId: comp.raceId,
+            partyId: { not: null },
+            totalPoints: { gt: ledger.totalPoints },
+          },
+        }) + 1
+      : null;
+
+    // Calculate change from last week (simplified - get events from last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const recentEvents = ledger
+      ? await prisma.pointEvent.aggregate({
+          where: {
+            ledgerId: ledger.id,
+            createdAt: { gte: weekAgo },
+          },
+          _sum: { points: true },
+        })
+      : { _sum: { points: 0 } };
+
+    const change = recentEvents._sum.points || 0;
+    const changeStr = change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2);
+
+    raceResults.push({
+      id: comp.id,
+      raceId: comp.raceId,
+      raceName: comp.race.title,
+      raceType: comp.race.raceType,
+      position,
+      totalPoints: ledger?.totalPoints || 0,
+      tier: ledger?.tier || 'BRONZE',
+      change: changeStr,
+      isSystemRace: comp.race.isSystemRace,
+    });
+  }
+
+  return raceResults;
+};
+
+// =============================================================================
+// PARTY REVIEWS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// List Party Reviews
+// -----------------------------------------------------------------------------
+
+export const listPartyReviews = async (
+  partyId: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ reviews: PartyReviewResponse[]; nextCursor: string | null; averageRating: number | null }> => {
+  await getPartyOrThrow(partyId);
+
+  const reviews = await prisma.review.findMany({
+    where: { targetPartyId: partyId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      author: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          party: { select: { name: true } },
+        },
+      },
+      replies: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  // Calculate average rating
+  const ratingAgg = await prisma.review.aggregate({
+    where: { targetPartyId: partyId },
+    _avg: { rating: true },
+    _count: { id: true },
+  });
+
+  const hasMore = reviews.length > limit;
+  const results = hasMore ? reviews.slice(0, -1) : reviews;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return {
+    reviews: results.map((r) => ({
+      id: r.id,
+      author: {
+        id: r.author.id,
+        username: r.author.username,
+        displayName: r.author.displayName,
+        avatarUrl: r.author.avatarUrl,
+        partyName: r.author.party?.name || null,
+      },
+      rating: r.rating,
+      content: r.content,
+      createdAt: r.createdAt,
+      replies: r.replies.map((rep) => ({
+        id: rep.id,
+        userId: rep.user.id,
+        username: rep.user.username,
+        displayName: rep.user.displayName,
+        avatarUrl: rep.user.avatarUrl,
+        content: rep.content,
+        createdAt: rep.createdAt,
+      })),
+    })),
+    nextCursor,
+    averageRating: ratingAgg._avg.rating,
+  };
+};
+
+// =============================================================================
+// FULL PARTY PROFILE
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Get Full Party Profile (comprehensive data for profile page)
+// -----------------------------------------------------------------------------
+
+export const getFullPartyProfile = async (
+  partyId: string,
+  viewerId?: string
+): Promise<FullPartyProfileResponse> => {
+  const party = await prisma.party.findUnique({
+    where: { id: partyId },
+    include: {
+      ...partyIncludes(viewerId),
+      reviewsReceived: {
+        select: { rating: true },
+      },
+    },
+  });
+
+  if (!party || party.deletedAt) {
+    throw new NotFoundError('Party');
+  }
+
+  // Get Best Party race points (system race)
+  const bestPartyRace = await prisma.race.findFirst({
+    where: { isSystemRace: true, raceType: 'PARTY_VS_PARTY' },
+    select: { id: true },
+  });
+
+  let cpPoints = 0;
+  let tier = 'BRONZE';
+  let change = '+0.00';
+
+  if (bestPartyRace) {
+    const ledger = await prisma.pointLedger.findUnique({
+      where: { partyId_raceId: { partyId, raceId: bestPartyRace.id } },
+    });
+
+    if (ledger) {
+      cpPoints = ledger.totalPoints;
+      tier = ledger.tier;
+
+      // Calculate weekly change
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const recentEvents = await prisma.pointEvent.aggregate({
+        where: {
+          ledgerId: ledger.id,
+          createdAt: { gte: weekAgo },
+        },
+        _sum: { points: true },
+      });
+
+      const changeVal = recentEvents._sum.points || 0;
+      change = changeVal >= 0 ? `+${changeVal.toFixed(2)}` : changeVal.toFixed(2);
+    }
+  }
+
+  // Count races
+  const raceCount = await prisma.raceCompetitor.count({
+    where: { partyId },
+  });
+
+  // Calculate average rating
+  const totalRating = party.reviewsReceived.reduce((sum, r) => sum + r.rating, 0);
+  const averageRating = party.reviewsReceived.length > 0
+    ? totalRating / party.reviewsReceived.length
+    : null;
+
+  const baseParty = formatParty(party, viewerId);
+
+  return {
+    ...baseParty,
+    stats: {
+      cpPoints,
+      tier,
+      change,
+      raceCount,
+    },
+    averageRating,
+    reviewCount: party.reviewsReceived.length,
+  };
 };
 
 // =============================================================================

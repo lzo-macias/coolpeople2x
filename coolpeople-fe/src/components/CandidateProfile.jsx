@@ -475,7 +475,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         id: fetchedProfile.id,
         username: fetchedProfile.username || passedCandidate?.username || defaults.username,
         avatar: fetchedProfile.avatarUrl || passedCandidate?.avatar || defaults.avatar,
-        party: fetchedProfile.party || passedCandidate?.party || defaults.party,
+        party: fetchedProfile.party?.name || fetchedProfile.party || passedCandidate?.party || defaults.party,
         bio: fetchedProfile.bio || passedCandidate?.bio || defaults.bio,
         followers: fetchedProfile.followersCount?.toString() || passedCandidate?.followers || defaults.followers,
         following: fetchedProfile.followingCount?.toString() || passedCandidate?.following || defaults.following,

@@ -74,6 +74,17 @@
   color: #999;
 }
 
+.user-party.clickable {
+  cursor: pointer;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.user-party.clickable:hover {
+  color: #e91e8c;
+  text-decoration: underline;
+}
+
 .user-sparkline {
   flex-shrink: 0;
   width: 60px;

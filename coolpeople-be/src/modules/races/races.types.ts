@@ -38,12 +38,17 @@ export interface CompetitorResponse {
     username: string;
     displayName: string;
     avatarUrl: string | null;
+    party?: {
+      id: string;
+      name: string;
+    };
   };
   party?: {
     id: string;
     name: string;
     handle: string;
     avatarUrl: string | null;
+    memberCount: number;
   };
 }
 

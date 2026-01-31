@@ -2087,3 +2087,42 @@
   color: #FFFFFF;
   margin: 0;
 }
+
+/* Loading State */
+.party-profile .profile-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 16px;
+  color: #888888;
+}
+
+.party-profile .profile-loading p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.party-profile .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #666666;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty State for Modals */
+.party-profile .stat-modal-empty {
+  padding: 24px;
+  text-align: center;
+  color: #666666;
+  font-size: 14px;
+}
