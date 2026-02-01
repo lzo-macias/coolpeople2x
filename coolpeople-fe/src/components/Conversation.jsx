@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
-import { messagesApi } from '../services/api'
+import { messagesApi, partiesApi } from '../services/api'
 import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket } from '../services/socket'
+import { useAuth } from '../contexts/AuthContext'
 import CreateScreen from './CreateScreen'
 import PartySettings from './PartySettings'
 import ChatSettings from './ChatSettings'
 import MessageReelViewer from './MessageReelViewer'
 import '../styling/Conversation.css'
+import '../styling/PartyCreationFlow.css'
 
 // Audio Message Component
 function AudioMessage({ src, duration }) {
@@ -92,6 +94,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   console.log('conversation.user:', conversation?.user)
   console.log('currentUserId:', currentUserId)
 
+  const { user: currentUser, updateUser } = useAuth()
   const [messageText, setMessageText] = useState('')
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [localMessages, setLocalMessages] = useState([])
@@ -104,6 +107,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [conversationId, setConversationId] = useState(conversation.id)
+  const [showJoinConfirmation, setShowJoinConfirmation] = useState(false)
+  const [pendingInvite, setPendingInvite] = useState(null)
+  const [isJoining, setIsJoining] = useState(false)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
@@ -141,11 +147,60 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     setReelViewerMessageId(msg.id)
   }
 
-  // Handle accepting a party invite
+  // Handle clicking join party button - show confirmation
+  const handleJoinClick = (msg) => {
+    console.log('handleJoinClick called with:', msg)
+    console.log('Setting showJoinConfirmation to true')
+    setPendingInvite(msg)
+    setShowJoinConfirmation(true)
+  }
+
+  // Handle confirming party join
+  const handleConfirmJoin = async () => {
+    console.log('handleConfirmJoin called, pendingInvite:', pendingInvite)
+    if (!pendingInvite) return
+
+    setIsJoining(true)
+    try {
+      // First get the party ID by handle
+      console.log('Fetching party by handle:', pendingInvite.metadata.partyHandle)
+      const partyResponse = await partiesApi.getPartyByHandle(pendingInvite.metadata.partyHandle)
+      console.log('Party response:', partyResponse)
+      // API returns { data: { party: {...} } }
+      const party = partyResponse.data?.party || partyResponse.party || partyResponse
+
+      if (!party?.id) {
+        console.error('Could not find party - no ID in response. Full response:', partyResponse)
+        return
+      }
+
+      console.log('Found party ID:', party.id, '- calling joinParty API')
+      // Join the party
+      const joinResponse = await partiesApi.joinParty(party.id)
+      console.log('Join party response:', joinResponse)
+
+      // Update the user's party affiliation in the auth context
+      updateUser({
+        partyId: party.id,
+        party: pendingInvite.metadata.partyName
+      })
+
+      console.log('Successfully joined party:', pendingInvite.metadata.partyName)
+      setShowJoinConfirmation(false)
+      setPendingInvite(null)
+      setReelViewerMessageId(null)
+    } catch (error) {
+      console.error('Failed to join party:', error)
+      console.error('Error details:', error.message, error.response)
+    } finally {
+      setIsJoining(false)
+    }
+  }
+
+  // Handle accepting a party invite from the reel viewer
   const handleAcceptInvite = (msg) => {
     console.log('Accepting party invite:', msg.metadata)
-    // TODO: Implement actual party join logic via API
-    setReelViewerMessageId(null)
+    handleJoinClick(msg)
   }
 
   // Fetch messages from API on mount
@@ -623,11 +678,17 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                       </div>
                       <div className="party-invite-name">{msg.metadata.partyName}</div>
                       <div className="party-invite-handle">@{msg.metadata.partyHandle}</div>
-                      <button className="party-invite-btn" onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenReelViewer(msg);
-                      }}>
-                        {msg.isOwn ? 'View' : 'View Invite'}
+                      <button
+                        className={`party-invite-btn ${msg.isOwn ? 'sent' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!msg.isOwn) {
+                            handleJoinClick(msg);
+                          }
+                        }}
+                        style={msg.isOwn ? { background: '#666', cursor: 'default' } : {}}
+                      >
+                        {msg.isOwn ? 'Sent' : (msg.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party')}
                       </button>
                     </div>
                   </div>
@@ -829,6 +890,49 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             onClose={() => setShowPartySettings(false)}
           />
         ),
+        document.body
+      )}
+
+      {/* Join Party Confirmation Dialog */}
+      {showJoinConfirmation && pendingInvite && createPortal(
+        <div className="party-confirm-overlay" style={{ zIndex: 10002 }}>
+          <div className="party-confirm-dialog">
+            <div className="party-confirm-icon" style={{ background: pendingInvite.metadata.partyColor || '#EC4899' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <h3 className="party-confirm-title">
+              Join {pendingInvite.metadata.partyName}?
+            </h3>
+            <p className="party-confirm-message">
+              You're currently <strong>{currentUser?.party || 'Independent'}</strong>. Joining this party will change your affiliation from {currentUser?.party || 'Independent'} to <strong style={{ color: pendingInvite.metadata.partyColor || '#EC4899' }}>{pendingInvite.metadata.partyName}</strong>.
+            </p>
+            <div className="party-confirm-actions">
+              <button
+                className="party-confirm-cancel"
+                onClick={() => {
+                  setShowJoinConfirmation(false)
+                  setPendingInvite(null)
+                }}
+                disabled={isJoining}
+              >
+                Stay {currentUser?.party || 'Independent'}
+              </button>
+              <button
+                className="party-confirm-create"
+                style={{ background: pendingInvite.metadata.partyColor || '#EC4899' }}
+                onClick={handleConfirmJoin}
+                disabled={isJoining}
+              >
+                {isJoining ? 'Joining...' : 'Join Party'}
+              </button>
+            </div>
+          </div>
+        </div>,
         document.body
       )}
     </div>
