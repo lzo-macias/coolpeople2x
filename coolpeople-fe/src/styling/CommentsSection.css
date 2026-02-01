@@ -52,6 +52,14 @@
   transform: scaleX(-1);
 }
 
+.video-thumbnail-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  color: rgba(255, 255, 255, 0.3);
+}
+
 .cp-badge {
   position: absolute;
   bottom: 12px;

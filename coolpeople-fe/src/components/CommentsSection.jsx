@@ -4,7 +4,7 @@ import Comment from './Comment'
 import { mockComments } from '../data/mockData'
 import { commentsApi } from '../services/api'
 
-function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity }) {
+function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity, onViewReel }) {
   const [dividerAtBottom, setDividerAtBottom] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
@@ -254,8 +254,17 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Video preview - click to close */}
-      <div className="comments-video-preview" onClick={onClose}>
+      {/* Video preview - click to view reel in scrollable view, or close if no handler */}
+      <div
+        className="comments-video-preview"
+        onClick={() => {
+          if (onViewReel && reel) {
+            onViewReel(reel)
+          } else {
+            onClose()
+          }
+        }}
+      >
         {reel?.videoUrl ? (
           <video
             src={reel.videoUrl}
@@ -265,11 +274,18 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             muted
             playsInline
           />
-        ) : (
+        ) : reel?.thumbnail ? (
           <div
             className="video-thumbnail"
-            style={{ backgroundImage: `url(${reel?.thumbnail})` }}
+            style={{ backgroundImage: `url(${reel.thumbnail})` }}
           />
+        ) : (
+          <div className="video-thumbnail video-thumbnail-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2" />
+              <path d="M10 8l6 4-6 4V8z" fill="currentColor" />
+            </svg>
+          </div>
         )}
       </div>
 

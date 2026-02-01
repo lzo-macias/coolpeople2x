@@ -574,7 +574,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 id: n.id,
                 actorId: data.actorId,
                 reelId: data.reelId,
-                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                reel: {
+                  id: data.reelId,
+                  thumbnail: data.thumbnailUrl,
+                  videoUrl: data.videoUrl || null,
+                },
                 user: {
                   id: data.actorId,
                   username: data.actorUsername,

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import './styling/App.css'
 import './styling/Auth.css'
 import NominationStories from './components/NominationStories'
@@ -17,6 +18,7 @@ import MyBallot from './components/MyBallot'
 import Messages from './components/Messages'
 import Conversation from './components/Conversation'
 import CreateScreen from './components/CreateScreen'
+import SinglePostView from './components/SinglePostView'
 import Login from './components/Login'
 import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -67,6 +69,8 @@ function AppContent() {
   const [showConversationOverlay, setShowConversationOverlay] = useState(false) // Show conversation as overlay
   const [overlayConversation, setOverlayConversation] = useState(null) // Conversation data for overlay
   const [navHistory, setNavHistory] = useState([])
+  const [showSinglePostView, setShowSinglePostView] = useState(false) // Show reel in scrollable view
+  const [singlePostViewData, setSinglePostViewData] = useState(null) // { posts, initialIndex }
 
   // Refs must also be at the top
   const reelsFeedRef = useRef(null)
@@ -965,6 +969,18 @@ function AppContent() {
   const handleNavClick = (page) => {
     const pageIndex = PAGES.indexOf(page)
     if (pageIndex !== -1) {
+      // Close all profile overlays when navigating via nav bar
+      setShowProfile(false)
+      setShowPartyProfile(false)
+      setShowParticipantProfile(false)
+      setShowComments(false)
+      setShowSinglePostView(false)
+      setSinglePostViewData(null)
+      setActiveCandidate(null)
+      setActiveParty(null)
+      setActiveParticipant(null)
+      setNavHistory([]) // Clear navigation history since we're starting fresh
+
       setCurrentPage(pageIndex)
       // Clear ballot notification when visiting campaign page
       if (page === 'campaign') {
@@ -1085,8 +1101,11 @@ function AppContent() {
               setActiveReel(reel)
             }}
             onViewComments={(reel) => {
-              // Open comments section for the reel
-              setActiveReel(reel)
+              // Try to find full reel data from our reels state (has videoUrl, etc.)
+              const fullReel = reels.find(r => r.id === reel.id) || userPosts.find(r => r.id === reel.id)
+              // Merge notification reel data with full reel data
+              const enrichedReel = fullReel ? { ...reel, ...fullReel } : reel
+              setActiveReel(enrichedReel)
               setShowComments(true)
             }}
             onOpenProfile={handleOpenProfile}
@@ -1228,8 +1247,8 @@ function AppContent() {
         </div>
       )}
 
-      {/* Comments overlay */}
-      {showComments && (
+      {/* Comments overlay - portaled to modal-root to appear above SinglePostView */}
+      {showComments && createPortal(
         <CommentsSection
           reel={activeReel}
           onClose={handleCloseComments}
@@ -1246,7 +1265,51 @@ function AppContent() {
             }
           }}
           onTrackActivity={trackActivity}
-        />
+          onViewReel={(reel) => {
+            // Close comments and open SinglePostView with the reel
+            setShowComments(false)
+            // Find the reel index in our posts, or create a list with just this reel
+            const allPosts = [...reels, ...userPosts.filter(p => !reels.find(r => r.id === p.id))]
+            const reelIndex = allPosts.findIndex(r => r.id === reel.id)
+            if (reelIndex >= 0) {
+              setSinglePostViewData({ posts: allPosts, initialIndex: reelIndex })
+            } else {
+              // Reel not in our lists, show just this reel
+              setSinglePostViewData({ posts: [reel], initialIndex: 0 })
+            }
+            setShowSinglePostView(true)
+          }}
+        />,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* SinglePostView - scrollable reel view when accessing from comments/notifications */}
+      {showSinglePostView && singlePostViewData && (
+        <div className="single-post-view-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxWidth: '430px',
+          margin: '0 auto',
+          zIndex: 1500,
+          background: '#000',
+        }}>
+          <SinglePostView
+            posts={singlePostViewData.posts}
+            initialIndex={singlePostViewData.initialIndex}
+            onClose={() => {
+              setShowSinglePostView(false)
+              setSinglePostViewData(null)
+            }}
+            onUsernameClick={handleReelUsernameClick}
+            onPartyClick={handleReelPartyClick}
+            onOpenComments={handleOpenComments}
+            onTrackActivity={trackActivity}
+            profileName="Feed"
+          />
+        </div>
       )}
 
       {/* Candidate Profile overlay */}
