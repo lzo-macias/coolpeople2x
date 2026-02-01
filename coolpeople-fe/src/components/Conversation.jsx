@@ -94,7 +94,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   console.log('conversation.user:', conversation?.user)
   console.log('currentUserId:', currentUserId)
 
-  const { user: currentUser, updateUser } = useAuth()
+  const { user: currentUser, updateUser, refreshUser } = useAuth()
   const [messageText, setMessageText] = useState('')
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [localMessages, setLocalMessages] = useState([])
@@ -179,11 +179,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       const joinResponse = await partiesApi.joinParty(party.id)
       console.log('Join party response:', joinResponse)
 
-      // Update the user's party affiliation in the auth context
-      updateUser({
-        partyId: party.id,
-        party: pendingInvite.metadata.partyName
-      })
+      // Refresh user data from server to update sitewide
+      await refreshUser?.()
 
       console.log('Successfully joined party:', pendingInvite.metadata.partyName)
       setShowJoinConfirmation(false)

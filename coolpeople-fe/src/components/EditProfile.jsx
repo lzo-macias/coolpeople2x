@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/EditProfile.css'
 import '../styling/ReelCard.css'
+import '../styling/PartyCreationFlow.css'
 import EditBio from './EditBio'
 import { useAuth } from '../contexts/AuthContext'
+import { partiesApi } from '../services/api'
 
 function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut }) {
-  const { logout } = useAuth()
+  const { logout, user: currentUser, updateUser, refreshUser } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -19,6 +21,11 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
   const [showStatusWarning, setShowStatusWarning] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(null)
   const [partySearch, setPartySearch] = useState('')
+
+  // Party change confirmation
+  const [showPartyConfirmation, setShowPartyConfirmation] = useState(false)
+  const [pendingParty, setPendingParty] = useState(null)
+  const [isChangingParty, setIsChangingParty] = useState(false)
   const [raceSearch, setRaceSearch] = useState('')
   const [selectedRaceDetail, setSelectedRaceDetail] = useState(null)
   const [editedCandidate, setEditedCandidate] = useState({
@@ -118,14 +125,41 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
   ])
   const [nominationSearch, setNominationSearch] = useState('')
 
-  const parties = [
-    { name: 'Independent', color: '#888888' },
-    { name: 'Democrat', color: '#3B82F6' },
-    { name: 'Republican', color: '#EF4444' },
-    { name: 'The Pink Lady Party', color: '#EC4899' },
-    { name: 'Green Party', color: '#22C55E' },
-    { name: 'Libertarian', color: '#F59E0B' },
-  ]
+  // Fetch real parties from API
+  const [parties, setParties] = useState([])
+  const [partiesLoading, setPartiesLoading] = useState(false)
+
+  useEffect(() => {
+    const fetchParties = async () => {
+      setPartiesLoading(true)
+      try {
+        const response = await partiesApi.listParties('', null, 50)
+        const partiesData = response.data?.parties || response.parties || []
+        // Sort by member count (most members first)
+        const sorted = partiesData.sort((a, b) => {
+          const countA = a.memberCount || a._count?.memberships || 0
+          const countB = b.memberCount || b._count?.memberships || 0
+          return countB - countA
+        })
+        // Map to expected format
+        const formattedParties = sorted.map(p => ({
+          id: p.id,
+          name: p.name,
+          handle: p.handle,
+          color: p.color || '#888888',
+          avatar: p.avatarUrl,
+          memberCount: p.memberCount || p._count?.memberships || 0
+        }))
+        setParties(formattedParties)
+      } catch (error) {
+        console.error('Failed to fetch parties:', error)
+        setParties([])
+      } finally {
+        setPartiesLoading(false)
+      }
+    }
+    fetchParties()
+  }, [])
 
   const statuses = ['Participant', 'Candidate']
 
@@ -302,6 +336,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
   }
 
   const getPartyColor = (partyName) => {
+    if (!partyName || partyName === 'Independent') return '#888888'
     const party = parties.find(p => p.name === partyName)
     return party?.color || '#888888'
   }
@@ -807,8 +842,81 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
   // Render Party selection
   const renderPartySection = () => {
     const filteredParties = parties.filter(party =>
-      party.name.toLowerCase().includes(partySearch.toLowerCase())
+      party.name.toLowerCase().includes(partySearch.toLowerCase()) ||
+      (party.handle && party.handle.toLowerCase().includes(partySearch.toLowerCase()))
     )
+
+    // Check if current user is Independent (no party)
+    const currentPartyName = editedCandidate.party || 'Independent'
+    const isIndependent = currentPartyName === 'Independent'
+
+    // Handle clicking on a party option - show confirmation
+    const handlePartyClick = (party) => {
+      // Don't show confirmation if already in this party
+      if (party === null && isIndependent) return
+      if (party && editedCandidate.party === party.name) return
+
+      setPendingParty(party) // null means Independent
+      setShowPartyConfirmation(true)
+    }
+
+    // Handle confirming party change
+    const handleConfirmPartyChange = async () => {
+      setIsChangingParty(true)
+      try {
+        if (pendingParty === null) {
+          // Leaving party to become Independent
+          // Use partyId from auth context or find in parties list
+          const userPartyId = currentUser?.partyId
+          const currentParty = parties.find(p => p.name === editedCandidate.party)
+          const partyIdToLeave = userPartyId || currentParty?.id
+
+          console.log('Leaving party:', { userPartyId, currentParty, partyIdToLeave })
+
+          if (!partyIdToLeave) {
+            console.error('No party ID found to leave')
+            alert('Could not find your current party. Please try again.')
+            return
+          }
+
+          const response = await partiesApi.leaveParty(partyIdToLeave)
+          console.log('Leave party response:', response)
+
+          // Update local state only after successful API call
+          setEditedCandidate(prev => ({ ...prev, party: 'Independent' }))
+          // Update auth context
+          updateUser?.({ partyId: null, party: null })
+        } else {
+          // Joining a new party (API handles leaving old party automatically)
+          console.log('Joining party:', pendingParty.id)
+          const response = await partiesApi.joinParty(pendingParty.id)
+          console.log('Join party response:', response)
+          // Update local state only after successful API call
+          setEditedCandidate(prev => ({ ...prev, party: pendingParty.name }))
+          // Update auth context
+          updateUser?.({ partyId: pendingParty.id, party: pendingParty.name })
+        }
+
+        console.log('Party changed successfully')
+
+        // Refresh user data from server to update sitewide
+        const updatedUser = await refreshUser?.()
+        console.log('Refreshed user data:', updatedUser)
+
+        setShowPartyConfirmation(false)
+        setPendingParty(null)
+        setPartySearch('')
+        setActiveSection(null)
+      } catch (error) {
+        console.error('Failed to change party:', error)
+        console.error('Error details:', error.message, error.response)
+        alert('Failed to change party. Please try again.')
+      } finally {
+        setIsChangingParty(false)
+      }
+    }
+
+    const getPendingPartyColor = () => pendingParty ? (pendingParty.color || '#FF2A55') : '#FF2A55'
 
     return (
       <div className="settings-page">
@@ -842,19 +950,59 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
         </div>
 
         <div className="settings-list selection-list">
-          {filteredParties.map(party => (
+          {/* Independent option always at top */}
+          {(!partySearch || 'independent'.includes(partySearch.toLowerCase())) && (
             <button
-              key={party.name}
-              className={`settings-row selection ${editedCandidate.party === party.name ? 'selected' : ''}`}
-              onClick={() => {
-                setEditedCandidate(prev => ({ ...prev, party: party.name }))
-                setPartySearch('')
-                setActiveSection(null)
-              }}
+              className={`settings-row selection ${isIndependent ? 'selected' : ''}`}
+              onClick={() => handlePartyClick(null)}
             >
               <div className="settings-row-left">
-                <span className="party-color-dot" style={{ background: party.color }} />
-                <span className="settings-row-label">{party.name}</span>
+                <span className="party-color-dot" style={{ background: '#888888' }} />
+                <span className="settings-row-label">Independent</span>
+              </div>
+              {isIndependent && (
+                <svg viewBox="0 0 24 24" fill="currentColor" className="check-icon">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                </svg>
+              )}
+            </button>
+          )}
+
+          {/* Loading state */}
+          {partiesLoading && (
+            <div className="no-results">Loading parties...</div>
+          )}
+
+          {/* Popular parties header */}
+          {!partiesLoading && filteredParties.length > 0 && !partySearch && (
+            <div className="settings-section-label" style={{ padding: '16px 0 8px', color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>
+              Popular Parties
+            </div>
+          )}
+
+          {/* Real parties from API */}
+          {filteredParties.map(party => (
+            <button
+              key={party.id}
+              className={`settings-row selection ${editedCandidate.party === party.name ? 'selected' : ''}`}
+              onClick={() => handlePartyClick(party)}
+            >
+              <div className="settings-row-left">
+                {party.avatar ? (
+                  <img
+                    src={party.avatar}
+                    alt={party.name}
+                    style={{ width: 24, height: 24, borderRadius: '50%', marginRight: 12 }}
+                  />
+                ) : (
+                  <span className="party-color-dot" style={{ background: party.color }} />
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="settings-row-label">{party.name}</span>
+                  <span style={{ fontSize: '12px', color: '#888' }}>
+                    {party.memberCount} member{party.memberCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
               </div>
               {editedCandidate.party === party.name && (
                 <svg viewBox="0 0 24 24" fill="currentColor" className="check-icon">
@@ -863,10 +1011,57 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
               )}
             </button>
           ))}
-          {filteredParties.length === 0 && (
+
+          {!partiesLoading && filteredParties.length === 0 && partySearch && (
             <div className="no-results">No parties found</div>
           )}
         </div>
+
+        {/* Party Change Confirmation Dialog */}
+        {showPartyConfirmation && (
+          <div className="party-confirm-overlay" style={{ zIndex: 10002 }}>
+            <div className="party-confirm-dialog">
+              <div className="party-confirm-icon" style={{ background: getPendingPartyColor() }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <h3 className="party-confirm-title">
+                {pendingParty ? `Join ${pendingParty.name}?` : 'Become Independent?'}
+              </h3>
+              <p className="party-confirm-message">
+                You're currently <strong>{currentPartyName}</strong>.
+                {pendingParty
+                  ? <> Joining this party will change your affiliation to <strong style={{ color: getPendingPartyColor() }}>{pendingParty.name}</strong>.</>
+                  : <> You will leave your current party and become <strong style={{ color: '#888' }}>Independent</strong>.</>
+                }
+              </p>
+              <div className="party-confirm-actions">
+                <button
+                  className="party-confirm-cancel"
+                  onClick={() => {
+                    setShowPartyConfirmation(false)
+                    setPendingParty(null)
+                  }}
+                  disabled={isChangingParty}
+                >
+                  Stay in {currentPartyName}
+                </button>
+                <button
+                  className="party-confirm-create"
+                  style={{ background: getPendingPartyColor() }}
+                  onClick={handleConfirmPartyChange}
+                  disabled={isChangingParty}
+                >
+                  {isChangingParty ? 'Changing...' : (pendingParty ? 'Join Party' : 'Go Independent')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

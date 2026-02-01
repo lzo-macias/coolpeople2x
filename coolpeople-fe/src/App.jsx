@@ -208,6 +208,106 @@ function AppContent() {
     loadUserProfile()
   }, [authUser?.id])
 
+  // Update userParty when authUser.partyId changes (party join/leave)
+  useEffect(() => {
+    const updatePartyFromAuth = async () => {
+      if (!authUser) return
+
+      // If user has no partyId, they're Independent
+      if (!authUser.partyId) {
+        console.log('User has no partyId, setting userParty to null (Independent)')
+        setUserParty(null)
+        return
+      }
+
+      // If partyId changed, fetch the new party data
+      if (userParty?.id !== authUser.partyId) {
+        console.log('Party changed, fetching new party data for:', authUser.partyId)
+        try {
+          const response = await partiesApi.getParty(authUser.partyId)
+          const partyData = response?.data?.party || response?.party || response?.data
+          if (partyData) {
+            const newUserParty = {
+              id: partyData.id,
+              name: partyData.name,
+              handle: partyData.handle,
+              bio: partyData.bio || partyData.description,
+              color: partyData.color || '#FF2A55',
+              photo: partyData.avatarUrl || partyData.photo,
+              type: partyData.isPrivate ? 'private' : 'public',
+              privacy: partyData.isPrivate ? 'private' : 'public',
+              stats: partyData.stats,
+            }
+            console.log('Updated userParty to:', newUserParty)
+            setUserParty(newUserParty)
+          }
+        } catch (error) {
+          console.error('Failed to fetch party data:', error)
+        }
+      }
+    }
+
+    updatePartyFromAuth()
+  }, [authUser?.partyId])
+
+  // Track previous party ID to detect actual changes (not initial load)
+  const prevPartyIdRef = useRef(undefined)
+
+  // When userParty changes, update the party info in reels and posts for the current user
+  // This ensures that after changing party in settings, all UI shows the updated party
+  useEffect(() => {
+    if (!authUser?.id) return
+
+    const currentPartyId = userParty?.id || null
+
+    // Only update if party actually changed (skip initial mount)
+    if (prevPartyIdRef.current === undefined) {
+      prevPartyIdRef.current = currentPartyId
+      return
+    }
+
+    // If party didn't change, skip update
+    if (prevPartyIdRef.current === currentPartyId) {
+      return
+    }
+
+    console.log('Party changed from', prevPartyIdRef.current, 'to', currentPartyId)
+    prevPartyIdRef.current = currentPartyId
+
+    const newPartyName = userParty?.name || null
+
+    // Update reels state - change party for current user's reels
+    setReels(prev => prev.map(reel => {
+      const reelUserId = reel.user?.id || reel.userId
+      if (reelUserId === authUser.id) {
+        return {
+          ...reel,
+          user: {
+            ...reel.user,
+            party: newPartyName,
+            partyId: currentPartyId,
+          }
+        }
+      }
+      return reel
+    }))
+
+    // Update userPosts state
+    setUserPosts(prev => prev.map(post => ({
+      ...post,
+      user: {
+        ...post.user,
+        party: newPartyName,
+        partyId: currentPartyId,
+      }
+    })))
+
+    // Trigger scoreboard refresh so it fetches fresh data
+    setScoreboardRefreshKey(prev => prev + 1)
+
+    console.log('Updated reels and posts with new party:', newPartyName)
+  }, [userParty?.id, userParty?.name, authUser?.id])
+
   // Load user's posts from backend on initial auth
   useEffect(() => {
     loadUserPosts()

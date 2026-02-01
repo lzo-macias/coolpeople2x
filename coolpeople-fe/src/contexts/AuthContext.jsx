@@ -7,6 +7,23 @@ import { authApi, getAuthToken, setAuthToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
+// Normalize user data from backend - converts party object to party name string
+const normalizeUser = (userData) => {
+  if (!userData) return null;
+
+  // If party is an object with name, extract the name as string
+  // Keep partyId for API calls, but use party name string for display
+  const normalized = { ...userData };
+  if (userData.party && typeof userData.party === 'object' && userData.party.name) {
+    normalized.party = userData.party.name;
+    // Ensure partyId is set from the party object if not already present
+    if (!normalized.partyId && userData.party.id) {
+      normalized.partyId = userData.party.id;
+    }
+  }
+  return normalized;
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +38,7 @@ export const AuthProvider = ({ children }) => {
           const result = await authApi.me();
           // API returns {success: true, data: {user}} or {user}
           const userData = result.data?.user || result.user || result;
-          setUser(userData);
+          setUser(normalizeUser(userData));
         } catch (err) {
           // Token invalid or expired
           setAuthToken(null);
@@ -41,7 +58,7 @@ export const AuthProvider = ({ children }) => {
       const userData = result.data?.user || result.user;
       console.log('Login result:', result);
       console.log('Setting user:', userData);
-      setUser(userData);
+      setUser(normalizeUser(userData));
       return result;
     } catch (err) {
       console.error('Login error:', err);
@@ -96,6 +113,23 @@ export const AuthProvider = ({ children }) => {
     setUser(prev => ({ ...prev, ...userData }));
   };
 
+  // Refresh user data from server (use after party changes, profile updates, etc.)
+  const refreshUser = async () => {
+    const token = getAuthToken();
+    if (!token) return null;
+
+    try {
+      const result = await authApi.me();
+      const userData = result.data?.user || result.user || result;
+      const normalized = normalizeUser(userData);
+      setUser(normalized);
+      return normalized;
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+      return null;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -107,6 +141,7 @@ export const AuthProvider = ({ children }) => {
     loginWithGoogle,
     loginWithApple,
     updateUser,
+    refreshUser,
   };
 
   return (

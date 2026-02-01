@@ -330,6 +330,15 @@ export const racesApi = {
 // =============================================================================
 
 export const partiesApi = {
+  // List parties with optional search and pagination
+  listParties: (search, cursor, limit = 50) => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (cursor) params.append('cursor', cursor);
+    if (limit) params.append('limit', limit.toString());
+    return apiFetch(`/api/parties?${params.toString()}`);
+  },
+
   getParty: (partyId) => apiFetch(`/api/parties/${partyId}`),
 
   getPartyByHandle: (handle) => apiFetch(`/api/parties/by-handle/${encodeURIComponent(handle)}`),

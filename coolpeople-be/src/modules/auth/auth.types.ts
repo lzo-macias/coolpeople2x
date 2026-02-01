@@ -45,6 +45,8 @@ export interface SafeUser {
   isVerified: boolean;
   isFrozen: boolean;
   isPrivate: boolean;
+  partyId: string | null;
+  party: { id: string; name: string } | null;
   createdAt: Date;
 }
 

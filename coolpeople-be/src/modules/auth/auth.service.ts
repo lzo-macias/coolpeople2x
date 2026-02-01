@@ -21,7 +21,7 @@ const SALT_ROUNDS = 12;
 // Helper: Strip sensitive fields from user
 // -----------------------------------------------------------------------------
 
-export const toSafeUser = (user: User): SafeUser => ({
+export const toSafeUser = (user: User & { party?: { id: string; name: string } | null }): SafeUser => ({
   id: user.id,
   email: user.email,
   username: user.username,
@@ -32,6 +32,8 @@ export const toSafeUser = (user: User): SafeUser => ({
   isVerified: user.isVerified,
   isFrozen: user.isFrozen,
   isPrivate: user.isPrivate,
+  partyId: user.partyId,
+  party: user.party ? { id: user.party.id, name: user.party.name } : null,
   createdAt: user.createdAt,
 });
 
@@ -92,13 +94,18 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   const { identifier, password } = data;
 
-  // Find user by email or username
+  // Find user by email or username, including party relation
   const user = await prisma.user.findFirst({
     where: {
       OR: [
         { email: identifier },
         { username: identifier },
       ],
+    },
+    include: {
+      party: {
+        select: { id: true, name: true },
+      },
     },
   });
 
@@ -137,6 +144,11 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 export const getCurrentUser = async (userId: string): Promise<SafeUser> => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
+    include: {
+      party: {
+        select: { id: true, name: true },
+      },
+    },
   });
 
   if (!user) {
