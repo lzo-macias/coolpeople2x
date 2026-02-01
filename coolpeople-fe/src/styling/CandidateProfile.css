@@ -1803,11 +1803,16 @@ button.profile-bio.empty {
   font-size: 14px;
 }
 
-.activity-action-text,
 .activity-action-user {
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 600;
   color: #FFFFFF;
+}
+
+.activity-action-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .activity-timestamp {

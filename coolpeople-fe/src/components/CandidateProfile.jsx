@@ -321,6 +321,13 @@ const activityConfig = {
   endorsement: { color: '#9B59B6', icon: '✓' },
   ballot: { color: '#FF9500', icon: '☐' },
   favorite: { color: '#FFD700', icon: '★' },
+  follow: { color: '#3B82F6', icon: '👤' },
+  review: { color: '#F59E0B', icon: '⭐' },
+  invite: { color: '#10B981', icon: '✉' },
+  message: { color: '#8B5CF6', icon: '💬' },
+  race: { color: '#EC4899', icon: '🏁' },
+  mention: { color: '#06B6D4', icon: '@' },
+  share: { color: '#14B8A6', icon: '↗' },
 }
 
 // Regular nominations (free community reviews)
@@ -879,6 +886,44 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const handlePostClick = (index) => {
     setSelectedPostIndex(index)
     setShowSinglePost(true)
+  }
+
+  // Handle like change from SinglePostView - updates local post state immediately
+  const handlePostLikeChange = (reelId, liked) => {
+    setFetchedPosts(prev => prev.map(post => {
+      if (post.id === reelId) {
+        const currentCount = parseInt(String(post.stats?.likes || post.likeCount || '0').replace(/,/g, '')) || 0
+        const newCount = liked ? currentCount + 1 : Math.max(0, currentCount - 1)
+        return {
+          ...post,
+          isLiked: liked,
+          likeCount: newCount,
+          stats: {
+            ...post.stats,
+            likes: newCount.toLocaleString()
+          }
+        }
+      }
+      return post
+    }))
+  }
+
+  // Handle comment added - updates local post state immediately
+  const handlePostCommentAdded = (reelId) => {
+    setFetchedPosts(prev => prev.map(post => {
+      if (post.id === reelId) {
+        const currentCount = parseInt(String(post.stats?.comments || post.commentCount || '0').replace(/,/g, '')) || 0
+        return {
+          ...post,
+          commentCount: currentCount + 1,
+          stats: {
+            ...post.stats,
+            comments: (currentCount + 1).toLocaleString()
+          }
+        }
+      }
+      return post
+    }))
   }
   // Build unified icebreakers array for drag-and-drop ordering
   const buildIcebreakersArray = (sections) => {
@@ -2161,73 +2206,78 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             {userActivity.length > 0 ? userActivity.map((activity) => {
               const config = activityConfig[activity.type]
               const video = activity.video
+              const actor = activity.actor || { username: 'Someone', avatar: null }
               const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
               const hasVideoUrl = !!video?.videoUrl
+              const hasVideo = !!video
               return (
                 <div key={activity.id} className="activity-item">
                   {/* Action indicator at top - full width */}
                   <div className="activity-action-badge">
-                    <span className="activity-action-icon" style={{ color: config.color }}>{config.icon}</span>
-                    <span className="activity-action-text">
-                      {activity.type === 'repost' || activity.type === 'post' ? 'post by' : activity.action}
-                    </span>
-                    <span className="activity-action-user">{video?.user?.username || 'unknown'}</span>
+                    <img
+                      src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+                      alt={actor.username}
+                      className="activity-action-badge-avatar"
+                    />
+                    <span className="activity-action-user">{actor.username}</span>
+                    <span className="activity-action-text">{activity.action}</span>
                     <span className="activity-timestamp">{activity.timestamp}</span>
                   </div>
 
-                  {/* Video card */}
-                  <div className="activity-video-card">
-
-                  {/* Video container */}
-                  <div className="activity-video-container">
-                    {hasVideoUrl ? (
-                      <video
-                        src={video.videoUrl}
-                        className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
-                        loop
-                        muted
-                        playsInline
-                        autoPlay
-                      />
-                    ) : video?.thumbnail ? (
-                      <img
-                        src={video.thumbnail}
-                        alt=""
-                        className="activity-video-thumbnail"
-                        onError={(e) => {
-                          e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
-                        }}
-                      />
-                    ) : (
-                      <div className="activity-video-thumbnail activity-video-placeholder" />
-                    )}
-
-                    {/* Overlay content */}
-                    <div className="activity-video-overlay">
-                      <div className="activity-info">
-                        {video?.race && (
-                          <div className="activity-race-pill">
-                            <span className="activity-race-dot"></span>
-                            {video.race}
-                          </div>
-                        )}
-                        <div className="activity-user-row">
-                          <img
-                            src={video?.user?.avatar}
-                            alt={video?.user?.username}
-                            className="activity-user-avatar"
-                            style={{ borderColor: videoPartyColor }}
+                  {/* Video card - only show if we have video data */}
+                  {hasVideo && (
+                    <div className="activity-video-card">
+                      {/* Video container */}
+                      <div className="activity-video-container">
+                        {hasVideoUrl ? (
+                          <video
+                            src={video.videoUrl}
+                            className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
+                            loop
+                            muted
+                            playsInline
+                            autoPlay
                           />
-                          <div className="activity-user-details">
-                            <span className="activity-party-tag">{video?.user?.party || 'Independent'}</span>
-                            <span className="activity-username">@{video?.user?.username}</span>
+                        ) : video?.thumbnail ? (
+                          <img
+                            src={video.thumbnail}
+                            alt=""
+                            className="activity-video-thumbnail"
+                            onError={(e) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
+                            }}
+                          />
+                        ) : (
+                          <div className="activity-video-thumbnail activity-video-placeholder" />
+                        )}
+
+                        {/* Overlay content */}
+                        <div className="activity-video-overlay">
+                          <div className="activity-info">
+                            {video?.race && (
+                              <div className="activity-race-pill">
+                                <span className="activity-race-dot"></span>
+                                {video.race}
+                              </div>
+                            )}
+                            <div className="activity-user-row">
+                              <img
+                                src={video?.user?.avatar}
+                                alt={video?.user?.username}
+                                className="activity-user-avatar"
+                                style={{ borderColor: videoPartyColor }}
+                              />
+                              <div className="activity-user-details">
+                                <span className="activity-party-tag">{video?.user?.party || 'Independent'}</span>
+                                <span className="activity-username">@{video?.user?.username}</span>
+                              </div>
+                            </div>
+                            <p className="activity-caption">{video?.caption}</p>
                           </div>
                         </div>
-                        <p className="activity-caption">{video?.caption}</p>
                       </div>
                     </div>
-                  </div>
-                  </div>
+                  )}
                 </div>
               )
             }) : (
@@ -2441,7 +2491,8 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onEndReached={() => setShowSinglePost(false)}
           onPartyClick={onPartyClick}
           onUsernameClick={onUserClick}
-          onOpenComments={onOpenComments}
+          onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
+          onLikeChange={handlePostLikeChange}
           profileName={candidate.username}
         />,
         document.getElementById('modal-root') || document.body

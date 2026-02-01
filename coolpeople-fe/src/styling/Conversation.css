@@ -136,6 +136,8 @@
   padding: 4px;
   background: #FF2A55;
   overflow: hidden;
+  position: relative;
+  cursor: pointer;
 }
 
 .chat-media {
@@ -148,6 +150,31 @@
 
 .chat-media.mirrored {
   transform: scaleX(-1);
+}
+
+.media-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.chat-bubble.media-bubble:hover .media-play-overlay {
+  opacity: 1;
+}
+
+.media-play-overlay svg {
+  margin-left: 4px;
 }
 
 /* Input Area */
@@ -866,4 +893,296 @@
 .conversation-empty span {
   font-size: 14px;
   color: #666;
+}
+
+/* Party Invite Card - Vertical Layout */
+.party-invite-card {
+  width: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  padding: 3px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.party-invite-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(255, 42, 85, 0.3);
+}
+
+.party-invite-card:active {
+  transform: scale(0.98);
+}
+
+.party-invite-video {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.party-invite-video video,
+.party-invite-video img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.party-invite-video video.mirrored {
+  transform: scaleX(-1);
+}
+
+.party-invite-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  pointer-events: none;
+}
+
+.party-invite-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  color: #666;
+}
+
+.party-invite-content {
+  padding: 14px;
+  background: #1a1a1a;
+  border-radius: 0 0 14px 14px;
+  text-align: center;
+}
+
+.party-invite-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.party-invite-text {
+  font-size: 13px;
+  color: #999;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.party-invite-text strong {
+  color: #fff;
+}
+
+.party-invite-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.party-invite-handle {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 14px;
+}
+
+.party-invite-btn {
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.party-invite-btn:hover {
+  opacity: 0.9;
+}
+
+/* Sent state for own party invites - still clickable to view */
+.chat-message.own .party-invite-card {
+  cursor: pointer;
+}
+
+.chat-message.own .party-invite-btn {
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Expanded Party Invite Modal */
+.party-invite-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.party-invite-modal {
+  width: 100%;
+  max-width: 360px;
+  background: #1a1a1a;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+}
+
+.party-invite-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.party-invite-modal-video {
+  width: 100%;
+  height: 400px;
+  background: #0a0a0a;
+  position: relative;
+}
+
+.party-invite-modal-video video,
+.party-invite-modal-video img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.party-invite-modal-video video.mirrored {
+  transform: scaleX(-1);
+}
+
+.party-invite-modal-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  color: #444;
+}
+
+.party-invite-modal-content {
+  padding: 20px;
+}
+
+.party-invite-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.party-invite-modal-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #00F2EA, #FF2A55);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.party-invite-modal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  background: #1a1a1a;
+}
+
+.party-invite-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2a2a2a;
+  border-radius: 50%;
+  color: #666;
+}
+
+.party-invite-modal-info {
+  flex: 1;
+}
+
+.party-invite-modal-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.party-invite-modal-handle {
+  font-size: 14px;
+  color: #888;
+}
+
+.party-invite-modal-message {
+  font-size: 15px;
+  color: #aaa;
+  text-align: center;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.party-invite-modal-message strong {
+  color: #fff;
+}
+
+.party-invite-modal-btn {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.party-invite-modal-btn:hover {
+  opacity: 0.9;
+}
+
+.party-invite-modal-btn:active {
+  transform: scale(0.98);
 }

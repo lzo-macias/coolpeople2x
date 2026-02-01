@@ -4,7 +4,7 @@ import Comment from './Comment'
 import { mockComments } from '../data/mockData'
 import { commentsApi } from '../services/api'
 
-function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
+function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity }) {
   const [dividerAtBottom, setDividerAtBottom] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
@@ -28,39 +28,32 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
       setIsLoading(true)
       try {
         const response = await commentsApi.getComments(reel.id)
-        if (response.data && response.data.length > 0) {
+        // Backend returns { success: true, data: [...comments] }
+        const commentsData = response.data || response.comments || []
+        if (commentsData && commentsData.length > 0) {
           // Transform API response to match expected format
-          const cpComments = response.data
-            .filter(c => c.isVerified)
-            .map(c => ({
-              id: c.id,
-              userId: c.user?.id,
-              username: c.user?.username,
-              avatar: c.user?.avatarUrl,
-              party: c.user?.party,
-              profileType: c.user?.isCandidate ? 'candidate' : 'participant',
-              text: c.text,
-              likes: c.likeCount || 0,
-              isCP: true,
-              replies: [],
-              createdAt: c.createdAt,
-            }))
-          const regularComments = response.data
-            .filter(c => !c.isVerified)
-            .map(c => ({
-              id: c.id,
-              userId: c.user?.id,
-              username: c.user?.username,
-              avatar: c.user?.avatarUrl,
-              party: c.user?.party,
-              profileType: c.user?.isCandidate ? 'candidate' : 'participant',
-              text: c.text,
-              likes: c.likeCount || 0,
-              isCP: false,
-              replies: [],
-              createdAt: c.createdAt,
-            }))
-          setApiComments({ cpComments, regularComments })
+          // Backend returns 'content' not 'text', no isVerified field
+          const regularComments = commentsData.map(c => ({
+            id: c.id,
+            userId: c.user?.id,
+            username: c.user?.username || c.user?.displayName,
+            avatar: c.user?.avatarUrl,
+            party: c.user?.party,
+            profileType: c.user?.isCandidate ? 'candidate' : 'participant',
+            text: c.content || c.text,
+            likes: c.likeCount || 0,
+            isCP: false,
+            replies: (c.replies || []).map(r => ({
+              id: r.id,
+              username: r.user?.username || r.user?.displayName,
+              avatar: r.user?.avatarUrl,
+              text: r.content || r.text,
+              likes: r.likeCount || 0,
+              party: r.user?.party,
+            })),
+            createdAt: c.createdAt,
+          }))
+          setApiComments({ cpComments: [], regularComments })
         }
       } catch (error) {
         console.log('Using mock comments:', error.message)
@@ -88,63 +81,109 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick }) {
 
       if (replyingTo) {
         // Adding a reply to a comment
-        const newReply = {
-          id: newId,
-          username: 'You',
-          avatar: 'https://i.pravatar.cc/40?img=20',
-          text: text,
-          likes: 0,
-          party: null
-        }
-        setCommentReplies(prev => ({
-          ...prev,
-          [replyingTo.commentId]: [...(prev[replyingTo.commentId] || []), newReply]
-        }))
+        const parentCommentId = replyingTo.commentId
         setReplyingTo(null)
 
-        // Scroll to the reply after a brief delay
-        setTimeout(() => {
-          const replyElement = document.getElementById(newId)
-          replyElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 100)
-
-        // Sync with API
+        // Sync with API first, then update UI
         try {
           if (reel?.id) {
-            await commentsApi.addComment(reel.id, {
-              text: text,
-              parentId: replyingTo.commentId,
+            const response = await commentsApi.addComment(reel.id, {
+              content: text,
+              parentId: parentCommentId,
             })
+            console.log('Reply saved:', response)
+
+            // Get the created comment from response
+            const createdComment = response.data?.comment || response.comment || response.data
+            const replyId = createdComment?.id || newId
+
+            // Add reply to local state with real ID
+            const newReply = {
+              id: replyId,
+              username: createdComment?.user?.username || 'You',
+              avatar: createdComment?.user?.avatarUrl || 'https://i.pravatar.cc/40?img=20',
+              text: text,
+              likes: 0,
+              party: null
+            }
+            setCommentReplies(prev => ({
+              ...prev,
+              [parentCommentId]: [...(prev[parentCommentId] || []), newReply]
+            }))
+
+            // Scroll to the reply
+            setTimeout(() => {
+              const replyElement = document.getElementById(replyId)
+              replyElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 100)
+
+            // Notify parent about comment added
+            onCommentAdded?.()
+            onTrackActivity?.('comment', reel)
           }
         } catch (error) {
-          console.log('Add reply error:', error.message)
+          console.error('Add reply error:', error)
+          // Still add locally as fallback
+          const newReply = {
+            id: newId,
+            username: 'You',
+            avatar: 'https://i.pravatar.cc/40?img=20',
+            text: text,
+            likes: 0,
+            party: null
+          }
+          setCommentReplies(prev => ({
+            ...prev,
+            [parentCommentId]: [...(prev[parentCommentId] || []), newReply]
+          }))
         }
       } else {
         // Adding a new top-level comment
-        const newComment = {
-          id: newId,
-          username: 'You',
-          avatar: 'https://i.pravatar.cc/40?img=20',
-          text: text,
-          likes: 0,
-          party: null,
-          profileType: 'participant'
-        }
-        setUserComments([...userComments, newComment])
-
-        // Scroll to the new comment
-        setTimeout(() => {
-          const commentElement = document.getElementById(newId)
-          commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 100)
-
-        // Sync with API
+        // Sync with API first, then update UI
         try {
           if (reel?.id) {
-            await commentsApi.addComment(reel.id, { text: text })
+            const response = await commentsApi.addComment(reel.id, { content: text })
+            console.log('Comment saved:', response)
+
+            // Get the created comment from response
+            const createdComment = response.data?.comment || response.comment || response.data
+            const commentId = createdComment?.id || newId
+
+            // Add comment to local state with real ID
+            const newComment = {
+              id: commentId,
+              username: createdComment?.user?.username || 'You',
+              avatar: createdComment?.user?.avatarUrl || 'https://i.pravatar.cc/40?img=20',
+              text: text,
+              likes: 0,
+              party: null,
+              profileType: 'participant'
+            }
+            setUserComments(prev => [...prev, newComment])
+
+            // Scroll to the new comment
+            setTimeout(() => {
+              const commentElement = document.getElementById(commentId)
+              commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 100)
+
+            // Notify parent about comment added
+            onCommentAdded?.()
+            onTrackActivity?.('comment', reel)
           }
         } catch (error) {
-          console.log('Add comment error:', error.message)
+          console.error('Add comment error:', error)
+          // Still add locally as fallback
+          const newComment = {
+            id: newId,
+            username: 'You',
+            avatar: 'https://i.pravatar.cc/40?img=20',
+            text: text,
+            likes: 0,
+            party: null,
+            profileType: 'participant'
+          }
+          setUserComments(prev => [...prev, newComment])
         }
       }
     }

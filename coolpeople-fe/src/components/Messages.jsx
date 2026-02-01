@@ -41,7 +41,7 @@ const mockActivityNotifications = {
   ballots: [],
 }
 
-function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted, onViewReel, onViewComments, onOpenProfile, isActive, onTrackActivity }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
@@ -294,6 +294,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       const typeMap = {
         LIKE: 'likes',
         COMMENT: 'comments',
+        COMMENT_REPLY: 'comments',
         REPOST: 'reposts',
         REVIEW: 'reviews',
         NOMINATE: 'nominates',
@@ -302,15 +303,26 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       const category = typeMap[activity.type]
 
       if (category) {
+        // Build content based on type
+        let content = getActivityContent(activity.type)
+        if ((activity.type === 'COMMENT' || activity.type === 'COMMENT_REPLY') && activity.commentText) {
+          content = `commented: "${activity.commentText}"`
+        }
+
         const notification = {
           id: `${activity.type}-${Date.now()}`,
+          actorId: activity.actorId,
+          reelId: activity.reelId,
+          reel: activity.reelId ? { id: activity.reelId, thumbnailUrl: activity.thumbnailUrl } : null,
           user: {
+            id: activity.actorId,
             username: activity.actorUsername,
             avatar: activity.actorAvatarUrl,
-            party: null,
+            party: activity.actorParty || null,
           },
-          content: getActivityContent(activity.type),
+          content,
           timestamp: formatTimestamp(activity.createdAt),
+          postImage: activity.thumbnailUrl,
         }
 
         setNotifications(prev => ({
@@ -326,8 +338,64 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     })
 
     const cleanupNotification = onNotification((notification) => {
-      // Handle general notifications (already handled by onNewActivity for activity types)
-      console.log('New notification:', notification)
+      // Handle real-time notifications - this is the main event for activity updates
+      console.log('New notification received:', notification)
+
+      // Map notification type to category
+      const typeMap = {
+        LIKE: 'likes',
+        COMMENT: 'comments',
+        COMMENT_REPLY: 'comments',
+        REPOST: 'reposts',
+        REVIEW: 'reviews',
+        NOMINATE: 'nominates',
+        BALLOT: 'ballots',
+      }
+      const category = typeMap[notification.type]
+
+      if (category) {
+        // Parse data field - might be string or object
+        let actorData = notification.data || {}
+        if (typeof actorData === 'string') {
+          try {
+            actorData = JSON.parse(actorData)
+          } catch (e) {
+            actorData = {}
+          }
+        }
+
+        // Build content based on type
+        let content = getActivityContent(notification.type)
+        if ((notification.type === 'COMMENT' || notification.type === 'COMMENT_REPLY') && actorData.commentText) {
+          content = `commented: "${actorData.commentText}"`
+        }
+
+        const newNotification = {
+          id: notification.id || `${notification.type}-${Date.now()}`,
+          actorId: actorData.actorId,
+          reelId: actorData.reelId,
+          reel: actorData.reelId ? { id: actorData.reelId, thumbnailUrl: actorData.thumbnailUrl } : null,
+          user: {
+            id: actorData.actorId,
+            username: actorData.actorUsername,
+            avatar: actorData.actorAvatarUrl,
+            party: actorData.actorParty || null,
+          },
+          content,
+          timestamp: formatTimestamp(notification.createdAt),
+          postImage: actorData.thumbnailUrl,
+        }
+
+        setNotifications(prev => ({
+          ...prev,
+          [category]: [newNotification, ...(prev[category] || [])],
+        }))
+
+        setActivity(prev => ({
+          ...prev,
+          [category]: (prev[category] || 0) + 1,
+        }))
+      }
     })
 
     const cleanupUserStatus = onUserStatus(({ userId, isOnline }) => {
@@ -458,49 +526,133 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       try {
         // Fetch notifications
         const notificationsRes = await notificationsApi.getNotifications()
-        if (notificationsRes.data) {
+        console.log('Raw notifications response:', notificationsRes)
+        // Backend returns { success: true, data: [...notifications] } or { notifications: [...] }
+        const notificationsList = notificationsRes.data || notificationsRes.notifications || []
+        console.log('Notifications list:', notificationsList)
+        if (notificationsList && notificationsList.length > 0) {
+          // Log first notification to debug data structure
+          console.log('First notification:', notificationsList[0])
+          console.log('First notification data field:', notificationsList[0]?.data)
+
+          // Helper to parse data field (might be string or object)
+          const parseNotificationData = (n) => {
+            if (!n.data) return {}
+            if (typeof n.data === 'string') {
+              try {
+                return JSON.parse(n.data)
+              } catch (e) {
+                return {}
+              }
+            }
+            return n.data
+          }
+
+          // Actor info is stored in n.data object (actorId, actorUsername, actorAvatarUrl, etc.)
           const grouped = {
-            likes: notificationsRes.data.filter(n => n.type === 'LIKE').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: 'liked your post',
-              timestamp: formatTimestamp(n.createdAt),
-              postImage: n.reel?.thumbnailUrl,
-            })),
-            comments: notificationsRes.data.filter(n => n.type === 'COMMENT').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: `commented: "${n.comment?.text || ''}"`,
-              timestamp: formatTimestamp(n.createdAt),
-              postImage: n.reel?.thumbnailUrl,
-            })),
-            reposts: notificationsRes.data.filter(n => n.type === 'REPOST').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: 'reposted your content',
-              timestamp: formatTimestamp(n.createdAt),
-              postImage: n.reel?.thumbnailUrl,
-            })),
-            reviews: notificationsRes.data.filter(n => n.type === 'REVIEW').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: `left you a ${n.review?.rating || 5}-star review`,
-              timestamp: formatTimestamp(n.createdAt),
-              rating: n.review?.rating,
-            })),
-            nominates: notificationsRes.data.filter(n => n.type === 'NOMINATE').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: 'nominated you',
-              timestamp: formatTimestamp(n.createdAt),
-              postImage: n.reel?.thumbnailUrl,
-            })),
-            ballots: notificationsRes.data.filter(n => n.type === 'BALLOT').map(n => ({
-              id: n.id,
-              user: { username: n.actor?.username, avatar: n.actor?.avatarUrl, party: n.actor?.party },
-              content: 'added you to their ballot',
-              timestamp: formatTimestamp(n.createdAt),
-            })),
+            likes: notificationsList.filter(n => n.type === 'LIKE').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                reelId: data.reelId,
+                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: 'liked your post',
+                timestamp: formatTimestamp(n.createdAt),
+                postImage: data.thumbnailUrl,
+              }
+            }),
+            comments: notificationsList.filter(n => n.type === 'COMMENT' || n.type === 'COMMENT_REPLY').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                reelId: data.reelId,
+                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: data.commentText ? `commented: "${data.commentText}"` : 'commented on your post',
+                timestamp: formatTimestamp(n.createdAt),
+                postImage: data.thumbnailUrl,
+              }
+            }),
+            reposts: notificationsList.filter(n => n.type === 'REPOST').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                reelId: data.reelId,
+                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: 'reposted your content',
+                timestamp: formatTimestamp(n.createdAt),
+                postImage: data.thumbnailUrl,
+              }
+            }),
+            reviews: notificationsList.filter(n => n.type === 'REVIEW').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: `left you a ${data.rating || 5}-star review`,
+                timestamp: formatTimestamp(n.createdAt),
+                rating: data.rating,
+              }
+            }),
+            nominates: notificationsList.filter(n => n.type === 'NOMINATE').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                reelId: data.reelId,
+                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: 'nominated you',
+                timestamp: formatTimestamp(n.createdAt),
+                postImage: data.thumbnailUrl,
+              }
+            }),
+            ballots: notificationsList.filter(n => n.type === 'BALLOT').map(n => {
+              const data = parseNotificationData(n)
+              return {
+                id: n.id,
+                actorId: data.actorId,
+                user: {
+                  id: data.actorId,
+                  username: data.actorUsername,
+                  avatar: data.actorAvatarUrl,
+                  party: data.actorParty
+                },
+                content: 'added you to their ballot',
+                timestamp: formatTimestamp(n.createdAt),
+              }
+            }),
           }
           setNotifications(grouped)
           setActivity({
@@ -1256,8 +1408,44 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           ) : (
             filteredNotifications.map(notification => {
               const partyColor = getPartyColor(notification.user?.party)
+
+              // Handle clicking on the notification row (excluding username)
+              const handleNotificationClick = (e) => {
+                // Don't navigate if clicking on username
+                if (e.target.closest('.activity-notification-username')) return
+
+                if (notification.type === 'comment' && notification.reel) {
+                  // For comments, go to comment section
+                  onViewComments?.(notification.reel)
+                  setShowActivity(false)
+                } else if (notification.reelId && notification.reel) {
+                  // For likes/reposts/nominates, go to the reel
+                  onViewReel?.(notification.reel)
+                  setShowActivity(false)
+                }
+              }
+
+              // Handle clicking on username
+              const handleUsernameClick = (e) => {
+                e.stopPropagation()
+                if (notification.user?.id) {
+                  onOpenProfile?.({
+                    id: notification.user.id,
+                    username: notification.user.username,
+                    avatar: notification.user.avatar,
+                    party: notification.user.party,
+                  })
+                  setShowActivity(false)
+                }
+              }
+
               return (
-                <div key={notification.id} className="activity-notification-item">
+                <div
+                  key={notification.id}
+                  className="activity-notification-item"
+                  onClick={handleNotificationClick}
+                  style={{ cursor: notification.reelId ? 'pointer' : 'default' }}
+                >
                   <div className="activity-notification-avatar" style={{ borderColor: partyColor }}>
                     <img src={notification.user?.avatar} alt={notification.user?.username} />
                     <div className={`activity-notification-icon ${notification.type}`}>
@@ -1295,7 +1483,13 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                   </div>
                   <div className="activity-notification-content">
                     <p>
-                      <strong>{notification.user?.username}</strong> {notification.content}
+                      <strong
+                        className="activity-notification-username"
+                        onClick={handleUsernameClick}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {notification.user?.username}
+                      </strong> {notification.content}
                     </p>
                     <span className="activity-notification-time">{notification.timestamp}</span>
                   </div>

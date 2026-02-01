@@ -22,6 +22,7 @@ export interface MessageResponse {
   senderId: string;
   receiverId: string;
   content: string;
+  metadata?: Record<string, unknown> | null;
   readAt: Date | null;
   createdAt: Date;
 }
@@ -46,4 +47,5 @@ export interface ConversationResponse {
 export interface SendMessageRequest {
   receiverId: string;
   content: string;
+  metadata?: Record<string, unknown>;
 }

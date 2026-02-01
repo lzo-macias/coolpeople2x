@@ -352,14 +352,21 @@ export const likeReel = async (
       // Notification for reel creator
       const liker = await prisma.user.findUnique({
         where: { id: userId },
-        select: { username: true },
+        select: { username: true, avatarUrl: true },
       });
       createNotification({
         userId: reel.userId,
         type: 'LIKE',
         title: 'New like',
         body: `${liker?.username ?? 'Someone'} liked your reel`,
-        data: { reelId, userId },
+        data: {
+          reelId,
+          userId,
+          actorId: userId,
+          actorUsername: liker?.username,
+          actorAvatarUrl: liker?.avatarUrl,
+          thumbnailUrl: reel.thumbnailUrl,
+        },
       }).catch(() => {});
     }
   } catch (err: any) {

@@ -16,6 +16,7 @@ export const sendMessageSchema = z.object({
       .min(1, 'Message cannot be empty')
       .max(2000, 'Message must be at most 2000 characters')
       .trim(),
+    metadata: z.record(z.unknown()).optional(), // Optional JSON metadata for party invites, etc.
   }),
 });
 

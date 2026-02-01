@@ -129,14 +129,19 @@ export const createUserReview = async (
   // Review notification
   const author = await prisma.user.findUnique({
     where: { id: authorId },
-    select: { username: true },
+    select: { username: true, avatarUrl: true },
   });
   createNotification({
     userId: targetUserId,
     type: 'REVIEW',
     title: 'New review',
     body: `${author?.username ?? 'Someone'} left a ${data.rating}-star review`,
-    data: { reviewId: review.id, rating: data.rating },
+    data: {
+      reviewId: review.id,
+      rating: data.rating,
+      actorUsername: author?.username,
+      actorAvatarUrl: author?.avatarUrl,
+    },
   }).catch(() => {});
 
   return formatReview(review);

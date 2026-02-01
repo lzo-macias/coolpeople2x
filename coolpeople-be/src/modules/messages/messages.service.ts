@@ -26,6 +26,7 @@ const formatMessage = (message: any): MessageResponse => ({
   senderId: message.senderId,
   receiverId: message.receiverId,
   content: message.content,
+  metadata: message.metadata,
   readAt: message.readAt,
   createdAt: message.createdAt,
 });
@@ -180,7 +181,7 @@ export const sendMessage = async (
   senderId: string,
   data: SendMessageRequest
 ): Promise<MessageResponse> => {
-  const { receiverId, content } = data;
+  const { receiverId, content, metadata } = data;
 
   // Can't DM yourself
   if (senderId === receiverId) {
@@ -203,6 +204,7 @@ export const sendMessage = async (
       senderId,
       receiverId,
       content,
+      metadata: metadata || undefined,
     },
   });
 
@@ -226,7 +228,7 @@ export const sendMessage = async (
         conversationId: `${ids[0]}:${ids[1]}`,
         senderId,
         sender: senderInfo,
-        message: { id: message.id, senderId, content, createdAt: message.createdAt },
+        message: { id: message.id, senderId, content, metadata: message.metadata, createdAt: message.createdAt },
       });
 
       // Emit to sender's personal room so their messages list updates too
@@ -234,12 +236,12 @@ export const sendMessage = async (
         conversationId: `${ids[0]}:${ids[1]}`,
         senderId,
         sender: receiverInfo, // For the sender, show the receiver's info
-        message: { id: message.id, senderId, content, createdAt: message.createdAt },
+        message: { id: message.id, senderId, content, metadata: message.metadata, createdAt: message.createdAt },
       });
 
       // Emit to conversation room for real-time chat view
       io.to(`conversation:${ids[0]}:${ids[1]}`).emit('conversation:message', {
-        message: { id: message.id, senderId, content, createdAt: message.createdAt },
+        message: { id: message.id, senderId, content, metadata: message.metadata, createdAt: message.createdAt },
       });
     }
   } catch {
@@ -249,14 +251,18 @@ export const sendMessage = async (
   // Create DM notification
   const sender = await prisma.user.findUnique({
     where: { id: senderId },
-    select: { username: true },
+    select: { username: true, avatarUrl: true },
   });
   createNotification({
     userId: receiverId,
     type: 'DM',
     title: 'New message',
     body: `${sender?.username ?? 'Someone'} sent you a message`,
-    data: { senderId },
+    data: {
+      senderId,
+      actorUsername: sender?.username,
+      actorAvatarUrl: sender?.avatarUrl,
+    },
   }).catch(() => {});
 
   // Award DM_RECEIVED points to receiver (if under daily cap from this sender)

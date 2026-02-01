@@ -2,13 +2,6 @@ import { useState, useEffect } from 'react'
 import '../styling/Comment.css'
 import { getPartyColor } from '../data/mockData'
 
-// Mock replies for comments
-const mockReplies = [
-  { id: 'r1', username: 'Alex.V', avatar: 'https://i.pravatar.cc/40?img=11', text: 'Totally agree with this!', likes: 5, party: 'Democrat' },
-  { id: 'r2', username: 'Jordan.K', avatar: 'https://i.pravatar.cc/40?img=12', text: 'Great point, well said.', likes: 3, party: null },
-  { id: 'r3', username: 'Sam.Politics', avatar: 'https://i.pravatar.cc/40?img=13', text: 'This is the kind of discourse we need.', likes: 8, party: 'The Pink Lady Party' },
-]
-
 function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply, onPaywall, userReplies = [] }) {
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(comment.likes)
@@ -17,8 +10,8 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
   const partyColor = getPartyColor(comment.party)
   const partyDisplay = comment.party || 'Independent'
 
-  // Combine mock replies with user replies
-  const allReplies = [...mockReplies, ...userReplies]
+  // Use only real user replies
+  const allReplies = userReplies
 
   // Auto-expand replies when user adds a new one
   useEffect(() => {
@@ -85,12 +78,14 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
           >
             reply
           </button>
-          <button
-            className="comment-action-btn"
-            onClick={() => setShowReplies(!showReplies)}
-          >
-            {showReplies ? 'hide replies' : `see replies (${allReplies.length})`}
-          </button>
+          {allReplies.length > 0 && (
+            <button
+              className="comment-action-btn"
+              onClick={() => setShowReplies(!showReplies)}
+            >
+              {showReplies ? 'hide replies' : `see replies (${allReplies.length})`}
+            </button>
+          )}
         </div>
 
         {/* Paywall modal for CP replies */}

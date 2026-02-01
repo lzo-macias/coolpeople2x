@@ -1078,6 +1078,19 @@ function AppContent() {
             currentUser={currentUser}
             startConversationWith={messageTargetUser}
             onConversationStarted={() => setMessageTargetUser(null)}
+            isActive={currentPage === 3}
+            onViewReel={(reel) => {
+              // Navigate to home feed and scroll to the reel
+              setCurrentPage(1)
+              setActiveReel(reel)
+            }}
+            onViewComments={(reel) => {
+              // Open comments section for the reel
+              setActiveReel(reel)
+              setShowComments(true)
+            }}
+            onOpenProfile={handleOpenProfile}
+            onTrackActivity={trackActivity}
           />
         </div>
 
@@ -1109,7 +1122,16 @@ function AppContent() {
           currentPage={PAGES[currentPage]}
           onNavigate={handleNavClick}
           onCreateClick={() => setShowCreateScreen(true)}
-          theme={PAGES[currentPage] === 'scoreboard' ? 'light' : PAGES[currentPage] === 'campaign' ? 'ballot' : 'dark'}
+          theme={
+            // Profile overlays always use dark theme
+            (showProfile || showPartyProfile || showParticipantProfile || showComments)
+              ? 'dark'
+              : PAGES[currentPage] === 'scoreboard'
+                ? 'light'
+                : PAGES[currentPage] === 'campaign'
+                  ? 'ballot'
+                  : 'dark'
+          }
           notifications={{ messages: 12, campaign: hasBallotNotification ? 1 : 0 }}
         />
       )}
@@ -1213,6 +1235,17 @@ function AppContent() {
           onClose={handleCloseComments}
           onUsernameClick={handleCommentUsernameClick}
           onPartyClick={handleCommentPartyClick}
+          onCommentAdded={() => {
+            // Update the comment count on the active reel
+            if (activeReel) {
+              setReels(prev => prev.map(r =>
+                r.id === activeReel.id
+                  ? { ...r, stats: { ...r.stats, comments: (parseInt(r.stats?.comments || '0') + 1).toString() } }
+                  : r
+              ))
+            }
+          }}
+          onTrackActivity={trackActivity}
         />
       )}
 

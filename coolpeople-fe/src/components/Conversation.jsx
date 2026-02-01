@@ -6,6 +6,7 @@ import { initializeSocket, joinConversation, leaveConversation, onConversationMe
 import CreateScreen from './CreateScreen'
 import PartySettings from './PartySettings'
 import ChatSettings from './ChatSettings'
+import MessageReelViewer from './MessageReelViewer'
 import '../styling/Conversation.css'
 
 // Audio Message Component
@@ -85,7 +86,7 @@ function AudioMessage({ src, duration }) {
   )
 }
 
-function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar }) {
+function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity }) {
   console.log('=== Conversation component rendered ===')
   console.log('conversation:', conversation)
   console.log('conversation.user:', conversation?.user)
@@ -127,6 +128,26 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     return timeA - timeB
   })
 
+  // Check if a message is a party invite
+  const isPartyInvite = (msg) => {
+    return msg.metadata?.type === 'party_invite'
+  }
+
+  // Track message to show in reel viewer
+  const [reelViewerMessageId, setReelViewerMessageId] = useState(null)
+
+  // Handle opening reel viewer for a message (party invite or video)
+  const handleOpenReelViewer = (msg) => {
+    setReelViewerMessageId(msg.id)
+  }
+
+  // Handle accepting a party invite
+  const handleAcceptInvite = (msg) => {
+    console.log('Accepting party invite:', msg.metadata)
+    // TODO: Implement actual party join logic via API
+    setReelViewerMessageId(null)
+  }
+
   // Fetch messages from API on mount
   useEffect(() => {
     const fetchMessages = async () => {
@@ -143,6 +164,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           const transformed = response.data.map(msg => ({
             id: msg.id,
             text: msg.content,
+            metadata: msg.metadata,
             isOwn: msg.senderId === currentUserId,
             timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             createdAt: msg.createdAt,
@@ -230,9 +252,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         }
 
         console.log('Adding message from other user with isOwn: false')
+        const messageMetadata = data.message?.metadata || data.metadata
         const newMsg = {
           id: messageId,
           text: messageContent,
+          metadata: messageMetadata,
           isOwn: false, // This is from the other user, not us
           timestamp: new Date(messageCreatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           createdAt: messageCreatedAt,
@@ -566,10 +590,51 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                   </div>
                 )}
 
-                {msg.mediaUrl ? (
+                {isPartyInvite(msg) ? (
+                  <div
+                    className="party-invite-card"
+                    onClick={(e) => { e.stopPropagation(); handleOpenReelViewer(msg); }}
+                  >
+                    <div className="party-invite-video">
+                      {msg.metadata.partyAvatar ? (
+                        <img src={msg.metadata.partyAvatar} alt={msg.metadata.partyName} />
+                      ) : (
+                        <div className="party-invite-placeholder">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="party-invite-overlay" />
+                    </div>
+                    <div className="party-invite-content">
+                      {msg.metadata.role === 'admin' && (
+                        <div className="party-invite-badge">Admin Invite</div>
+                      )}
+                      <div className="party-invite-text">
+                        {msg.isOwn ? (
+                          <>You invited them to join</>
+                        ) : (
+                          <><strong>{user.username}</strong> invited you to join</>
+                        )}
+                      </div>
+                      <div className="party-invite-name">{msg.metadata.partyName}</div>
+                      <div className="party-invite-handle">@{msg.metadata.partyHandle}</div>
+                      <button className="party-invite-btn" onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenReelViewer(msg);
+                      }}>
+                        {msg.isOwn ? 'View' : 'View Invite'}
+                      </button>
+                    </div>
+                  </div>
+                ) : msg.mediaUrl ? (
                   <div
                     className="chat-bubble media-bubble"
-                    onClick={(e) => { e.stopPropagation(); handleMessageClick(msg.id); }}
+                    onClick={(e) => { e.stopPropagation(); handleOpenReelViewer(msg); }}
                   >
                     <video
                       src={msg.mediaUrl}
@@ -579,6 +644,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                       muted
                       playsInline
                     />
+                    <div className="media-play-overlay">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                    </div>
                   </div>
                 ) : msg.audioUrl ? (
                   <div
@@ -694,6 +764,19 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             Cancel
           </button>
         </div>
+      )}
+
+      {/* Message Reel Viewer */}
+      {reelViewerMessageId && (
+        <MessageReelViewer
+          messages={messages}
+          initialMessageId={reelViewerMessageId}
+          onClose={() => setReelViewerMessageId(null)}
+          onAcceptInvite={handleAcceptInvite}
+          senderUser={user}
+          currentUserAvatar={userAvatar}
+          onTrackActivity={onTrackActivity}
+        />
       )}
 
       {showCreateScreen && createPortal(

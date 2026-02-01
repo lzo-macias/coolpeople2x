@@ -10,6 +10,9 @@ function SinglePostView({
   onUsernameClick,
   onPartyClick,
   onOpenComments,
+  onLikeChange,
+  onTrackActivity,
+  onCommentAdded,
   profileName = 'Profile'
 }) {
   const containerRef = useRef(null)
@@ -88,6 +91,8 @@ function SinglePostView({
               onUsernameClick={onUsernameClick}
               onPartyClick={onPartyClick}
               onOpenComments={() => onOpenComments?.(post)}
+              onLikeChange={onLikeChange}
+              onTrackActivity={onTrackActivity}
             />
           </div>
         ))}

@@ -473,14 +473,20 @@ export const nominateCandidate = async (
     // Nomination notification
     const nominator = await prisma.user.findUnique({
       where: { id: nominatorId },
-      select: { username: true },
+      select: { username: true, avatarUrl: true },
     });
     createNotification({
       userId: nomineeId,
       type: 'NOMINATION',
       title: 'You were nominated!',
       body: `${nominator?.username ?? 'Someone'} nominated you for ${race.title}`,
-      data: { raceId, nominatorId, reelId },
+      data: {
+        raceId,
+        nominatorId,
+        reelId,
+        actorUsername: nominator?.username,
+        actorAvatarUrl: nominator?.avatarUrl,
+      },
     }).catch(() => {});
 
     return {

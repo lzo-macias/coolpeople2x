@@ -248,6 +248,44 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     setShowSinglePost(true)
   }
 
+  // Handle like change from SinglePostView - updates local post state immediately
+  const handlePostLikeChange = (reelId, liked) => {
+    setPosts(prev => prev.map(post => {
+      if (post.id === reelId) {
+        const currentCount = parseInt(String(post.stats?.likes || post.likeCount || '0').replace(/,/g, '')) || 0
+        const newCount = liked ? currentCount + 1 : Math.max(0, currentCount - 1)
+        return {
+          ...post,
+          isLiked: liked,
+          likeCount: newCount,
+          stats: {
+            ...post.stats,
+            likes: newCount.toLocaleString()
+          }
+        }
+      }
+      return post
+    }))
+  }
+
+  // Handle comment added - updates local post state immediately
+  const handlePostCommentAdded = (reelId) => {
+    setPosts(prev => prev.map(post => {
+      if (post.id === reelId) {
+        const currentCount = parseInt(String(post.stats?.comments || post.commentCount || '0').replace(/,/g, '')) || 0
+        return {
+          ...post,
+          commentCount: currentCount + 1,
+          stats: {
+            ...post.stats,
+            comments: (currentCount + 1).toLocaleString()
+          }
+        }
+      }
+      return post
+    }))
+  }
+
   // Profile sections state for icebreakers
   // New parties start with empty icebreakers, established parties have content
   const defaultIcebreakers = isNewParty ? {
@@ -1335,7 +1373,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}
           onUsernameClick={onMemberClick}
-          onOpenComments={onOpenComments}
+          onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
+          onLikeChange={handlePostLikeChange}
           profileName={party.name}
         />
       )}

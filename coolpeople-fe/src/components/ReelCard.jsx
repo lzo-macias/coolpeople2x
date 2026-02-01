@@ -178,7 +178,7 @@ const mockFollowedRaces = [
   { id: 'pinklady', name: 'The Pink Lady', icon: 'https://i.pravatar.cc/40?img=47' },
 ]
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -458,7 +458,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
         {/* Right side actions - move down when no nominate button (participant posts) */}
         <div className={`reel-actions-container ${data.user.isParticipant ? 'no-nominate' : ''}`}>
-          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} />
+          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} onLikeChange={onLikeChange} />
         </div>
 
         {/* Bottom info */}
@@ -513,6 +513,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   // Has target race - auto-nominate with checkmark and sound
                   setHasNominatedPoster(true)
                   playNominateSound()
+                  if (onTrackActivity) {
+                    onTrackActivity('nominate', data)
+                  }
                 } else if ((followedRaces.length > 0 || mockFollowedRaces.length > 0)) {
                   // No target race but has followed races, show race selection first
                   setShowNominateRaceSelect(true)
@@ -781,9 +784,13 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               <button
                 className="nominate-option-btn nominate"
                 onClick={() => {
-                  // TODO: Handle direct nomination
                   setShowNominateOptions(false)
                   setSelectedRaceForNomination(null)
+                  setHasNominatedPoster(true)
+                  playNominateSound()
+                  if (onTrackActivity) {
+                    onTrackActivity('nominate', data)
+                  }
                 }}
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -814,6 +821,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             // Show checkmark and play sound after completing nomination
             setHasNominatedPoster(true)
             playNominateSound()
+            if (onTrackActivity) {
+              onTrackActivity('nominate', data)
+            }
             resumeVideo()
           }}
         />

@@ -29,6 +29,10 @@ const SALT_ROUNDS = 12;
 // These always exist and cannot be deleted
 // -----------------------------------------------------------------------------
 
+// End date for testing: one month from now
+const testEndDate = new Date();
+testEndDate.setMonth(testEndDate.getMonth() + 1);
+
 const systemRaces = [
   {
     title: 'CoolPeople',
@@ -36,7 +40,7 @@ const systemRaces = [
     raceType: RaceType.CANDIDATE_VS_CANDIDATE,
     winCondition: WinCondition.POINTS,
     isSystemRace: true,
-    endDate: null, // Rolling/never-ending
+    endDate: testEndDate,
   },
   {
     title: 'Best Party',
@@ -44,7 +48,7 @@ const systemRaces = [
     raceType: RaceType.PARTY_VS_PARTY,
     winCondition: WinCondition.POINTS,
     isSystemRace: true,
-    endDate: null, // Rolling/never-ending
+    endDate: testEndDate,
   },
 ];
 

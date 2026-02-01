@@ -20,7 +20,7 @@ const recentContacts = [
   { id: 12, name: 'Local Activists', avatar: 'https://i.pravatar.cc/80?img=25', active: null, type: 'group', memberCount: 156 },
 ]
 
-function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
+function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange }) {
   const partyColor = getPartyColor(user?.party)
   const [isLiked, setIsLiked] = useState(reel?.isLiked || false)
   const [likeCount, setLikeCount] = useState(stats?.likes || '9,999')
@@ -30,10 +30,11 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
   const [createGroupExpanded, setCreateGroupExpanded] = useState(false)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
 
-  // Sync liked state when reel changes (e.g., scrolling to different reel or reload)
+  // Sync liked state and count when reel changes (e.g., scrolling to different reel or reload)
   useEffect(() => {
     setIsLiked(reel?.isLiked || false)
-  }, [reel?.id, reel?.isLiked])
+    setLikeCount(stats?.likes || '0')
+  }, [reel?.id, reel?.isLiked, stats?.likes])
 
   const handleLike = async () => {
     // Optimistic update
@@ -59,8 +60,10 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
       if (reel?.id) {
         if (wasLiked) {
           await reelsApi.unlikeReel(reel.id)
+          onLikeChange?.(reel.id, false)
         } else {
           await reelsApi.likeReel(reel.id)
+          onLikeChange?.(reel.id, true)
         }
       }
     } catch (error) {
@@ -77,6 +80,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
     try {
       if (reel?.id) {
         await reelsApi.repostReel(reel.id)
+        if (onTrackActivity && reel) {
+          onTrackActivity('repost', reel)
+        }
       }
     } catch (error) {
       console.log('Repost error:', error.message)
@@ -88,6 +94,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
     try {
       if (reel?.id) {
         await reelsApi.shareReel(reel.id)
+        if (onTrackActivity && reel) {
+          onTrackActivity('share', reel)
+        }
       }
     } catch (error) {
       console.log('Share error:', error.message)
@@ -98,6 +107,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel }) {
     try {
       if (user?.id) {
         await usersApi.followUser(user.id)
+        if (onTrackActivity && reel) {
+          onTrackActivity('follow', reel)
+        }
       }
     } catch (error) {
       console.log('Follow error:', error.message)

@@ -161,6 +161,93 @@ borderprimary: E6EAEF (also the color for icons in darkmode when not selected)
   height: 20px;
 }
 
+/* Single Reel Viewer Overlay - from activity screen */
+.single-reel-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  background: #000;
+  z-index: 1000;
+}
+
+/* Activity reels feed - scrollable like main feed */
+.activity-reels-feed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 70px; /* Leave space for bottom nav */
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.activity-reels-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.activity-reel-wrapper {
+  position: relative;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.activity-reel-wrapper .reel-card {
+  height: 100%;
+}
+
+
+.single-reel-back-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  color: #FFFFFF;
+  transition: opacity 0.3s ease, background 0.2s ease;
+}
+
+.single-reel-back-button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.single-reel-back-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Hide back button when scrolled away from first reel */
+.activity-reels-feed.scrolled-away .single-reel-back-button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.single-reel-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.single-reel-container .reel-card {
+  height: 100%;
+}
+
 /* Create Screen Container */
 .create-screen-container {
   position: absolute;

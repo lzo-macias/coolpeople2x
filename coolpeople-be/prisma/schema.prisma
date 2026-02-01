@@ -87,6 +87,7 @@ enum NotificationType {
   FOLLOW
   LIKE
   COMMENT
+  COMMENT_REPLY
   NOMINATION
   REVIEW
   RACE_UPDATE
@@ -904,6 +905,7 @@ model DirectMessage {
   senderId    String
   receiverId  String
   content     String
+  metadata    Json?     // Optional JSON for party invites, media, etc.
 
   readAt      DateTime?
   createdAt   DateTime  @default(now())

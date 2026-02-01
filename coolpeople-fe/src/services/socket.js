@@ -315,8 +315,12 @@ export const onNewActivity = (callback) => {
       actorId: data.actorId,
       actorUsername: data.actorUsername,
       actorAvatarUrl: data.actorAvatarUrl,
+      actorParty: data.actorParty,
       targetId: data.targetId,
       targetType: data.targetType,
+      reelId: data.reelId,
+      thumbnailUrl: data.thumbnailUrl,
+      commentText: data.commentText,
       createdAt: new Date(data.createdAt),
     })
   }

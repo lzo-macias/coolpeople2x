@@ -827,6 +827,7 @@
   border: 2px solid;
   overflow: visible;
   flex-shrink: 0;
+  background: #333;
 }
 
 .activity-notification-avatar img {
@@ -834,6 +835,7 @@
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+  background: #333;
 }
 
 .activity-notification-icon {
@@ -856,6 +858,16 @@
 .activity-notification-icon.comment {
   background: #00F2EA;
   color: #fff;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  gap: 0;
+}
+
+.activity-notification-icon svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .activity-notification-icon.review {
@@ -892,6 +904,32 @@
 
 .activity-notification-content strong {
   font-weight: 600;
+}
+
+.activity-notification-content strong:hover {
+  text-decoration: underline;
+}
+
+.activity-notification-username {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.activity-notification-username:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.activity-notification-username:active {
+  opacity: 0.6;
+}
+
+.activity-notification-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.activity-notification-avatar:hover {
+  opacity: 0.8;
 }
 
 .activity-notification-time {

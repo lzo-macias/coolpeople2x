@@ -592,7 +592,11 @@ export const followUser = async (
       type: 'FOLLOW',
       title: 'New follower',
       body: `${follower?.username ?? 'Someone'} started following you`,
-      data: { followerId },
+      data: {
+        followerId,
+        actorUsername: follower?.username,
+        actorAvatarUrl: follower?.avatarUrl,
+      },
     }).catch(() => {});
     // Emit real-time follow update
     if (follower) {

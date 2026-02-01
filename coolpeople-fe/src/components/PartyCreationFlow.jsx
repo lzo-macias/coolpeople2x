@@ -487,18 +487,25 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     const sendInvites = async () => {
       const allInvites = []
 
+      // Debug: Check if video base64 is available
+      console.log('Sending invites with video base64:', recordedVideoBase64 ? `${recordedVideoBase64.substring(0, 50)}... (${recordedVideoBase64.length} chars)` : 'NO VIDEO BASE64')
+
       // Send admin invites
       for (const admin of adminInvites) {
         allInvites.push(
           messagesApi.sendMessage({
             receiverId: admin.id,
-            content: `🎉 You've been invited to join ${displayName} as an Admin!\n\nAs an admin, you'll be able to:\n• Add and manage posts\n• Approve new members\n• Help grow the party\n\nTap to accept the invite and join the party!`,
+            content: `Party invite: ${displayName}`,
             metadata: {
               type: 'party_invite',
               partyHandle: partyHandle,
               partyName: displayName,
               role: 'admin',
-              partyColor: partyColor
+              partyColor: partyColor,
+              partyAvatar: avatarPhoto,
+              // Use base64 for persistence - blob URLs are session-only
+              introVideoBase64: recordedVideoBase64,
+              introVideoMirrored: isMirrored
             }
           }).catch(err => console.log(`Failed to send admin invite to ${admin.username}:`, err))
         )
@@ -509,13 +516,17 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
         allInvites.push(
           messagesApi.sendMessage({
             receiverId: member.id,
-            content: `🎉 You've been invited to join ${displayName}!\n\nJoin us and be part of something great. Tap to accept the invite!`,
+            content: `Party invite: ${displayName}`,
             metadata: {
               type: 'party_invite',
               partyHandle: partyHandle,
               partyName: displayName,
               role: 'member',
-              partyColor: partyColor
+              partyColor: partyColor,
+              partyAvatar: avatarPhoto,
+              // Use base64 for persistence - blob URLs are session-only
+              introVideoBase64: recordedVideoBase64,
+              introVideoMirrored: isMirrored
             }
           }).catch(err => console.log(`Failed to send member invite to ${member.username}:`, err))
         )

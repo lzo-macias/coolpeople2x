@@ -17,6 +17,13 @@ const activityConfig = {
   endorsement: { color: '#9B59B6', icon: '✓' },
   ballot: { color: '#FF9500', icon: '☐' },
   favorite: { color: '#FFD700', icon: '★' },
+  follow: { color: '#3B82F6', icon: '👤' },
+  review: { color: '#F59E0B', icon: '⭐' },
+  invite: { color: '#10B981', icon: '✉' },
+  message: { color: '#8B5CF6', icon: '💬' },
+  race: { color: '#EC4899', icon: '🏁' },
+  mention: { color: '#06B6D4', icon: '@' },
+  share: { color: '#14B8A6', icon: '↗' },
 }
 
 // Activity Video Item component with IntersectionObserver for auto-play
@@ -51,43 +58,50 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
     return () => observer.disconnect()
   }, [hasVideoUrl])
 
+  // Get actor info (who performed the action)
+  const actor = activity.actor || { username: 'Someone', avatar: null }
+  const hasVideo = !!video
+
   return (
     <div className="activity-item" ref={containerRef}>
       {/* Action indicator at top - full width */}
       <div className="activity-action-badge">
-        <span className="activity-action-icon" style={{ color: config.color }}>{config.icon}</span>
-        <span className="activity-action-text">
-          {activity.type === 'repost' || activity.type === 'post' ? 'post by' : activity.action}
-        </span>
-        <span className="activity-action-user">{video?.user?.username || 'unknown'}</span>
+        <img
+          src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+          alt={actor.username}
+          className="activity-actor-avatar"
+        />
+        <span className="activity-action-user">{actor.username}</span>
+        <span className="activity-action-text">{activity.action}</span>
         <span className="activity-timestamp">{activity.timestamp}</span>
       </div>
 
-      {/* Video card */}
-      <div className="activity-video-card">
-        {/* Video container */}
-        <div className="activity-video-container">
-          {hasVideoUrl ? (
-            <video
-              ref={videoRef}
-              src={video.videoUrl}
-              className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
-              loop
-              muted
-              playsInline
-            />
-          ) : video?.thumbnail ? (
-            <img
-              src={video.thumbnail}
-              alt=""
-              className="activity-video-thumbnail"
-              onError={(e) => {
-                e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
-              }}
-            />
-          ) : (
-            <div className="activity-video-thumbnail activity-video-placeholder" />
-          )}
+      {/* Video card - only show if we have video data */}
+      {hasVideo && (
+        <div className="activity-video-card">
+          {/* Video container */}
+          <div className="activity-video-container">
+            {hasVideoUrl ? (
+              <video
+                ref={videoRef}
+                src={video.videoUrl}
+                className={`activity-video-thumbnail ${video?.isMirrored ? 'mirrored' : ''}`}
+                loop
+                muted
+                playsInline
+              />
+            ) : video?.thumbnail ? (
+              <img
+                src={video.thumbnail}
+                alt=""
+                className="activity-video-thumbnail"
+                onError={(e) => {
+                  e.target.src = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop'
+                }}
+              />
+            ) : (
+              <div className="activity-video-thumbnail activity-video-placeholder" />
+            )}
 
           {/* Overlay content */}
           <div className="activity-video-overlay">
@@ -115,6 +129,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -150,7 +165,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',
@@ -720,7 +735,8 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}
           onPartyClick={onPartyClick}
-          onOpenComments={onOpenComments}
+          onOpenComments={(post) => onOpenComments?.(post, onUserPostCommentAdded)}
+          onLikeChange={onUserPostLikeChange}
           profileName={profileData.username}
         />,
         document.getElementById('modal-root') || document.body

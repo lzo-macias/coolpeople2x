@@ -132,6 +132,12 @@ export const createComment = async (
     }),
   ]);
 
+  // Get commenter info for notifications
+  const commenter = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true, avatarUrl: true },
+  });
+
   // Update affinity (comment = +3)
   if (reel.userId !== userId) {
     prisma.userAffinity
@@ -143,17 +149,105 @@ export const createComment = async (
       .catch(() => {});
 
     // Notification for reel creator
-    const commenter = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true },
-    });
     createNotification({
       userId: reel.userId,
       type: 'COMMENT',
       title: 'New comment',
       body: `${commenter?.username ?? 'Someone'} commented on your reel`,
-      data: { reelId, commentId: comment.id },
+      data: {
+        reelId,
+        commentId: comment.id,
+        commentText: data.content,
+        actorId: userId,
+        actorUsername: commenter?.username,
+        actorAvatarUrl: commenter?.avatarUrl,
+        thumbnailUrl: reel.thumbnailUrl,
+      },
     }).catch(() => {});
+  }
+
+  // If this is a reply, send additional notifications
+  if (data.parentId) {
+    const parentComment = await prisma.comment.findUnique({
+      where: { id: data.parentId },
+      include: {
+        user: { select: { id: true, username: true } },
+        // Get all other replies to this comment to notify those users too
+        replies: {
+          where: { deletedAt: null, userId: { not: userId } },
+          select: { userId: true },
+          distinct: ['userId'],
+        },
+      },
+    });
+
+    if (parentComment) {
+      // Notify the original commenter (if not the replier and not the reel owner who already got notified)
+      if (parentComment.userId !== userId && parentComment.userId !== reel.userId) {
+        createNotification({
+          userId: parentComment.userId,
+          type: 'COMMENT_REPLY',
+          title: 'New reply',
+          body: `${commenter?.username ?? 'Someone'} replied to your comment`,
+          data: {
+            reelId,
+            commentId: comment.id,
+            parentCommentId: data.parentId,
+            commentText: data.content,
+            actorId: userId,
+            actorUsername: commenter?.username,
+            actorAvatarUrl: commenter?.avatarUrl,
+            thumbnailUrl: reel.thumbnailUrl,
+          },
+        }).catch(() => {});
+      }
+
+      // Notify other users who have replied to the same comment (thread participants)
+      const otherRepliers = parentComment.replies
+        .map(r => r.userId)
+        .filter(uid => uid !== userId && uid !== reel.userId && uid !== parentComment.userId);
+
+      for (const replierId of otherRepliers) {
+        createNotification({
+          userId: replierId,
+          type: 'COMMENT_REPLY',
+          title: 'New reply in thread',
+          body: `${commenter?.username ?? 'Someone'} also replied to a comment you're in`,
+          data: {
+            reelId,
+            commentId: comment.id,
+            parentCommentId: data.parentId,
+            commentText: data.content,
+            actorId: userId,
+            actorUsername: commenter?.username,
+            actorAvatarUrl: commenter?.avatarUrl,
+            thumbnailUrl: reel.thumbnailUrl,
+          },
+        }).catch(() => {});
+      }
+    }
+  }
+
+  // Notify party members if reel is posted to a party (excluding the commenter and reel owner)
+  if (reel.partyId) {
+    const partyMembers = await prisma.partyMembership.findMany({
+      where: {
+        partyId: reel.partyId,
+        userId: { notIn: [userId, reel.userId] },
+      },
+      select: { userId: true },
+      take: 50, // Limit to avoid spam
+    });
+
+    for (const member of partyMembers) {
+      createNotification({
+        userId: member.userId,
+        type: 'COMMENT',
+        title: 'New comment on party post',
+        body: `${commenter?.username ?? 'Someone'} commented on a post in your party`,
+        data: { reelId, commentId: comment.id },
+      }).catch(() => {});
+    }
   }
 
   return formatComment(comment, userId);

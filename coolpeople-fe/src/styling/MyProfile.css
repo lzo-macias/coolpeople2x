@@ -606,11 +606,24 @@ button.my-profile-bio.empty {
   font-size: 14px;
 }
 
-.my-profile .activity-action-text,
+.my-profile .activity-actor-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .my-profile .activity-action-user {
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 600;
   color: #FFFFFF;
+}
+
+.my-profile .activity-action-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .my-profile .activity-timestamp {
