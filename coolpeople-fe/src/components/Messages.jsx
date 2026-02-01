@@ -8,7 +8,6 @@ import {
   onNewMessage,
   onNewStory,
   onStoryExpired,
-  onNewActivity,
   onNotification,
   onUserStatus,
   onPartyMessage,
@@ -70,6 +69,21 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const [notifications, setNotifications] = useState({ likes: [], comments: [], reposts: [], reviews: [], nominates: [], ballots: [] })
   const [activity, setActivity] = useState({ likes: 0, comments: 0, reposts: 0, reviews: 0, nominates: 0, ballots: 0 })
   const [searchResults, setSearchResults] = useState([])
+
+  // Helper to close activity screen and reset only the viewed category's count
+  const closeActivityScreen = () => {
+    // Reset only the category that was being viewed
+    if (activityFilter !== 'all') {
+      setActivity(prev => ({
+        ...prev,
+        [activityFilter]: 0
+      }))
+    } else {
+      // If viewing "all", reset all counts
+      setActivity({ likes: 0, comments: 0, reposts: 0, reviews: 0, nominates: 0, ballots: 0 })
+    }
+    setShowActivity(false)
+  }
 
   // ============================================================================
   // REAL-TIME UPDATE HELPERS
@@ -289,54 +303,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       })
     })
 
-    const cleanupNewActivity = onNewActivity((activity) => {
-      // Map activity type to notification category
-      const typeMap = {
-        LIKE: 'likes',
-        COMMENT: 'comments',
-        COMMENT_REPLY: 'comments',
-        REPOST: 'reposts',
-        REVIEW: 'reviews',
-        NOMINATE: 'nominates',
-        BALLOT: 'ballots',
-      }
-      const category = typeMap[activity.type]
-
-      if (category) {
-        // Build content based on type
-        let content = getActivityContent(activity.type)
-        if ((activity.type === 'COMMENT' || activity.type === 'COMMENT_REPLY') && activity.commentText) {
-          content = `commented: "${activity.commentText}"`
-        }
-
-        const notification = {
-          id: `${activity.type}-${Date.now()}`,
-          actorId: activity.actorId,
-          reelId: activity.reelId,
-          reel: activity.reelId ? { id: activity.reelId, thumbnailUrl: activity.thumbnailUrl } : null,
-          user: {
-            id: activity.actorId,
-            username: activity.actorUsername,
-            avatar: activity.actorAvatarUrl,
-            party: activity.actorParty || null,
-          },
-          content,
-          timestamp: formatTimestamp(activity.createdAt),
-          postImage: activity.thumbnailUrl,
-        }
-
-        setNotifications(prev => ({
-          ...prev,
-          [category]: [notification, ...(prev[category] || [])],
-        }))
-
-        setActivity(prev => ({
-          ...prev,
-          [category]: (prev[category] || 0) + 1,
-        }))
-      }
-    })
-
+    // Note: We only use onNotification, not onNewActivity, to avoid duplicate notifications
     const cleanupNotification = onNotification((notification) => {
       // Handle real-time notifications - this is the main event for activity updates
       console.log('New notification received:', notification)
@@ -344,6 +311,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       // Map notification type to category
       const typeMap = {
         LIKE: 'likes',
+        COMMENT_LIKE: 'likes',
         COMMENT: 'comments',
         COMMENT_REPLY: 'comments',
         REPOST: 'reposts',
@@ -369,12 +337,19 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         if ((notification.type === 'COMMENT' || notification.type === 'COMMENT_REPLY') && actorData.commentText) {
           content = `commented: "${actorData.commentText}"`
         }
+        if (notification.type === 'COMMENT_LIKE') {
+          content = 'liked your comment'
+        }
 
         const newNotification = {
           id: notification.id || `${notification.type}-${Date.now()}`,
           actorId: actorData.actorId,
           reelId: actorData.reelId,
-          reel: actorData.reelId ? { id: actorData.reelId, thumbnailUrl: actorData.thumbnailUrl } : null,
+          reel: actorData.reelId ? {
+            id: actorData.reelId,
+            thumbnail: actorData.thumbnailUrl,
+            videoUrl: actorData.videoUrl || null,
+          } : null,
           user: {
             id: actorData.actorId,
             username: actorData.actorUsername,
@@ -442,7 +417,6 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       cleanupNewMessage()
       cleanupNewStory()
       cleanupStoryExpired()
-      cleanupNewActivity()
       cleanupNotification()
       cleanupUserStatus()
       cleanupPartyMessage()
@@ -550,22 +524,29 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
           // Actor info is stored in n.data object (actorId, actorUsername, actorAvatarUrl, etc.)
           const grouped = {
-            likes: notificationsList.filter(n => n.type === 'LIKE').map(n => {
+            likes: notificationsList.filter(n => n.type === 'LIKE' || n.type === 'COMMENT_LIKE').map(n => {
               const data = parseNotificationData(n)
+              const isCommentLike = n.type === 'COMMENT_LIKE'
               return {
                 id: n.id,
                 actorId: data.actorId,
                 reelId: data.reelId,
-                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                commentId: data.commentId || null,
+                reel: {
+                  id: data.reelId,
+                  thumbnail: data.thumbnailUrl,
+                  videoUrl: data.videoUrl || null,
+                },
                 user: {
                   id: data.actorId,
                   username: data.actorUsername,
                   avatar: data.actorAvatarUrl,
                   party: data.actorParty
                 },
-                content: 'liked your post',
+                content: isCommentLike ? 'liked your comment' : 'liked your post',
                 timestamp: formatTimestamp(n.createdAt),
                 postImage: data.thumbnailUrl,
+                isCommentLike,
               }
             }),
             comments: notificationsList.filter(n => n.type === 'COMMENT' || n.type === 'COMMENT_REPLY').map(n => {
@@ -596,7 +577,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 id: n.id,
                 actorId: data.actorId,
                 reelId: data.reelId,
-                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                reel: {
+                  id: data.reelId,
+                  thumbnail: data.thumbnailUrl,
+                  videoUrl: data.videoUrl || null,
+                },
                 user: {
                   id: data.actorId,
                   username: data.actorUsername,
@@ -630,7 +615,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 id: n.id,
                 actorId: data.actorId,
                 reelId: data.reelId,
-                reel: { id: data.reelId, thumbnailUrl: data.thumbnailUrl },
+                reel: {
+                  id: data.reelId,
+                  thumbnail: data.thumbnailUrl,
+                  videoUrl: data.videoUrl || null,
+                },
                 user: {
                   id: data.actorId,
                   username: data.actorUsername,
@@ -659,14 +648,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             }),
           }
           setNotifications(grouped)
-          setActivity({
-            likes: grouped.likes.length,
-            comments: grouped.comments.length,
-            reposts: grouped.reposts.length,
-            reviews: grouped.reviews.length,
-            nominates: grouped.nominates.length,
-            ballots: grouped.ballots.length,
-          })
+          // Don't set activity counts from initial fetch - they represent "unread" counts
+          // Only new notifications via socket should increment these
         }
       } catch (error) {
         console.log('Failed to fetch notifications:', error.message)
@@ -1376,7 +1359,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return createPortal(
       <div className="activity-screen">
         <div className="activity-screen-header">
-          <button className="activity-back-btn" onClick={() => setShowActivity(false)}>
+          <button className="activity-back-btn" onClick={() => closeActivityScreen()}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
@@ -1421,11 +1404,15 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 if (notification.type === 'comment' && notification.reel) {
                   // For comments, go to comment section
                   onViewComments?.(notification.reel)
-                  setShowActivity(false)
+                  closeActivityScreen()
+                } else if (notification.isCommentLike && notification.reel) {
+                  // For comment likes, go to comment section so they can see the comment
+                  onViewComments?.(notification.reel)
+                  closeActivityScreen()
                 } else if (notification.reelId && notification.reel) {
                   // For likes/reposts/nominates, go to the reel
                   onViewReel?.(notification.reel)
-                  setShowActivity(false)
+                  closeActivityScreen()
                 }
               }
 
@@ -1439,7 +1426,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                     avatar: notification.user.avatar,
                     party: notification.user.party,
                   })
-                  setShowActivity(false)
+                  closeActivityScreen()
                 }
               }
 

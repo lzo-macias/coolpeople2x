@@ -131,85 +131,96 @@ function AppContent() {
     fetchStories()
   }, [isAuthenticated])
 
+  // Reusable function to load user profile data
+  const loadUserProfile = async () => {
+    if (!authUser?.id) return
+
+    try {
+      const userData = await usersApi.getUser(authUser.id)
+      // Backend returns {success: true, data: {user: {...}}}
+      const profile = userData.data?.user || userData.user || userData.data || userData
+
+      // Update local state with persisted data from backend
+      // Use !== undefined to allow empty strings
+      if (profile.bio !== undefined) setUserBio(profile.bio || '')
+      if (profile.avatarUrl !== undefined) setCustomAvatar(profile.avatarUrl || null)
+      if (profile.followersCount !== undefined) setUserFollowers(profile.followersCount?.toString() || '0')
+      if (profile.followingCount !== undefined) setUserFollowing(profile.followingCount?.toString() || '0')
+      if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing)
+      if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting)
+      if (profile.points) setUserPoints(profile.points)
+      if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
+
+      // Load user's party if they have one (from new partyId relation)
+      console.log('Profile party data:', profile.party)
+      if (profile.party && profile.party.id) {
+        console.log('Loading full party details for:', profile.party.id)
+        try {
+          const partyResponse = await partiesApi.getParty(profile.party.id)
+          const partyData = partyResponse.data?.party || partyResponse.party || partyResponse.data || partyResponse
+          if (partyData) {
+            const newUserParty = {
+              id: partyData.id,
+              name: partyData.name,
+              handle: partyData.handle,
+              bio: partyData.bio || partyData.description,
+              color: partyData.color || '#FF2A55',
+              photo: partyData.avatarUrl || partyData.avatar,
+              type: partyData.type || 'open',
+              privacy: partyData.privacy || 'public',
+              stats: partyData.stats,
+            }
+            console.log('Setting userParty to:', newUserParty)
+            setUserParty(newUserParty)
+          }
+        } catch (partyError) {
+          console.log('Could not load full party details:', partyError.message)
+          // At minimum, set the party info so profile shows it
+          setUserParty({ id: profile.party.id, name: profile.party.name })
+        }
+      } else if (profile.parties && profile.parties.length > 0) {
+        // Fallback: old memberships-based approach
+        const primaryPartyInfo = profile.parties[0]
+        setUserParty({ id: primaryPartyInfo.id, name: primaryPartyInfo.name, handle: primaryPartyInfo.handle })
+      }
+    } catch (error) {
+      console.log('Using local state for profile:', error.message)
+    }
+  }
+
+  // Reusable function to load user's posts
+  const loadUserPosts = async () => {
+    if (!authUser?.id) return
+
+    try {
+      const response = await reelsApi.getUserReels(authUser.id)
+      const posts = response.data || response
+      if (posts) {
+        setUserPosts(posts)
+      }
+    } catch (error) {
+      console.log('Using local posts:', error.message)
+    }
+  }
+
   // Load user profile data from backend when authenticated
   useEffect(() => {
-    const loadUserProfile = async () => {
-      if (!authUser?.id) return
-
-      try {
-        const userData = await usersApi.getUser(authUser.id)
-        // Backend returns {success: true, data: {user: {...}}}
-        const profile = userData.data?.user || userData.user || userData.data || userData
-
-        // Update local state with persisted data from backend
-        // Use !== undefined to allow empty strings
-        if (profile.bio !== undefined) setUserBio(profile.bio || '')
-        if (profile.avatarUrl !== undefined) setCustomAvatar(profile.avatarUrl || null)
-        if (profile.followersCount !== undefined) setUserFollowers(profile.followersCount?.toString() || '0')
-        if (profile.followingCount !== undefined) setUserFollowing(profile.followingCount?.toString() || '0')
-        if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing)
-        if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting)
-        if (profile.points) setUserPoints(profile.points)
-        if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
-
-        // Load user's party if they have one (from new partyId relation)
-        console.log('Profile party data:', profile.party)
-        if (profile.party && profile.party.id) {
-          console.log('Loading full party details for:', profile.party.id)
-          try {
-            const partyResponse = await partiesApi.getParty(profile.party.id)
-            const partyData = partyResponse.data?.party || partyResponse.party || partyResponse.data || partyResponse
-            if (partyData) {
-              const newUserParty = {
-                id: partyData.id,
-                name: partyData.name,
-                handle: partyData.handle,
-                bio: partyData.bio || partyData.description,
-                color: partyData.color || '#FF2A55',
-                photo: partyData.avatarUrl || partyData.avatar,
-                type: partyData.type || 'open',
-                privacy: partyData.privacy || 'public',
-                stats: partyData.stats,
-              }
-              console.log('Setting userParty to:', newUserParty)
-              setUserParty(newUserParty)
-            }
-          } catch (partyError) {
-            console.log('Could not load full party details:', partyError.message)
-            // At minimum, set the party info so profile shows it
-            setUserParty({ id: profile.party.id, name: profile.party.name })
-          }
-        } else if (profile.parties && profile.parties.length > 0) {
-          // Fallback: old memberships-based approach
-          const primaryPartyInfo = profile.parties[0]
-          setUserParty({ id: primaryPartyInfo.id, name: primaryPartyInfo.name, handle: primaryPartyInfo.handle })
-        }
-      } catch (error) {
-        console.log('Using local state for profile:', error.message)
-      }
-    }
-
     loadUserProfile()
   }, [authUser?.id])
 
-  // Load user's posts from backend
+  // Load user's posts from backend on initial auth
   useEffect(() => {
-    const loadUserPosts = async () => {
-      if (!authUser?.id) return
-
-      try {
-        const response = await reelsApi.getUserReels(authUser.id)
-        const posts = response.data || response
-        if (posts && posts.length > 0) {
-          setUserPosts(posts)
-        }
-      } catch (error) {
-        console.log('Using local posts:', error.message)
-      }
-    }
-
     loadUserPosts()
   }, [authUser?.id])
+
+  // Refresh profile data when navigating to MyProfile page
+  useEffect(() => {
+    if (currentPage === 5 && authUser?.id) {
+      // Refresh posts and profile data when visiting profile
+      loadUserPosts()
+      loadUserProfile()
+    }
+  }, [currentPage])
 
   // Initialize socket for real-time updates
   useEffect(() => {
@@ -1098,13 +1109,40 @@ function AppContent() {
             onViewReel={(reel) => {
               // Navigate to home feed and scroll to the reel
               setCurrentPage(1)
-              setActiveReel(reel)
+
+              // Find the reel index and scroll to it
+              const reelIndex = reels.findIndex(r => r.id === reel.id)
+              if (reelIndex >= 0 && reelsFeedRef.current) {
+                // Scroll to the reel after a short delay to ensure page transition
+                setTimeout(() => {
+                  const reelHeight = window.innerHeight
+                  reelsFeedRef.current?.scrollTo({
+                    top: reelIndex * reelHeight,
+                    behavior: 'smooth'
+                  })
+                }, 100)
+              }
             }}
             onViewComments={(reel) => {
               // Try to find full reel data from our reels state (has videoUrl, etc.)
               const fullReel = reels.find(r => r.id === reel.id) || userPosts.find(r => r.id === reel.id)
               // Merge notification reel data with full reel data
               const enrichedReel = fullReel ? { ...reel, ...fullReel } : reel
+
+              // Navigate to home feed first so reel is underneath comments
+              setCurrentPage(1)
+              const reelIndex = reels.findIndex(r => r.id === reel.id)
+              if (reelIndex >= 0 && reelsFeedRef.current) {
+                setTimeout(() => {
+                  const reelHeight = window.innerHeight
+                  reelsFeedRef.current?.scrollTo({
+                    top: reelIndex * reelHeight,
+                    behavior: 'instant'
+                  })
+                }, 50)
+              }
+
+              // Then open comments
               setActiveReel(enrichedReel)
               setShowComments(true)
             }}
@@ -1132,6 +1170,7 @@ function AppContent() {
             currentUser={currentUser}
             onAvatarChange={handleAvatarChange}
             onBioChange={handleBioChange}
+            isActive={currentPage === 5}
           />
         </div>
       </div>
@@ -1265,20 +1304,6 @@ function AppContent() {
             }
           }}
           onTrackActivity={trackActivity}
-          onViewReel={(reel) => {
-            // Close comments and open SinglePostView with the reel
-            setShowComments(false)
-            // Find the reel index in our posts, or create a list with just this reel
-            const allPosts = [...reels, ...userPosts.filter(p => !reels.find(r => r.id === p.id))]
-            const reelIndex = allPosts.findIndex(r => r.id === reel.id)
-            if (reelIndex >= 0) {
-              setSinglePostViewData({ posts: allPosts, initialIndex: reelIndex })
-            } else {
-              // Reel not in our lists, show just this reel
-              setSinglePostViewData({ posts: [reel], initialIndex: 0 })
-            }
-            setShowSinglePostView(true)
-          }}
         />,
         document.getElementById('modal-root') || document.body
       )}

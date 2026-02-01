@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import '../styling/Comment.css'
 import { getPartyColor } from '../data/mockData'
+import { commentsApi } from '../services/api'
 
-function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply, onPaywall, userReplies = [] }) {
-  const [isLiked, setIsLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(comment.likes)
+function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply, onPaywall, userReplies = [], reelId }) {
+  const [isLiked, setIsLiked] = useState(comment.isLiked || false)
+  const [likeCount, setLikeCount] = useState(comment.likes || 0)
   const [showReplies, setShowReplies] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
   const partyColor = getPartyColor(comment.party)
@@ -20,13 +21,33 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
     }
   }, [userReplies.length])
 
-  const handleLike = () => {
-    if (isLiked) {
-      setLikeCount(likeCount - 1)
+  const handleLike = async () => {
+    const wasLiked = isLiked
+    const currentCount = likeCount || 0
+
+    // Optimistic update
+    if (wasLiked) {
+      setLikeCount(Math.max(0, currentCount - 1))
     } else {
-      setLikeCount(likeCount + 1)
+      setLikeCount(currentCount + 1)
     }
-    setIsLiked(!isLiked)
+    setIsLiked(!wasLiked)
+
+    // Sync with API
+    try {
+      if (reelId && comment.id) {
+        if (wasLiked) {
+          await commentsApi.unlikeComment(reelId, comment.id)
+        } else {
+          await commentsApi.likeComment(reelId, comment.id)
+        }
+      }
+    } catch (error) {
+      // Revert on error
+      console.log('Comment like error:', error.message)
+      setIsLiked(wasLiked)
+      setLikeCount(currentCount)
+    }
   }
 
   const handleUsernameClick = () => {

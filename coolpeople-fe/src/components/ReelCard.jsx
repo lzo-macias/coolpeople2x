@@ -417,15 +417,15 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            {data.user.party ? (
-              <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
-                {data.user.party}
+            {data.user?.party ? (
+              <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
+                {data.user?.party}
               </button>
             ) : (
               <span className="party-tag">Independent</span>
             )}
             <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
-              @{data.user.username}
+              @{data.user?.username || 'unknown'}
             </button>
           </div>
         </div>
@@ -457,7 +457,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         <EngagementScoreBar scores={data.engagementScores} onItemClick={(score) => { pauseVideo(); onEngagementClick?.(score) }} />
 
         {/* Right side actions - move down when no nominate button (participant posts) */}
-        <div className={`reel-actions-container ${data.user.isParticipant ? 'no-nominate' : ''}`}>
+        <div className={`reel-actions-container ${data.user?.isParticipant ? 'no-nominate' : ''}`}>
           <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} onLikeChange={onLikeChange} />
         </div>
 
@@ -480,22 +480,22 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             )}
             <div className="reel-user-row">
               <img
-                src={data.user.avatar}
-                alt={data.user.username}
+                src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                alt={data.user?.username || 'user'}
                 className="reel-user-avatar clickable"
-                style={{ borderColor: getPartyColor(data.user.party) }}
+                style={{ borderColor: getPartyColor(data.user?.party) }}
                 onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
               />
               <div className="reel-user-details">
-                {data.user.party ? (
-                  <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user.party) }}>
-                    {data.user.party}
+                {data.user?.party ? (
+                  <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
+                    {data.user?.party}
                   </button>
                 ) : (
                   <span className="party-tag">Independent</span>
                 )}
                 <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
-                  {data.user.username}
+                  {data.user?.username || 'unknown'}
                 </button>
               </div>
             </div>
@@ -503,7 +503,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             <p className="reel-caption">{data.caption}</p>
           </div>
           {/* Hide nominate button for participant posts (they can't be nominated as candidates) */}
-          {!data.user.isParticipant && (
+          {!data.user?.isParticipant && (
             <button
               className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
               onClick={() => {
@@ -765,7 +765,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           <div className="nominate-modal nominate-options">
             <div className="nominate-modal-handle" />
             <h3 className="nominate-modal-title">
-              Nominate @{data.user.username} to {selectedRaceForNomination?.name}
+              Nominate @{data.user?.username || 'user'} to {selectedRaceForNomination?.name}
             </h3>
             <div className="nominate-options-list">
               <button

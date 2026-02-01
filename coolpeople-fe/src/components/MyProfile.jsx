@@ -165,7 +165,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',

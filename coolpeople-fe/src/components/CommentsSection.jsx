@@ -4,7 +4,7 @@ import Comment from './Comment'
 import { mockComments } from '../data/mockData'
 import { commentsApi } from '../services/api'
 
-function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity, onViewReel }) {
+function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity }) {
   const [dividerAtBottom, setDividerAtBottom] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
@@ -254,16 +254,10 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Video preview - click to view reel in scrollable view, or close if no handler */}
+      {/* Video preview - click to close comments */}
       <div
         className="comments-video-preview"
-        onClick={() => {
-          if (onViewReel && reel) {
-            onViewReel(reel)
-          } else {
-            onClose()
-          }
-        }}
+        onClick={onClose}
       >
         {reel?.videoUrl ? (
           <video
@@ -302,6 +296,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
                 onPartyClick={onPartyClick}
                 onReply={handleReply}
                 userReplies={commentReplies[comment.id] || []}
+                reelId={reel?.id}
               />
               {index === comments.cpComments.length - 1 && (
                 <span className="leave-verified-comment" onClick={() => setShowPaywall(true)}>leave a verified comment</span>
@@ -333,6 +328,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
                 onPartyClick={onPartyClick}
                 onReply={handleReply}
                 userReplies={commentReplies[comment.id] || []}
+                reelId={reel?.id}
               />
             ))}
           </div>
