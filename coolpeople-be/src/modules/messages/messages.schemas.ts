@@ -50,3 +50,27 @@ export const cursorQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(50).default(20),
   }),
 });
+
+// -----------------------------------------------------------------------------
+// Add DM Reaction
+// -----------------------------------------------------------------------------
+
+export const addDmReactionSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid message ID'),
+  }),
+  body: z.object({
+    emoji: z.string().min(1, 'Emoji is required').max(10, 'Emoji too long'),
+  }),
+});
+
+// -----------------------------------------------------------------------------
+// Remove DM Reaction
+// -----------------------------------------------------------------------------
+
+export const removeDmReactionSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid message ID'),
+    emoji: z.string().min(1, 'Emoji is required'),
+  }),
+});

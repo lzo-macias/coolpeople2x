@@ -155,3 +155,25 @@ export const deleteMessage = async (req: Request, res: Response): Promise<void> 
   await messagesService.deleteMessage(messageId, req.user!.userId);
   sendNoContent(res);
 };
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/:id/reactions
+// -----------------------------------------------------------------------------
+
+export const addReaction = async (req: Request, res: Response): Promise<void> => {
+  const messageId = req.params.id as string;
+  const { emoji } = req.body as { emoji: string };
+  const result = await messagesService.addDmReaction(messageId, req.user!.userId, emoji);
+  sendCreated(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/:id/reactions/:emoji
+// -----------------------------------------------------------------------------
+
+export const removeReaction = async (req: Request, res: Response): Promise<void> => {
+  const messageId = req.params.id as string;
+  const emoji = decodeURIComponent(req.params.emoji as string);
+  await messagesService.removeDmReaction(messageId, req.user!.userId, emoji);
+  sendNoContent(res);
+};

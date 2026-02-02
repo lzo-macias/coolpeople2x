@@ -238,6 +238,9 @@ model User {
   // Story views
   storyViews      StoryView[]
 
+  // Direct message reactions
+  dmReactions     DirectMessageReaction[]
+
   @@index([email])
   @@index([username])
   @@index([userType])
@@ -933,9 +936,25 @@ model DirectMessage {
   sender      User      @relation("DMSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver    User      @relation("DMReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   deletedFor  DeletedMessage[]
+  reactions   DirectMessageReaction[]
 
   @@index([senderId, receiverId])
   @@index([receiverId, createdAt])
+}
+
+model DirectMessageReaction {
+  id        String        @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+
+  createdAt DateTime      @default(now())
+
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 // Tracks which messages a user has deleted for themselves (delete for me only)

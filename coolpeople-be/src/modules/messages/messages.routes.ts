@@ -12,6 +12,8 @@ import {
   conversationUserParamSchema,
   messageIdParamSchema,
   cursorQuerySchema,
+  addDmReactionSchema,
+  removeDmReactionSchema,
 } from './messages.schemas.js';
 
 export const messagesRouter = Router();
@@ -171,4 +173,28 @@ messagesRouter.delete(
   requireAuth,
   validate(messageIdParamSchema),
   messagesController.deleteMessage
+);
+
+// -----------------------------------------------------------------------------
+// POST /api/messages/:id/reactions
+// Add a reaction to a message
+// -----------------------------------------------------------------------------
+
+messagesRouter.post(
+  '/:id/reactions',
+  requireAuth,
+  validate(addDmReactionSchema),
+  messagesController.addReaction
+);
+
+// -----------------------------------------------------------------------------
+// DELETE /api/messages/:id/reactions/:emoji
+// Remove a reaction from a message
+// -----------------------------------------------------------------------------
+
+messagesRouter.delete(
+  '/:id/reactions/:emoji',
+  requireAuth,
+  validate(removeDmReactionSchema),
+  messagesController.removeReaction
 );

@@ -1330,6 +1330,21 @@ export const addReaction = async (
     await prisma.chatReaction.create({
       data: { messageId, userId, emoji },
     });
+
+    // Emit socket event for real-time sync
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`party:${partyId}`).emit('party:reaction:added', {
+          partyId,
+          messageId,
+          userId,
+          emoji,
+        });
+      }
+    } catch {
+      // Don't fail on WebSocket errors
+    }
   } catch (err: any) {
     if (err?.code === 'P2002') throw new ConflictError('Already reacted with this emoji');
     throw err;
@@ -1368,6 +1383,21 @@ export const removeReaction = async (
   if (!reaction) throw new NotFoundError('Reaction');
 
   await prisma.chatReaction.delete({ where: { id: reaction.id } });
+
+  // Emit socket event for real-time sync
+  try {
+    const io = getIO();
+    if (io) {
+      io.to(`party:${partyId}`).emit('party:reaction:removed', {
+        partyId,
+        messageId,
+        userId,
+        emoji,
+      });
+    }
+  } catch {
+    // Don't fail on WebSocket errors
+  }
 };
 
 // =============================================================================

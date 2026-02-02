@@ -14,14 +14,41 @@ import type {
   ConversationResponse,
   ConversationUser,
   MessageResponse,
+  MessageReaction,
   SendMessageRequest,
 } from './messages.types.js';
+
+// -----------------------------------------------------------------------------
+// Helper: Format message reactions for API response
+// -----------------------------------------------------------------------------
+
+const formatMessageReactions = (
+  reactions: Array<{ emoji: string; userId: string }>,
+  currentUserId: string
+): MessageReaction[] => {
+  // Group reactions by emoji
+  const grouped = reactions.reduce((acc, r) => {
+    if (!acc[r.emoji]) {
+      acc[r.emoji] = { count: 0, userIds: new Set<string>() };
+    }
+    acc[r.emoji].count++;
+    acc[r.emoji].userIds.add(r.userId);
+    return acc;
+  }, {} as Record<string, { count: number; userIds: Set<string> }>);
+
+  // Convert to array with reacted flag
+  return Object.entries(grouped).map(([emoji, data]) => ({
+    emoji,
+    count: data.count,
+    reacted: data.userIds.has(currentUserId),
+  }));
+};
 
 // -----------------------------------------------------------------------------
 // Helper: Format message for API response
 // -----------------------------------------------------------------------------
 
-const formatMessage = (message: any): MessageResponse => ({
+const formatMessage = (message: any, currentUserId?: string): MessageResponse => ({
   id: message.id,
   senderId: message.senderId,
   receiverId: message.receiverId,
@@ -29,6 +56,9 @@ const formatMessage = (message: any): MessageResponse => ({
   metadata: message.metadata,
   readAt: message.readAt,
   createdAt: message.createdAt,
+  reactions: message.reactions && currentUserId
+    ? formatMessageReactions(message.reactions, currentUserId)
+    : undefined,
 });
 
 // -----------------------------------------------------------------------------
@@ -416,6 +446,14 @@ export const getMessagesWithUser = async (
       // Exclude messages deleted by the current user
       ...(deletedMessageIds.length > 0 && { NOT: { id: { in: deletedMessageIds } } }),
     },
+    include: {
+      reactions: {
+        select: {
+          emoji: true,
+          userId: true,
+        },
+      },
+    },
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { createdAt: 'desc' },
@@ -426,7 +464,7 @@ export const getMessagesWithUser = async (
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
   return {
-    messages: results.map(formatMessage),
+    messages: results.map((msg) => formatMessage(msg, currentUserId)),
     nextCursor,
   };
 };
@@ -688,4 +726,128 @@ export const deleteConversation = async (
       otherUserId,
     },
   });
+};
+
+// -----------------------------------------------------------------------------
+// Add DM Reaction
+// Adds a reaction to a direct message
+// -----------------------------------------------------------------------------
+
+export const addDmReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<{ reacted: boolean }> => {
+  // Verify message exists and user is participant
+  const message = await prisma.directMessage.findUnique({
+    where: { id: messageId },
+  });
+
+  if (!message) throw new NotFoundError('Message');
+
+  // User must be sender or receiver
+  if (message.senderId !== userId && message.receiverId !== userId) {
+    throw new ForbiddenError('You can only react to messages in your conversations');
+  }
+
+  // Create the reaction (upsert to handle duplicates gracefully)
+  await prisma.directMessageReaction.upsert({
+    where: {
+      messageId_userId_emoji: { messageId, userId, emoji },
+    },
+    update: {}, // Already exists, no update needed
+    create: {
+      messageId,
+      userId,
+      emoji,
+    },
+  });
+
+  // Emit socket event for real-time sync
+  try {
+    const io = getIO();
+    if (io) {
+      const ids = [message.senderId, message.receiverId].sort();
+      // Emit to conversation room
+      io.to(`conversation:${ids[0]}:${ids[1]}`).emit('dm:reaction:added', {
+        messageId,
+        userId,
+        emoji,
+      });
+      // Also emit to individual user rooms
+      io.to(`user:${message.senderId}`).emit('dm:reaction:added', {
+        messageId,
+        userId,
+        emoji,
+      });
+      io.to(`user:${message.receiverId}`).emit('dm:reaction:added', {
+        messageId,
+        userId,
+        emoji,
+      });
+    }
+  } catch {
+    // Don't fail on WebSocket errors
+  }
+
+  return { reacted: true };
+};
+
+// -----------------------------------------------------------------------------
+// Remove DM Reaction
+// Removes a reaction from a direct message
+// -----------------------------------------------------------------------------
+
+export const removeDmReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> => {
+  // Verify message exists and user is participant
+  const message = await prisma.directMessage.findUnique({
+    where: { id: messageId },
+  });
+
+  if (!message) throw new NotFoundError('Message');
+
+  // User must be sender or receiver
+  if (message.senderId !== userId && message.receiverId !== userId) {
+    throw new ForbiddenError('You can only remove your own reactions');
+  }
+
+  // Delete the reaction
+  await prisma.directMessageReaction.deleteMany({
+    where: {
+      messageId,
+      userId,
+      emoji,
+    },
+  });
+
+  // Emit socket event for real-time sync
+  try {
+    const io = getIO();
+    if (io) {
+      const ids = [message.senderId, message.receiverId].sort();
+      // Emit to conversation room
+      io.to(`conversation:${ids[0]}:${ids[1]}`).emit('dm:reaction:removed', {
+        messageId,
+        userId,
+        emoji,
+      });
+      // Also emit to individual user rooms
+      io.to(`user:${message.senderId}`).emit('dm:reaction:removed', {
+        messageId,
+        userId,
+        emoji,
+      });
+      io.to(`user:${message.receiverId}`).emit('dm:reaction:removed', {
+        messageId,
+        userId,
+        emoji,
+      });
+    }
+  } catch {
+    // Don't fail on WebSocket errors
+  }
 };

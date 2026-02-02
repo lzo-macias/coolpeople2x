@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
 import { messagesApi, partiesApi } from '../services/api'
 import { joinPartyRoom, leavePartyRoom, onPartyMessage } from '../services/socket'
-import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket } from '../services/socket'
+import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket, onDmReactionAdded, onDmReactionRemoved } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
 import CreateScreen from './CreateScreen'
 import PartySettings from './PartySettings'
@@ -247,6 +247,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               senderAvatar: msg.user?.avatarUrl,
             })).reverse()
             setFetchedMessages(transformed)
+
+            // Initialize reactions from party chat API response
+            const reactionsMap = {}
+            messages.forEach(msg => {
+              if (msg.reactions && msg.reactions.length > 0) {
+                reactionsMap[msg.id] = msg.reactions
+              }
+            })
+            setMessageReactions(reactionsMap)
           }
         } else {
           // Fetch DM messages
@@ -263,6 +272,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               createdAt: msg.createdAt,
             })).reverse()
             setFetchedMessages(transformed)
+
+            // Initialize reactions from API response
+            const reactionsMap = {}
+            response.data.forEach(msg => {
+              if (msg.reactions && msg.reactions.length > 0) {
+                reactionsMap[msg.id] = msg.reactions
+              }
+            })
+            setMessageReactions(reactionsMap)
           }
         }
       } catch (error) {
@@ -498,6 +516,79 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     }
   }, [otherUserId, isPartyChat, partyId])
 
+  // Listen for real-time reaction updates (both DM and party chat)
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket) return
+
+    const handleReactionAdded = (data) => {
+      const { messageId, userId: reactorId, emoji } = data
+
+      // Skip if this is our own reaction (we already updated optimistically)
+      if (reactorId === currentUserIdRef.current) return
+
+      setMessageReactions(prev => {
+        const reactions = prev[messageId] || []
+        const existing = reactions.find(r => r.emoji === emoji)
+
+        if (existing) {
+          return {
+            ...prev,
+            [messageId]: reactions.map(r =>
+              r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+            )
+          }
+        } else {
+          return {
+            ...prev,
+            [messageId]: [...reactions, { emoji, count: 1, reacted: false }]
+          }
+        }
+      })
+    }
+
+    const handleReactionRemoved = (data) => {
+      const { messageId, userId: reactorId, emoji } = data
+
+      // Skip if this is our own reaction (we already updated optimistically)
+      if (reactorId === currentUserIdRef.current) return
+
+      setMessageReactions(prev => {
+        const reactions = prev[messageId] || []
+        const existing = reactions.find(r => r.emoji === emoji)
+
+        if (!existing) return prev
+
+        if (existing.count <= 1) {
+          return {
+            ...prev,
+            [messageId]: reactions.filter(r => r.emoji !== emoji)
+          }
+        }
+
+        return {
+          ...prev,
+          [messageId]: reactions.map(r =>
+            r.emoji === emoji ? { ...r, count: r.count - 1 } : r
+          )
+        }
+      })
+    }
+
+    // Listen for both DM and party chat reaction events
+    socket.on('dm:reaction:added', handleReactionAdded)
+    socket.on('dm:reaction:removed', handleReactionRemoved)
+    socket.on('party:reaction:added', handleReactionAdded)
+    socket.on('party:reaction:removed', handleReactionRemoved)
+
+    return () => {
+      socket.off('dm:reaction:added', handleReactionAdded)
+      socket.off('dm:reaction:removed', handleReactionRemoved)
+      socket.off('party:reaction:added', handleReactionAdded)
+      socket.off('party:reaction:removed', handleReactionRemoved)
+    }
+  }, [isPartyChat, user?.id, partyId])
+
   // Fallback avatar if none provided
   const userAvatar = currentUserAvatar || 'https://i.pravatar.cc/40?img=12'
 
@@ -507,23 +598,83 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     setActiveMessageId(activeMessageId === msgId ? null : msgId)
   }
 
-  const addReaction = (msgId, emoji) => {
+  const addReaction = async (msgId, emoji) => {
+    // Skip API calls for local messages (not yet saved to database)
+    const isLocalMessage = msgId.startsWith('local-')
+
+    // Check if user already reacted with this emoji
+    const current = messageReactions[msgId] || []
+    const existing = current.find(r => r.emoji === emoji)
+    const hasReacted = existing?.reacted
+
+    // Optimistic update
     setMessageReactions(prev => {
-      const current = prev[msgId] || []
-      const existing = current.find(r => r.emoji === emoji)
-      if (existing) {
-        // Toggle off if already reacted with same emoji
+      const reactions = prev[msgId] || []
+      const existingReaction = reactions.find(r => r.emoji === emoji)
+
+      if (existingReaction && existingReaction.reacted) {
+        // Remove reaction
+        if (existingReaction.count === 1) {
+          return {
+            ...prev,
+            [msgId]: reactions.filter(r => r.emoji !== emoji)
+          }
+        }
         return {
           ...prev,
-          [msgId]: current.filter(r => r.emoji !== emoji)
+          [msgId]: reactions.map(r =>
+            r.emoji === emoji ? { ...r, count: r.count - 1, reacted: false } : r
+          )
         }
-      }
-      return {
-        ...prev,
-        [msgId]: [...current, { emoji, count: 1 }]
+      } else if (existingReaction) {
+        // Add to existing emoji
+        return {
+          ...prev,
+          [msgId]: reactions.map(r =>
+            r.emoji === emoji ? { ...r, count: r.count + 1, reacted: true } : r
+          )
+        }
+      } else {
+        // New reaction
+        return {
+          ...prev,
+          [msgId]: [...reactions, { emoji, count: 1, reacted: true }]
+        }
       }
     })
     setActiveMessageId(null)
+
+    // Skip API call for local messages - they'll be synced when the message is saved
+    if (isLocalMessage) {
+      console.log('Skipping API call for local message reaction')
+      return
+    }
+
+    // Call appropriate API based on chat type
+    try {
+      if (isPartyChat && partyId) {
+        // Party chat reactions
+        if (hasReacted) {
+          await partiesApi.removeChatReaction(partyId, msgId, emoji)
+        } else {
+          await partiesApi.addChatReaction(partyId, msgId, emoji)
+        }
+      } else {
+        // DM reactions
+        if (hasReacted) {
+          await messagesApi.removeReaction(msgId, emoji)
+        } else {
+          await messagesApi.addReaction(msgId, emoji)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update reaction:', error)
+      // Revert optimistic update on error
+      setMessageReactions(prev => ({
+        ...prev,
+        [msgId]: current
+      }))
+    }
   }
 
   const handleReply = (msg) => {
@@ -563,6 +714,14 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         const response = await partiesApi.sendChatMessage(partyId, messageContent)
         console.log('Party chat API response:', response)
 
+        // Update the local message with the real ID from the server
+        const messageData = response.data?.message || response.data
+        if (messageData?.id) {
+          setLocalMessages(prev => prev.map(msg =>
+            msg.id === newMessage.id ? { ...msg, id: messageData.id } : msg
+          ))
+        }
+
         // Notify parent to update the messages list
         onMessageSent?.({
           conversationId: `party-${partyId}`,
@@ -584,6 +743,13 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         // Use the message ID as the conversation identifier, or construct from user IDs
         const messageData = response.data?.message || response.data
         const convId = messageData?.id ? `conv-${user.id}` : conversationId
+
+        // Update the local message with the real ID from the server
+        if (messageData?.id) {
+          setLocalMessages(prev => prev.map(msg =>
+            msg.id === newMessage.id ? { ...msg, id: messageData.id } : msg
+          ))
+        }
 
         // Update the conversation ID if this was a new conversation
         if (isNewConversation) {
@@ -876,7 +1042,14 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 {reactions.length > 0 && (
                   <div className={`chat-reactions ${msg.isOwn ? 'own' : 'other'}`}>
                     {reactions.map(r => (
-                      <span key={r.emoji} className="chat-reaction-item">{r.emoji}</span>
+                      <span
+                        key={r.emoji}
+                        className={`chat-reaction-item ${r.reacted ? 'reacted' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); addReaction(msg.id, r.emoji); }}
+                      >
+                        {r.emoji}
+                        {r.count > 1 && <span className="reaction-count">{r.count}</span>}
+                      </span>
                     ))}
                   </div>
                 )}

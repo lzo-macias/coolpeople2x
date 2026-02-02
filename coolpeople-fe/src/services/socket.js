@@ -573,6 +573,60 @@ export const setupPartyRoomAutoJoin = () => {
 }
 
 // =============================================================================
+// DM Reaction Events
+// =============================================================================
+
+/**
+ * Listen for DM reaction added events
+ * @param {Function} callback - Called when a reaction is added
+ * @returns {Function} Cleanup function
+ */
+export const onDmReactionAdded = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      messageId: data.messageId,
+      userId: data.userId,
+      emoji: data.emoji,
+    })
+  }
+
+  socket.on('dm:reaction:added', handler)
+  eventListeners.set('dm:reaction:added', handler)
+
+  return () => {
+    socket?.off('dm:reaction:added', handler)
+    eventListeners.delete('dm:reaction:added')
+  }
+}
+
+/**
+ * Listen for DM reaction removed events
+ * @param {Function} callback - Called when a reaction is removed
+ * @returns {Function} Cleanup function
+ */
+export const onDmReactionRemoved = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      messageId: data.messageId,
+      userId: data.userId,
+      emoji: data.emoji,
+    })
+  }
+
+  socket.on('dm:reaction:removed', handler)
+  eventListeners.set('dm:reaction:removed', handler)
+
+  return () => {
+    socket?.off('dm:reaction:removed', handler)
+    eventListeners.delete('dm:reaction:removed')
+  }
+}
+
+// =============================================================================
 // Utility Exports
 // =============================================================================
 
@@ -606,4 +660,6 @@ export default {
   onPartyMessage,
   onPartyMemberJoined,
   onPartyMemberLeft,
+  onDmReactionAdded,
+  onDmReactionRemoved,
 }

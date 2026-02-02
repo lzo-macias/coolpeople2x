@@ -429,6 +429,15 @@ export const partiesApi = {
   deleteChatMessage: (partyId, messageId) => apiFetch(`/api/parties/${partyId}/chat/messages/${messageId}`, {
     method: 'DELETE',
   }),
+
+  addChatReaction: (partyId, messageId, emoji) => apiFetch(`/api/parties/${partyId}/chat/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  }),
+
+  removeChatReaction: (partyId, messageId, emoji) => apiFetch(`/api/parties/${partyId}/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+    method: 'DELETE',
+  }),
 };
 
 // =============================================================================
@@ -483,6 +492,15 @@ export const messagesApi = {
   }),
 
   deleteMessage: (messageId) => apiFetch(`/api/messages/${messageId}`, {
+    method: 'DELETE',
+  }),
+
+  addReaction: (messageId, emoji) => apiFetch(`/api/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  }),
+
+  removeReaction: (messageId, emoji) => apiFetch(`/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
     method: 'DELETE',
   }),
 };

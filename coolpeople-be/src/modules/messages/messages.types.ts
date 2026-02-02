@@ -14,6 +14,16 @@ export interface ConversationUser {
 }
 
 // -----------------------------------------------------------------------------
+// Message Reaction
+// -----------------------------------------------------------------------------
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  reacted: boolean; // Whether the current user has reacted with this emoji
+}
+
+// -----------------------------------------------------------------------------
 // Message Response
 // -----------------------------------------------------------------------------
 
@@ -25,6 +35,7 @@ export interface MessageResponse {
   metadata?: Record<string, unknown> | null;
   readAt: Date | null;
   createdAt: Date;
+  reactions?: MessageReaction[];
 }
 
 // -----------------------------------------------------------------------------
