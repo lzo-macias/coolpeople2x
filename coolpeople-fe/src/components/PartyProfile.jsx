@@ -83,6 +83,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           setPartyData(profileRes.data.party)
         }
 
+        console.log('PartyProfile: membersRes:', membersRes)
+        console.log('PartyProfile: membersRes?.data:', membersRes?.data)
         setMembers(membersRes?.data || [])
         setFollowers(followersRes?.data || [])
         setRaces(racesRes?.data?.races || [])
@@ -142,9 +144,15 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     username: m.username,
     avatar: m.avatarUrl || 'https://i.pravatar.cc/40',
     party: party.name,
-    role: m.permissions?.includes('admin') ? 'Admin' : m.permissions?.includes('moderate') ? 'Moderator' : 'Member',
+    role: m.permissions?.includes('leader') ? 'Leader' : m.permissions?.includes('admin') ? 'Admin' : m.permissions?.includes('moderate') ? 'Moderator' : 'Member',
     joinedAt: formatRelativeTime(m.joinedAt),
   }))
+
+  // Debug log members
+  if (members.length > 0 || formattedMembers.length > 0) {
+    console.log('PartyProfile: members state:', members)
+    console.log('PartyProfile: formattedMembers:', formattedMembers)
+  }
 
   // Format races for display
   const formattedRaces = races.map(r => ({

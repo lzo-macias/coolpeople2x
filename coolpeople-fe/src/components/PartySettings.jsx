@@ -1,16 +1,125 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { messagesApi, partiesApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import '../styling/PartySettings.css'
 
-function PartySettings({ party, isAdmin = true, onClose, onSave }) {
+function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave }) {
+  const { user: currentUser } = useAuth()
   const [activeSection, setActiveSection] = useState(null)
+  const [members, setMembers] = useState([])
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false)
+
+  // Convert permissions array to display role
+  const permissionsToRole = (permissions) => {
+    if (permissions.includes('leader')) return 'founder'
+    if (permissions.includes('admin')) return 'admin'
+    if (permissions.includes('moderate')) return 'moderator'
+    return 'member'
+  }
+
+  // Fetch real members from API
+  useEffect(() => {
+    const fetchMembers = async () => {
+      const partyId = conversation?.partyId
+      if (!partyId) return
+
+      setIsLoadingMembers(true)
+      try {
+        const response = await partiesApi.getMembers(partyId)
+        // API returns { data: [...members...] } where each member has: userId, username, displayName, avatarUrl, permissions
+        if (response.data && Array.isArray(response.data)) {
+          const transformedMembers = response.data.map(member => ({
+            id: member.userId,
+            username: member.username || member.displayName || 'Member',
+            avatar: member.avatarUrl || 'https://i.pravatar.cc/40',
+            role: permissionsToRole(member.permissions || []),
+          }))
+          setMembers(transformedMembers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch members:', error)
+      } finally {
+        setIsLoadingMembers(false)
+      }
+    }
+
+    fetchMembers()
+  }, [conversation?.partyId])
+
+  // Fetch banned members from API (only for admins)
+  useEffect(() => {
+    const fetchBannedMembers = async () => {
+      const partyId = conversation?.partyId
+      if (!partyId || !isAdmin) return
+
+      setIsLoadingBanned(true)
+      try {
+        const response = await partiesApi.getBannedMembers(partyId)
+        if (response.data && Array.isArray(response.data)) {
+          const transformedBanned = response.data.map(ban => ({
+            id: ban.userId,
+            username: ban.username || ban.displayName || 'User',
+            avatar: ban.avatarUrl || 'https://i.pravatar.cc/40',
+            bannedDate: new Date(ban.bannedAt).toLocaleDateString(),
+          }))
+          setBannedUsers(transformedBanned)
+        }
+      } catch (error) {
+        console.error('Failed to fetch banned members:', error)
+      } finally {
+        setIsLoadingBanned(false)
+      }
+    }
+
+    fetchBannedMembers()
+  }, [conversation?.partyId, isAdmin])
+
   const [partyData, setPartyData] = useState({
     name: party?.name || 'The Pink Lady Party',
     avatar: party?.avatar || 'https://i.pravatar.cc/150?img=47',
     color: party?.color || '#EC4899',
     description: party?.description || 'A party for the people, by the people.',
     isPrivate: true, // false = public (anyone can join), true = private (must request)
-    notifications: true,
+    notifications: !conversation?.isMuted, // Initialize from conversation settings
   })
+
+  // Handle mute/unmute with API call
+  const handleToggleMute = async () => {
+    const partyId = conversation?.partyId
+    if (!partyId) return
+
+    const newMutedState = partyData.notifications // notifications=true means NOT muted, so toggling means mute
+    try {
+      if (newMutedState) {
+        await messagesApi.muteConversation(partyId)
+      } else {
+        await messagesApi.unmuteConversation(partyId)
+      }
+      setPartyData(prev => ({ ...prev, notifications: !prev.notifications }))
+      // Notify parent of the change
+      if (onSettingsChange) {
+        onSettingsChange({ isMuted: newMutedState })
+      }
+    } catch (error) {
+      console.error('Failed to toggle mute:', error)
+    }
+  }
+
+  // Handle hide with API call
+  const handleHide = async () => {
+    const partyId = conversation?.partyId
+    if (!partyId) return
+
+    try {
+      await messagesApi.hideConversation(partyId)
+      if (onSettingsChange) {
+        onSettingsChange({ isHidden: true })
+      }
+      onClose() // Close settings after hiding
+    } catch (error) {
+      console.error('Failed to hide conversation:', error)
+    }
+  }
 
   const [adminPermissions, setAdminPermissions] = useState({
     acceptRequests: true,
@@ -38,25 +147,12 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
   const [silencedMembers, setSilencedMembers] = useState([])
   const [memberRoles, setMemberRoles] = useState({})
   const [bannedSearchQuery, setBannedSearchQuery] = useState('')
-  const [bannedUsers, setBannedUsers] = useState([
-    { id: 201, username: 'toxic_user', avatar: 'https://i.pravatar.cc/40?img=30', bannedDate: '2 days ago' },
-    { id: 202, username: 'spam_bot_99', avatar: 'https://i.pravatar.cc/40?img=31', bannedDate: '1 week ago' },
-    { id: 203, username: 'rule_breaker', avatar: 'https://i.pravatar.cc/40?img=32', bannedDate: '3 weeks ago' },
-  ])
-  const [unbannedUsers, setUnbannedUsers] = useState([])
+  const [bannedUsers, setBannedUsers] = useState([])
+  const [isLoadingBanned, setIsLoadingBanned] = useState(false)
 
   const togglePermission = (key) => {
     setAdminPermissions(prev => ({ ...prev, [key]: !prev[key] }))
   }
-
-  // Mock members data
-  const members = [
-    { id: 1, username: 'pink_lady', avatar: 'https://i.pravatar.cc/40?img=1', role: 'founder' },
-    { id: 2, username: 'sarah.2024', avatar: 'https://i.pravatar.cc/40?img=5', role: 'admin 1' },
-    { id: 3, username: 'mike_politics', avatar: 'https://i.pravatar.cc/40?img=8', role: 'admin 2' },
-    { id: 4, username: 'jane_votes', avatar: 'https://i.pravatar.cc/40?img=9', role: 'admin 3' },
-    { id: 5, username: 'alex_liberty', avatar: 'https://i.pravatar.cc/40?img=12', role: 'member' },
-  ]
 
   // Mock shared media
   const sharedMedia = [
@@ -136,7 +232,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
           </svg>
           <span>Search</span>
         </button>
-        <button className="party-action-btn" onClick={() => setPartyData(prev => ({ ...prev, notifications: !prev.notifications }))}>
+        <button className="party-action-btn" onClick={handleToggleMute}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {partyData.notifications ? (
               <>
@@ -231,7 +327,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
       {showMoreMenu && (
         <div className="party-more-overlay" onClick={() => setShowMoreMenu(false)}>
           <div className="party-more-menu" onClick={e => e.stopPropagation()}>
-            <button className="party-more-option">
+            <button className="party-more-option" onClick={() => { setShowMoreMenu(false); handleLeaveParty(); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -239,7 +335,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
               </svg>
               Leave
             </button>
-            <button className="party-more-option">
+            <button className="party-more-option" onClick={handleHide}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                 <line x1="1" y1="1" x2="23" y2="23" />
@@ -460,33 +556,98 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
   )
 
   // Render Members Section
-  const toggleSilenceMember = (memberId) => {
-    setSilencedMembers(prev =>
-      prev.includes(memberId)
-        ? prev.filter(id => id !== memberId)
-        : [...prev, memberId]
-    )
-  }
+  const partyId = conversation?.partyId
 
-  const roleHierarchy = ['member', 'admin 3', 'admin 2', 'admin 1']
+  // Silence member - removes chat permission
+  const toggleSilenceMember = async (memberId) => {
+    if (!partyId) return
 
-  const promoteMember = (memberId, currentRole) => {
-    const currentIndex = roleHierarchy.indexOf(currentRole)
-    if (currentIndex < roleHierarchy.length - 1) {
-      setMemberRoles(prev => ({
-        ...prev,
-        [memberId]: roleHierarchy[currentIndex + 1]
-      }))
+    const isSilenced = silencedMembers.includes(memberId)
+    try {
+      if (isSilenced) {
+        // Unsilence - add chat permission back
+        await partiesApi.updateMemberPermissions(partyId, memberId, ['view', 'chat'])
+        setSilencedMembers(prev => prev.filter(id => id !== memberId))
+      } else {
+        // Silence - remove chat permission
+        await partiesApi.updateMemberPermissions(partyId, memberId, ['view'])
+        setSilencedMembers(prev => [...prev, memberId])
+      }
+    } catch (error) {
+      console.error('Failed to toggle silence:', error)
     }
   }
 
-  const demoteMember = (memberId, currentRole) => {
-    const currentIndex = roleHierarchy.indexOf(currentRole)
-    if (currentIndex > 0) {
-      setMemberRoles(prev => ({
-        ...prev,
-        [memberId]: roleHierarchy[currentIndex - 1]
-      }))
+  // Promote member to admin
+  const promoteMember = async (memberId) => {
+    if (!partyId) return
+
+    try {
+      await partiesApi.updateMemberPermissions(partyId, memberId, ['view', 'chat', 'post', 'invite', 'moderate', 'admin'])
+      // Update local state to reflect new role
+      setMembers(prev => prev.map(m =>
+        m.id === memberId ? { ...m, role: 'admin' } : m
+      ))
+    } catch (error) {
+      console.error('Failed to promote member:', error)
+    }
+  }
+
+  // Demote admin to member
+  const demoteMember = async (memberId) => {
+    if (!partyId) return
+
+    try {
+      await partiesApi.updateMemberPermissions(partyId, memberId, ['view', 'chat'])
+      // Update local state to reflect new role
+      setMembers(prev => prev.map(m =>
+        m.id === memberId ? { ...m, role: 'member' } : m
+      ))
+    } catch (error) {
+      console.error('Failed to demote member:', error)
+    }
+  }
+
+  // Block/ban member from party
+  const blockMember = async (memberId) => {
+    if (!partyId) return
+
+    try {
+      // Get the member info before banning for the banned list
+      const memberToBan = members.find(m => m.id === memberId)
+
+      await partiesApi.banMember(partyId, memberId)
+
+      // Remove from members list
+      setMembers(prev => prev.filter(m => m.id !== memberId))
+
+      // Add to banned users list
+      if (memberToBan) {
+        setBannedUsers(prev => [...prev, {
+          id: memberToBan.id,
+          username: memberToBan.username,
+          avatar: memberToBan.avatar,
+          bannedDate: new Date().toLocaleDateString(),
+        }])
+      }
+    } catch (error) {
+      console.error('Failed to ban member:', error)
+    }
+  }
+
+  // Leave party
+  const handleLeaveParty = async () => {
+    if (!partyId) return
+
+    try {
+      await partiesApi.leaveParty(partyId)
+      onClose() // Close the settings panel
+      // Navigate back after leaving
+      if (onLeave) {
+        onLeave()
+      }
+    } catch (error) {
+      console.error('Failed to leave party:', error)
     }
   }
 
@@ -527,78 +688,113 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
       <div className="party-members-list">
         {filteredMembers.map(member => {
           const isSilenced = silencedMembers.includes(member.id)
-          const currentRole = getMemberRole(member)
-          const isFounder = member.role === 'founder'
+          const memberRole = getMemberRole(member)
+          const isCurrentUser = member.id === currentUser?.id
+
+          // Find current user's role in the party
+          const currentUserMember = members.find(m => m.id === currentUser?.id)
+          const myRole = currentUserMember?.role || 'member'
+          const amLeader = myRole === 'founder'
+          const amAdmin = myRole === 'admin' || myRole === 'moderator'
+
+          // Determine what actions to show based on roles
+          const memberIsLeader = memberRole === 'founder'
+          const memberIsAdmin = memberRole === 'admin' || memberRole === 'moderator'
+          const memberIsMember = !memberIsLeader && !memberIsAdmin
+
+          // Leader sees: promote/silence/block on members, demote/silence/block on admins
+          // Admin sees: silence/block on members only
+          // Member sees: nothing on anyone
+          const showPromote = amLeader && memberIsMember
+          const showDemote = amLeader && memberIsAdmin
+          const showSilence = (amLeader && !isCurrentUser) || (amAdmin && memberIsMember)
+          const showBlock = (amLeader && !isCurrentUser) || (amAdmin && memberIsMember)
 
           return (
             <div key={member.id} className="party-member-item">
               <img src={member.avatar} alt={member.username} className="party-member-avatar" />
               <div className="party-member-info">
                 <span className="party-member-username">{member.username}</span>
-                <span className="party-member-role">{currentRole}</span>
+                <span className="party-member-role">{memberRole}</span>
               </div>
               <div className="party-member-actions">
-                {isFounder ? (
-                  <button className="party-member-action-btn leave">
+                {isCurrentUser ? (
+                  <button
+                    className="party-member-action-btn leave"
+                    title="Leave Party"
+                    onClick={handleLeaveParty}
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                       <polyline points="16 17 21 12 16 7" />
                       <line x1="21" y1="12" x2="9" y2="12" />
                     </svg>
                   </button>
-                ) : isAdmin && (
+                ) : (
                   <>
-                    <button
-                      className="party-member-action-btn"
-                      onClick={() => toggleSilenceMember(member.id)}
-                      title={isSilenced ? 'Unsilence' : 'Silence'}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        {isSilenced ? (
-                          <>
-                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                            <line x1="12" y1="19" x2="12" y2="23" />
-                            <line x1="8" y1="23" x2="16" y2="23" />
-                          </>
-                        ) : (
-                          <>
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                            <line x1="12" y1="19" x2="12" y2="23" />
-                            <line x1="8" y1="23" x2="16" y2="23" />
-                          </>
-                        )}
-                      </svg>
-                    </button>
-                    <button
-                      className="party-member-action-btn"
-                      onClick={() => promoteMember(member.id, currentRole)}
-                      title="Promote"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                      </svg>
-                    </button>
-                    <button
-                      className="party-member-action-btn"
-                      onClick={() => demoteMember(member.id, currentRole)}
-                      title="Demote"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                      </svg>
-                    </button>
-                    <button className="party-member-action-btn ban" title="Ban">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                      </svg>
-                    </button>
+                    {showSilence && (
+                      <button
+                        className="party-member-action-btn"
+                        onClick={() => toggleSilenceMember(member.id)}
+                        title={isSilenced ? 'Unsilence' : 'Silence'}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          {isSilenced ? (
+                            <>
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                              <line x1="12" y1="19" x2="12" y2="23" />
+                              <line x1="8" y1="23" x2="16" y2="23" />
+                            </>
+                          ) : (
+                            <>
+                              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                              <line x1="12" y1="19" x2="12" y2="23" />
+                              <line x1="8" y1="23" x2="16" y2="23" />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    )}
+                    {showPromote && (
+                      <button
+                        className="party-member-action-btn"
+                        onClick={() => promoteMember(member.id, memberRole)}
+                        title="Promote"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="16" />
+                          <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                      </button>
+                    )}
+                    {showDemote && (
+                      <button
+                        className="party-member-action-btn"
+                        onClick={() => demoteMember(member.id, memberRole)}
+                        title="Demote"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                      </button>
+                    )}
+                    {showBlock && (
+                      <button
+                        className="party-member-action-btn ban"
+                        title="Block"
+                        onClick={() => blockMember(member.id)}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                        </svg>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -926,16 +1122,16 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
   )
 
   // Render Banned Members Section
-  const toggleBanUser = (userId) => {
-    setUnbannedUsers(prev =>
-      prev.includes(userId)
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    )
-  }
+  const unbanUser = async (userId) => {
+    if (!partyId) return
 
-  const unbanAll = () => {
-    setUnbannedUsers(bannedUsers.map(u => u.id))
+    try {
+      await partiesApi.unbanMember(partyId, userId)
+      // Remove from banned list
+      setBannedUsers(prev => prev.filter(u => u.id !== userId))
+    } catch (error) {
+      console.error('Failed to unban member:', error)
+    }
   }
 
   const filteredBannedUsers = bannedUsers.filter(user =>
@@ -968,23 +1164,15 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
             onChange={(e) => setBannedSearchQuery(e.target.value)}
           />
         </div>
-        <button className="party-unban-all-btn" onClick={() => {
-          if (unbannedUsers.length === bannedUsers.length) {
-            // All are unbanned, so ban all
-            setUnbannedUsers([])
-          } else {
-            // Some or none are unbanned, so unban all
-            setUnbannedUsers(bannedUsers.map(u => u.id))
-          }
-        }}>
-          {unbannedUsers.length === bannedUsers.length ? 'Ban All' : 'Unban All'}
-        </button>
       </div>
 
-      <div className="party-banned-list">
-        {filteredBannedUsers.map(user => {
-          const isUnbanned = unbannedUsers.includes(user.id)
-          return (
+      {isLoadingBanned ? (
+        <div className="party-banned-empty">
+          <p>Loading...</p>
+        </div>
+      ) : (
+        <div className="party-banned-list">
+          {filteredBannedUsers.map(user => (
             <div key={user.id} className="party-banned-item">
               <img src={user.avatar} alt={user.username} className="party-banned-avatar" />
               <div className="party-banned-info">
@@ -992,24 +1180,17 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
                 <span className="party-banned-date">Banned {user.bannedDate}</span>
               </div>
               <button
-                className={`party-ban-toggle-btn ${isUnbanned ? 'unbanned' : ''}`}
-                onClick={() => toggleBanUser(user.id)}
+                className="party-ban-toggle-btn"
+                onClick={() => unbanUser(user.id)}
               >
-                {isUnbanned ? (
-                  <>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 4 }}>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Unbanned
-                  </>
-                ) : 'Banned'}
+                Unban
               </button>
             </div>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {filteredBannedUsers.length === 0 && (
+      {!isLoadingBanned && filteredBannedUsers.length === 0 && (
         <div className="party-banned-empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="12" cy="12" r="10" />
@@ -1017,7 +1198,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave }) {
             <line x1="9" y1="9" x2="9.01" y2="9" />
             <line x1="15" y1="9" x2="15.01" y2="9" />
           </svg>
-          <p>No banned members found</p>
+          <p>No banned members</p>
         </div>
       )}
     </div>

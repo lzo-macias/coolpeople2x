@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
 import { messagesApi, partiesApi } from '../services/api'
+import { joinPartyRoom, leavePartyRoom, onPartyMessage } from '../services/socket'
 import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
 import CreateScreen from './CreateScreen'
@@ -110,6 +111,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [showJoinConfirmation, setShowJoinConfirmation] = useState(false)
   const [pendingInvite, setPendingInvite] = useState(null)
   const [isJoining, setIsJoining] = useState(false)
+  const [canChat, setCanChat] = useState(true) // Whether user has chat permission in party
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
@@ -118,7 +120,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const { user } = conversation
   const otherUserId = user?.id
   const otherUserIdRef = useRef(otherUserId)
-  const isPartyChat = conversation.isParty || false
+  const isPartyChat = conversation.isPartyChat || conversation.isParty || false
+  const partyId = conversation.partyId || null
   const isNewConversation = conversation.isNew || conversationId?.startsWith('new-')
 
   // Keep refs updated
@@ -175,8 +178,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       }
 
       console.log('Found party ID:', party.id, '- calling joinParty API')
-      // Join the party
-      const joinResponse = await partiesApi.joinParty(party.id)
+      // Join the party - pass asAdmin if this is an admin invite
+      const isAdminInvite = pendingInvite.metadata?.role === 'admin'
+      const joinResponse = await partiesApi.joinParty(party.id, isAdminInvite ? { asAdmin: true } : {})
       console.log('Join party response:', joinResponse)
 
       // Refresh user data from server to update sitewide
@@ -189,6 +193,16 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     } catch (error) {
       console.error('Failed to join party:', error)
       console.error('Error details:', error.message, error.response)
+
+      // Handle "Already a member" error gracefully
+      if (error.message?.includes('Already a member')) {
+        alert('You are already a member of this party!')
+        setShowJoinConfirmation(false)
+        setPendingInvite(null)
+        setReelViewerMessageId(null)
+      } else {
+        alert(`Failed to join party: ${error.message}`)
+      }
     } finally {
       setIsJoining(false)
     }
@@ -203,25 +217,53 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   // Fetch messages from API on mount
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!user?.id) {
+      // For party chats, we need a partyId; for DMs, we need user.id
+      if (isPartyChat && !partyId) {
+        setIsLoading(false)
+        return
+      }
+      if (!isPartyChat && !user?.id) {
         setIsLoading(false)
         return
       }
 
       try {
-        const response = await messagesApi.getMessagesWithUser(user.id)
-        if (response.data) {
-          // Transform API messages to match expected format
-          // API returns messages sorted desc, so reverse for chronological order
-          const transformed = response.data.map(msg => ({
-            id: msg.id,
-            text: msg.content,
-            metadata: msg.metadata,
-            isOwn: msg.senderId === currentUserId,
-            timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            createdAt: msg.createdAt,
-          })).reverse()
-          setFetchedMessages(transformed)
+        if (isPartyChat && partyId) {
+          // Fetch party chat messages
+          const response = await partiesApi.getChatMessages(partyId)
+          // API returns { success: true, data: [...messages...] }
+          const messages = response.data
+          if (messages && Array.isArray(messages)) {
+            // Transform party chat messages to match expected format
+            // API returns messages sorted desc, so reverse for chronological order
+            const transformed = messages.map(msg => ({
+              id: msg.id,
+              text: msg.content,
+              metadata: null,
+              isOwn: msg.user?.id === currentUserId,
+              timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              createdAt: msg.createdAt,
+              senderName: msg.user?.username || msg.user?.displayName,
+              senderAvatar: msg.user?.avatarUrl,
+            })).reverse()
+            setFetchedMessages(transformed)
+          }
+        } else {
+          // Fetch DM messages
+          const response = await messagesApi.getMessagesWithUser(user.id)
+          if (response.data) {
+            // Transform API messages to match expected format
+            // API returns messages sorted desc, so reverse for chronological order
+            const transformed = response.data.map(msg => ({
+              id: msg.id,
+              text: msg.content,
+              metadata: msg.metadata,
+              isOwn: msg.senderId === currentUserId,
+              timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              createdAt: msg.createdAt,
+            })).reverse()
+            setFetchedMessages(transformed)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch messages:', error)
@@ -231,7 +273,40 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     }
 
     fetchMessages()
-  }, [user?.id, currentUserId])
+  }, [user?.id, currentUserId, isPartyChat, partyId])
+
+  // Check if current user has chat permission in party chat
+  useEffect(() => {
+    const checkChatPermission = async () => {
+      if (!isPartyChat || !partyId || !currentUserId) {
+        setCanChat(true) // DMs always allow chat
+        return
+      }
+
+      try {
+        const response = await partiesApi.getMembers(partyId)
+        if (response.data && Array.isArray(response.data)) {
+          const myMembership = response.data.find(m => m.userId === currentUserId)
+          if (myMembership) {
+            // Check if user has 'chat' permission or is admin/leader
+            const permissions = myMembership.permissions || []
+            const hasChat = permissions.includes('chat') ||
+                           permissions.includes('admin') ||
+                           permissions.includes('leader') ||
+                           permissions.includes('moderate')
+            setCanChat(hasChat)
+          } else {
+            setCanChat(false) // Not a member
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check chat permission:', error)
+        setCanChat(true) // Default to allowing chat on error
+      }
+    }
+
+    checkChatPermission()
+  }, [isPartyChat, partyId, currentUserId])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -240,12 +315,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
   // Join conversation room and listen for real-time messages
   useEffect(() => {
-    if (!user?.id) return
+    // For party chats, we need partyId; for DMs, we need user.id
+    if (isPartyChat && !partyId) return
+    if (!isPartyChat && !user?.id) return
 
     // Ensure socket is initialized
     initializeSocket()
 
     let messageHandler = null
+    let partyMessageHandler = null
     let connectHandler = null
     let isSetup = false
 
@@ -253,84 +331,128 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       if (isSetup || !socket) return
       isSetup = true
 
-      // Join the conversation room for real-time updates
-      joinConversation(user.id)
+      if (isPartyChat && partyId) {
+        // Join the party room for real-time updates
+        joinPartyRoom(partyId)
 
-      // Handler for incoming messages
-      messageHandler = (data) => {
-        console.log('=== SOCKET MESSAGE RECEIVED ===', data)
+        // Handler for incoming party chat messages
+        partyMessageHandler = (data) => {
+          console.log('=== PARTY CHAT MESSAGE RECEIVED ===', data)
 
-        // Get sender ID from the message data - check multiple possible locations
-        const senderId = data.message?.senderId || data.senderId
-        const receiverId = data.message?.receiverId || data.receiverId
-        const messageId = data.message?.id || data.id
-        const messageContent = data.message?.content || data.content
-        const messageCreatedAt = data.message?.createdAt || data.createdAt
+          // Only process messages for this party
+          if (data.partyId !== partyId) return
 
-        console.log('Message details:', { senderId, receiverId, messageId, messageContent })
+          const message = data.message
+          if (!message) return
 
-        // Skip if missing required data
-        if (!senderId || !messageId || !messageContent) {
-          console.log('Skipping - missing required data:', { senderId, messageId, messageContent })
-          return
-        }
-
-        // Use refs to get current values (avoid stale closures)
-        const myUserId = currentUserIdRef.current
-        const theirUserId = otherUserIdRef.current
-
-        console.log('ID comparison:', {
-          senderId,
-          myUserId,
-          theirUserId,
-          senderIsMe: senderId === myUserId,
-          senderIsOther: senderId === theirUserId,
-        })
-
-        // Skip if this message is from us (we already added it locally)
-        if (senderId === myUserId) {
-          console.log('Skipping - message is from me (already added locally)')
-          return
-        }
-
-        // Skip if this message is not for this conversation
-        // Check if either: sender is the other user, OR receiver is me (and sender is other user)
-        const isForThisConversation = senderId === theirUserId ||
-          (receiverId && receiverId === myUserId && senderId === theirUserId)
-
-        if (!isForThisConversation) {
-          console.log('Skipping - message not for this conversation')
-          return
-        }
-
-        console.log('Adding message from other user with isOwn: false')
-        const messageMetadata = data.message?.metadata || data.metadata
-        const newMsg = {
-          id: messageId,
-          text: messageContent,
-          metadata: messageMetadata,
-          isOwn: false, // This is from the other user, not us
-          timestamp: new Date(messageCreatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          createdAt: messageCreatedAt,
-        }
-
-        // Check if message already exists to avoid duplicates
-        setFetchedMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) {
-            console.log('Skipping - duplicate message')
-            return prev
+          // Skip if this message is from us (we already added it locally)
+          if (message.senderId === currentUserIdRef.current) {
+            console.log('Skipping - message is from me (already added locally)')
+            return
           }
-          console.log('Message added to fetchedMessages')
-          return [...prev, newMsg]
-        })
 
-        // Mark message as read since we're viewing the conversation
-        messagesApi.markConversationRead(theirUserId).catch(() => {})
+          const newMsg = {
+            id: message.id,
+            text: message.content,
+            metadata: null,
+            isOwn: false,
+            timestamp: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: message.createdAt,
+            senderName: message.senderUsername,
+          }
+
+          // Check if message already exists to avoid duplicates
+          setFetchedMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) {
+              console.log('Skipping - duplicate message')
+              return prev
+            }
+            console.log('Party message added to fetchedMessages')
+            return [...prev, newMsg]
+          })
+        }
+
+        socket.on('party:message', partyMessageHandler)
+      } else {
+        // Join the DM conversation room for real-time updates
+        joinConversation(user.id)
+
+        // Handler for incoming DM messages
+        messageHandler = (data) => {
+          console.log('=== SOCKET MESSAGE RECEIVED ===', data)
+
+          // Get sender ID from the message data - check multiple possible locations
+          const senderId = data.message?.senderId || data.senderId
+          const receiverId = data.message?.receiverId || data.receiverId
+          const messageId = data.message?.id || data.id
+          const messageContent = data.message?.content || data.content
+          const messageCreatedAt = data.message?.createdAt || data.createdAt
+
+          console.log('Message details:', { senderId, receiverId, messageId, messageContent })
+
+          // Skip if missing required data
+          if (!senderId || !messageId || !messageContent) {
+            console.log('Skipping - missing required data:', { senderId, messageId, messageContent })
+            return
+          }
+
+          // Use refs to get current values (avoid stale closures)
+          const myUserId = currentUserIdRef.current
+          const theirUserId = otherUserIdRef.current
+
+          console.log('ID comparison:', {
+            senderId,
+            myUserId,
+            theirUserId,
+            senderIsMe: senderId === myUserId,
+            senderIsOther: senderId === theirUserId,
+          })
+
+          // Skip if this message is from us (we already added it locally)
+          if (senderId === myUserId) {
+            console.log('Skipping - message is from me (already added locally)')
+            return
+          }
+
+          // Skip if this message is not for this conversation
+          // Check if either: sender is the other user, OR receiver is me (and sender is other user)
+          const isForThisConversation = senderId === theirUserId ||
+            (receiverId && receiverId === myUserId && senderId === theirUserId)
+
+          if (!isForThisConversation) {
+            console.log('Skipping - message not for this conversation')
+            return
+          }
+
+          console.log('Adding message from other user with isOwn: false')
+          const messageMetadata = data.message?.metadata || data.metadata
+          const newMsg = {
+            id: messageId,
+            text: messageContent,
+            metadata: messageMetadata,
+            isOwn: false, // This is from the other user, not us
+            timestamp: new Date(messageCreatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: messageCreatedAt,
+          }
+
+          // Check if message already exists to avoid duplicates
+          setFetchedMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) {
+              console.log('Skipping - duplicate message')
+              return prev
+            }
+            console.log('Message added to fetchedMessages')
+            return [...prev, newMsg]
+          })
+
+          // Mark message as read since we're viewing the conversation
+          messagesApi.markConversationRead(theirUserId).catch(() => {})
+        }
+
+        // Listen for both event types (conversation room and personal room)
+        socket.on('conversation:message', messageHandler)
+        socket.on('message:new', messageHandler)
       }
-
-      // Listen for both event types (conversation room and personal room)
-      socket.on('conversation:message', messageHandler)
-      socket.on('message:new', messageHandler)
     }
 
     const socket = getSocket()
@@ -355,7 +477,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     // Cleanup on unmount
     return () => {
       clearTimeout(delayedSetup)
-      leaveConversation(otherUserIdRef.current)
+      if (isPartyChat && partyId) {
+        leavePartyRoom(partyId)
+      } else {
+        leaveConversation(otherUserIdRef.current)
+      }
       const s = getSocket()
       if (s) {
         if (connectHandler) {
@@ -365,9 +491,12 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           s.off('conversation:message', messageHandler)
           s.off('message:new', messageHandler)
         }
+        if (partyMessageHandler) {
+          s.off('party:message', partyMessageHandler)
+        }
       }
     }
-  }, [otherUserId])
+  }, [otherUserId, isPartyChat, partyId])
 
   // Fallback avatar if none provided
   const userAvatar = currentUserAvatar || 'https://i.pravatar.cc/40?img=12'
@@ -410,7 +539,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
     console.log('=== SENDING MESSAGE ===')
     console.log('My user ID:', currentUserId)
-    console.log('Receiver (other user) ID:', user.id)
+    console.log('Is party chat:', isPartyChat)
+    console.log('Party ID:', partyId)
+    console.log('Receiver (other user) ID:', user?.id)
     console.log('Message content:', messageContent)
 
     const now = new Date()
@@ -420,44 +551,61 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       isOwn: true,
       timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: now.toISOString(),
-      replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, username: replyingTo.isOwn ? 'You' : user.username } : null
+      replyTo: replyingTo ? { id: replyingTo.id, text: replyingTo.text, username: replyingTo.isOwn ? 'You' : user?.username } : null
     }
     console.log('Adding local message with isOwn: true', newMessage)
     setLocalMessages(prev => [...prev, newMessage])
     setReplyingTo(null)
 
     try {
-      // Send message via API - backend expects 'receiverId' and 'content'
-      const response = await messagesApi.sendMessage({
-        receiverId: user.id,
-        content: messageContent,
-      })
-      console.log('API response:', response)
+      if (isPartyChat && partyId) {
+        // Send party chat message
+        const response = await partiesApi.sendChatMessage(partyId, messageContent)
+        console.log('Party chat API response:', response)
 
-      // Use the message ID as the conversation identifier, or construct from user IDs
-      const messageData = response.data?.message || response.data
-      const convId = messageData?.id ? `conv-${user.id}` : conversationId
+        // Notify parent to update the messages list
+        onMessageSent?.({
+          conversationId: `party-${partyId}`,
+          user: user,
+          lastMessage: messageContent,
+          lastMessageAt: new Date().toISOString(),
+          isNew: false,
+          isPartyChat: true,
+          partyId: partyId,
+        })
+      } else {
+        // Send DM message via API - backend expects 'receiverId' and 'content'
+        const response = await messagesApi.sendMessage({
+          receiverId: user.id,
+          content: messageContent,
+        })
+        console.log('API response:', response)
 
-      // Update the conversation ID if this was a new conversation
-      if (isNewConversation) {
-        setConversationId(convId)
-      }
+        // Use the message ID as the conversation identifier, or construct from user IDs
+        const messageData = response.data?.message || response.data
+        const convId = messageData?.id ? `conv-${user.id}` : conversationId
 
-      // Always notify parent to update the messages list
-      onMessageSent?.({
-        conversationId: convId,
-        user: user,
-        lastMessage: messageContent,
-        lastMessageAt: new Date().toISOString(),
-        isNew: isNewConversation,
-      })
+        // Update the conversation ID if this was a new conversation
+        if (isNewConversation) {
+          setConversationId(convId)
+        }
 
-      // Also update shared conversations if available
-      if (setSharedConversations) {
-        setSharedConversations(prev => ({
-          ...prev,
-          [convId]: [...(prev[convId] || []), newMessage]
-        }))
+        // Always notify parent to update the messages list
+        onMessageSent?.({
+          conversationId: convId,
+          user: user,
+          lastMessage: messageContent,
+          lastMessageAt: new Date().toISOString(),
+          isNew: isNewConversation,
+        })
+
+        // Also update shared conversations if available
+        if (setSharedConversations) {
+          setSharedConversations(prev => ({
+            ...prev,
+            [convId]: [...(prev[convId] || []), newMessage]
+          }))
+        }
       }
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -760,42 +908,43 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         </div>
       )}
 
-      {/* Input Area */}
-      <div className="conversation-input-area">
-        <div className="conversation-input-wrapper">
-          <input
-            type="text"
-            placeholder="message"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            className="conversation-input"
-          />
-        </div>
+      {/* Input Area - Hidden when user is muted in party chat */}
+      {canChat ? (
+        <div className="conversation-input-area">
+          <div className="conversation-input-wrapper">
+            <input
+              type="text"
+              placeholder="message"
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              className="conversation-input"
+            />
+          </div>
 
-        <button
-          className={`conversation-action-btn ${isRecording ? 'recording' : ''}`}
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onMouseLeave={stopRecording}
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
-          </svg>
-        </button>
+          <button
+            className={`conversation-action-btn ${isRecording ? 'recording' : ''}`}
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onMouseLeave={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </button>
 
-        <button className="conversation-action-btn" onClick={() => setShowCreateScreen(true)}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="16" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-          </svg>
-        </button>
+          <button className="conversation-action-btn" onClick={() => setShowCreateScreen(true)}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+          </button>
 
         {messageText.trim() && (
           <button className="conversation-send-btn" onClick={sendMessage}>
@@ -804,7 +953,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             </svg>
           </button>
         )}
-      </div>
+        </div>
+      ) : null}
 
       {/* Recording Overlay */}
       {isRecording && (
@@ -868,12 +1018,21 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         isPartyChat ? (
           <PartySettings
             party={{
-              name: conversation.partyName,
-              avatar: conversation.partyAvatar,
+              name: conversation.partyName || user?.username,
+              avatar: conversation.partyAvatar || user?.avatar,
               color: conversation.partyColor || '#EC4899'
             }}
             isAdmin={true}
             onClose={() => setShowPartySettings(false)}
+            conversation={conversation}
+            onSettingsChange={(changes) => {
+              // Update the conversation state if needed
+              console.log('Party settings changed:', changes)
+            }}
+            onLeave={() => {
+              // Navigate back after leaving the party
+              onBack()
+            }}
           />
         ) : (
           <ChatSettings
@@ -885,6 +1044,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             }}
             isGroupChat={false}
             onClose={() => setShowPartySettings(false)}
+            conversation={conversation}
+            onSettingsChange={(changes) => {
+              // Update the conversation state if needed
+              console.log('Chat settings changed:', changes)
+            }}
           />
         ),
         document.body

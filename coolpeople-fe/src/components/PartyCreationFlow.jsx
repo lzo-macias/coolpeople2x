@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/PartyCreationFlow.css'
-import { usersApi, favoritesApi, messagesApi, partiesApi } from '../services/api'
+import { usersApi, favoritesApi, partiesApi } from '../services/api'
 
 function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVideoBase64, isMirrored, currentUserId, conversations = {} }) {
   // Basic Info
@@ -483,62 +483,8 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     // Use uploaded photo preview (data URL) or capture a frame from the video
     const avatarPhoto = partyPhotoPreview || captureVideoFrame()
 
-    // Send invites to admins and members via messages
-    const sendInvites = async () => {
-      const allInvites = []
-
-      // Debug: Check if video base64 is available
-      console.log('Sending invites with video base64:', recordedVideoBase64 ? `${recordedVideoBase64.substring(0, 50)}... (${recordedVideoBase64.length} chars)` : 'NO VIDEO BASE64')
-
-      // Send admin invites
-      for (const admin of adminInvites) {
-        allInvites.push(
-          messagesApi.sendMessage({
-            receiverId: admin.id,
-            content: `Party invite: ${displayName}`,
-            metadata: {
-              type: 'party_invite',
-              partyHandle: partyHandle,
-              partyName: displayName,
-              role: 'admin',
-              partyColor: partyColor,
-              partyAvatar: avatarPhoto,
-              // Use base64 for persistence - blob URLs are session-only
-              introVideoBase64: recordedVideoBase64,
-              introVideoMirrored: isMirrored
-            }
-          }).catch(err => console.log(`Failed to send admin invite to ${admin.username}:`, err))
-        )
-      }
-
-      // Send member invites
-      for (const member of memberInvites) {
-        allInvites.push(
-          messagesApi.sendMessage({
-            receiverId: member.id,
-            content: `Party invite: ${displayName}`,
-            metadata: {
-              type: 'party_invite',
-              partyHandle: partyHandle,
-              partyName: displayName,
-              role: 'member',
-              partyColor: partyColor,
-              partyAvatar: avatarPhoto,
-              // Use base64 for persistence - blob URLs are session-only
-              introVideoBase64: recordedVideoBase64,
-              introVideoMirrored: isMirrored
-            }
-          }).catch(err => console.log(`Failed to send member invite to ${member.username}:`, err))
-        )
-      }
-
-      // Send all invites in parallel
-      await Promise.all(allInvites)
-      console.log(`Sent ${adminInvites.length} admin invites and ${memberInvites.length} member invites`)
-    }
-
-    // Send invites (don't block party creation on this)
-    sendInvites()
+    // Note: Invites are sent from App.jsx AFTER party and reel are created
+    // This allows us to include the reelId in invites for action buttons to work
 
     const partyData = {
       name: displayName,

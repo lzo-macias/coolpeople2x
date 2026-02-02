@@ -103,17 +103,9 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return storiesList.filter(story => !isStoryExpired(story))
   }
 
-  // Sort messages: party chat pinned first, then by most recent
+  // Sort messages by most recent
   const sortMessages = (messagesList) => {
     return [...messagesList].sort((a, b) => {
-      // Pin party chat at top if user is in a party
-      if (userParty) {
-        const aIsPartyChat = a.isPartyChat || (a.partyId != null && a.partyId === userParty.id)
-        const bIsPartyChat = b.isPartyChat || (b.partyId != null && b.partyId === userParty.id)
-        if (aIsPartyChat && !bIsPartyChat) return -1
-        if (!aIsPartyChat && bIsPartyChat) return 1
-      }
-      // Then sort by most recent message
       const aTime = a.lastMessageAt ? new Date(a.lastMessageAt) : new Date(0)
       const bTime = b.lastMessageAt ? new Date(b.lastMessageAt) : new Date(0)
       return bTime - aTime
@@ -767,7 +759,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     { id: 'requests', label: 'Requests', count: null },
   ]
 
-  // Filter and sort messages - party chat pinned at top, then by most recent
+  // Filter and sort messages by most recent
   const filteredMessages = sortMessages(messages.filter((msg) => {
     // Hidden filter shows only hidden messages
     if (activeFilter === 'hidden') return hiddenConversations.has(msg.id)
@@ -1699,8 +1691,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     const { message } = longPressPopup
     const isDM = !message.isPartyChat && !message.isGroupChat
     const isCurrentlyHidden = hiddenConversations.has(message.id) || message.isHidden
-    const isCurrentlyPinned = pinnedConversations.has(message.id) || message.isPinned ||
-      ((message.isPartyChat || (message.partyId != null && message.partyId === userParty?.id)) && !unpinnedConversations.has(message.id))
+    const isCurrentlyPinned = pinnedConversations.has(message.id) || message.isPinned
     const isCurrentlySilenced = silencedConversations.has(message.id) || message.isMuted
 
     return createPortal(
@@ -1963,9 +1954,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           </div>
         ) : (
           filteredMessages.map((message) => {
-            const isPartyPinned = message.isPartyChat || (message.partyId != null && message.partyId === userParty?.id)
-            const isManuallyPinned = pinnedConversations.has(message.id) || message.isPinned
-            const isPinned = (isPartyPinned || isManuallyPinned) && !unpinnedConversations.has(message.id)
+            const isPinned = pinnedConversations.has(message.id) || message.isPinned
             const isSilenced = silencedConversations.has(message.id) || message.isMuted
             const isHidden = hiddenConversations.has(message.id) || message.isHidden
             const isLongPressActive = longPressPopup?.message?.id === message.id
@@ -2055,14 +2044,13 @@ function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActiv
               {isPartyChat ? '🎉' : (user?.username?.[0] || '?')}
             </div>
           )}
-          <span className="message-avatar-label">{isPartyChat ? 'Party' : user?.username?.split('.')[0]}</span>
         </div>
       </div>
 
       <div className="message-content">
         <div className="message-username-row">
-          <span className="message-username">{isPartyChat ? 'Party Chat' : user?.username}</span>
-          {isOnline && <span className="message-online-dot" />}
+          <span className="message-username">{user?.username}</span>
+          {isOnline && !isPartyChat && <span className="message-online-dot" />}
         </div>
         <span className="message-preview">{lastMessage || 'No messages yet'}</span>
       </div>

@@ -32,6 +32,9 @@ export interface MessageResponse {
 // -----------------------------------------------------------------------------
 
 export interface ConversationResponse {
+  id?: string; // Optional - used for party chats
+  partyId?: string; // Optional - set for party group chats
+  isPartyChat?: boolean; // Optional - true for party group chats
   otherUser: ConversationUser;
   lastMessage: MessageResponse;
   unreadCount: number;

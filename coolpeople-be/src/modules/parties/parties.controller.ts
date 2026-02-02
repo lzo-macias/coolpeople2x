@@ -112,9 +112,10 @@ export const unfollowParty = async (req: Request, res: Response): Promise<void> 
 // POST /api/parties/:id/join
 export const joinParty = async (req: Request, res: Response): Promise<void> => {
   const id = req.params.id as string;
-  const result = await partiesService.joinParty(req.user!.userId, id);
+  const asAdmin = req.body?.asAdmin === true;
+  const result = await partiesService.joinParty(req.user!.userId, id, asAdmin);
   if (result.joined) {
-    sendCreated(res, { joined: true, requested: false });
+    sendCreated(res, { joined: true, requested: false, upgraded: result.upgraded || false });
   } else {
     sendCreated(res, { joined: false, requested: true });
   }
@@ -161,6 +162,42 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
   const userId = req.params.userId as string;
   await partiesService.removeMember(id, userId, req.user!.userId);
   sendNoContent(res);
+};
+
+// =============================================================================
+// BANS
+// =============================================================================
+
+// POST /api/parties/:id/bans/:userId
+export const banMember = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const userId = req.params.userId as string;
+  const reason = req.body?.reason;
+  await partiesService.banMember(id, userId, req.user!.userId, reason);
+  sendCreated(res, { banned: true });
+};
+
+// DELETE /api/parties/:id/bans/:userId
+export const unbanMember = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const userId = req.params.userId as string;
+  await partiesService.unbanMember(id, userId, req.user!.userId);
+  sendNoContent(res);
+};
+
+// GET /api/parties/:id/bans
+export const listBannedMembers = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await partiesService.listBannedMembers(
+    id,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.bans, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
 };
 
 // =============================================================================

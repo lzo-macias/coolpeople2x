@@ -11,8 +11,9 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
   const partyColor = getPartyColor(comment.party)
   const partyDisplay = comment.party || 'Independent'
 
-  // Use only real user replies
-  const allReplies = userReplies
+  // Combine API-fetched replies with user-added replies
+  const fetchedReplies = comment.replies || []
+  const allReplies = [...fetchedReplies, ...userReplies]
 
   // Auto-expand replies when user adds a new one
   useEffect(() => {

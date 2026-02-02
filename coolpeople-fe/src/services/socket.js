@@ -44,6 +44,8 @@ export const initializeSocket = () => {
   socket.on('connect', () => {
     console.log('Socket: Connected')
     reconnectAttempts = 0
+    // Setup auto-join for party rooms
+    setupPartyRoomAutoJoin()
   })
 
   socket.on('disconnect', (reason) => {
@@ -120,6 +122,24 @@ export const joinRace = (raceId) => {
 export const leaveRace = (raceId) => {
   if (socket?.connected) {
     socket.emit('leave:race', raceId)
+  }
+}
+
+/**
+ * Join a party room for group chat
+ */
+export const joinPartyRoom = (partyId) => {
+  if (socket?.connected) {
+    socket.emit('party:join:room', partyId)
+  }
+}
+
+/**
+ * Leave a party room
+ */
+export const leavePartyRoom = (partyId) => {
+  if (socket?.connected) {
+    socket.emit('party:leave:room', partyId)
   }
 }
 
@@ -484,6 +504,74 @@ export const onPartyMessage = (callback) => {
   }
 }
 
+/**
+ * Listen for new member joining party
+ * @param {Function} callback - Called when a member joins
+ * @returns {Function} Cleanup function
+ */
+export const onPartyMemberJoined = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      partyId: data.partyId,
+      member: data.member,
+    })
+  }
+
+  socket.on('party:member:joined', handler)
+  eventListeners.set('party:member:joined', handler)
+
+  return () => {
+    socket?.off('party:member:joined', handler)
+    eventListeners.delete('party:member:joined')
+  }
+}
+
+/**
+ * Listen for member leaving party
+ * @param {Function} callback - Called when a member leaves
+ * @returns {Function} Cleanup function
+ */
+export const onPartyMemberLeft = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      partyId: data.partyId,
+      userId: data.userId,
+    })
+  }
+
+  socket.on('party:member:left', handler)
+  eventListeners.set('party:member:left', handler)
+
+  return () => {
+    socket?.off('party:member:left', handler)
+    eventListeners.delete('party:member:left')
+  }
+}
+
+/**
+ * Setup auto-join for party rooms when server requests
+ * Should be called after socket initialization
+ */
+export const setupPartyRoomAutoJoin = () => {
+  if (!socket) return
+
+  // When server tells us to join a party room (after joining a party)
+  socket.on('party:join:room', (data) => {
+    socket.emit('party:join:room', data.partyId)
+    console.log('Socket: Auto-joined party room', data.partyId)
+  })
+
+  // When server tells us to leave a party room (after leaving a party)
+  socket.on('party:leave:room', (data) => {
+    socket.emit('party:leave:room', data.partyId)
+    console.log('Socket: Auto-left party room', data.partyId)
+  })
+}
+
 // =============================================================================
 // Utility Exports
 // =============================================================================
@@ -499,6 +587,8 @@ export default {
   leaveConversation,
   joinRace,
   leaveRace,
+  joinPartyRoom,
+  leavePartyRoom,
 
   // Event listeners
   onNewMessage,
@@ -514,4 +604,6 @@ export default {
   onFollowUpdate,
   onUserStatus,
   onPartyMessage,
+  onPartyMemberJoined,
+  onPartyMemberLeft,
 }

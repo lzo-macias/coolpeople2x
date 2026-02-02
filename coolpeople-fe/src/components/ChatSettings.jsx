@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { getPartyColor } from '../data/mockData'
+import { messagesApi } from '../services/api'
 import '../styling/ChatSettings.css'
 
-function ChatSettings({ chat, isGroupChat = false, onClose }) {
+function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSettingsChange }) {
   const [activeSection, setActiveSection] = useState(null)
 
   // Get party color - gray for independent, party color otherwise
@@ -12,8 +13,51 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
     name: chat?.name || chat?.username || 'Chat',
     avatar: chat?.avatar || 'https://i.pravatar.cc/150?img=47',
     color: partyColor,
-    notifications: true,
+    notifications: !conversation?.isMuted, // Initialize from conversation settings
   })
+
+  // Get the userId for API calls - for DMs it's the other user's ID
+  const getConversationId = () => {
+    return conversation?.user?.id || conversation?.id
+  }
+
+  // Handle mute/unmute with API call
+  const handleToggleMute = async () => {
+    const userId = getConversationId()
+    if (!userId) return
+
+    const newMutedState = chatData.notifications // notifications=true means NOT muted, so toggling means mute
+    try {
+      if (newMutedState) {
+        await messagesApi.muteConversation(userId)
+      } else {
+        await messagesApi.unmuteConversation(userId)
+      }
+      setChatData(prev => ({ ...prev, notifications: !prev.notifications }))
+      // Notify parent of the change
+      if (onSettingsChange) {
+        onSettingsChange({ isMuted: newMutedState })
+      }
+    } catch (error) {
+      console.error('Failed to toggle mute:', error)
+    }
+  }
+
+  // Handle hide with API call
+  const handleHide = async () => {
+    const userId = getConversationId()
+    if (!userId) return
+
+    try {
+      await messagesApi.hideConversation(userId)
+      if (onSettingsChange) {
+        onSettingsChange({ isHidden: true })
+      }
+      onClose() // Close settings after hiding
+    } catch (error) {
+      console.error('Failed to hide conversation:', error)
+    }
+  }
 
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showShareMenu, setShowShareMenu] = useState(false)
@@ -99,7 +143,7 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
           </svg>
           <span>Search</span>
         </button>
-        <button className="chat-action-btn" onClick={() => setChatData(prev => ({ ...prev, notifications: !prev.notifications }))}>
+        <button className="chat-action-btn" onClick={handleToggleMute}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {chatData.notifications ? (
               <>
@@ -178,7 +222,7 @@ function ChatSettings({ chat, isGroupChat = false, onClose }) {
                 Leave Group
               </button>
             )}
-            <button className="chat-more-option">
+            <button className="chat-more-option" onClick={handleHide}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                 <line x1="1" y1="1" x2="23" y2="23" />

@@ -96,6 +96,15 @@ export const initializeSocket = (httpServer: HTTPServer): SocketServer => {
       socket.leave(`conversation:${ids[0]}:${ids[1]}`);
     });
 
+    // Handle party room join/leave (triggered when joining/leaving a party)
+    socket.on('party:join:room', (partyId: string) => {
+      socket.join(`party:${partyId}`);
+    });
+
+    socket.on('party:leave:room', (partyId: string) => {
+      socket.leave(`party:${partyId}`);
+    });
+
     socket.on('disconnect', () => {
       console.log(`Socket disconnected: user ${userId}`);
     });
@@ -334,6 +343,54 @@ export const emitPartyChatMessage = (
   io.to(`party:${partyId}`).emit('party:message', {
     partyId,
     message,
+  });
+};
+
+/**
+ * Emit member joined party - notifies existing members and tells new member to join room
+ */
+export const emitMemberJoinedParty = (
+  partyId: string,
+  member: {
+    userId: string;
+    username: string;
+    displayName?: string;
+    avatarUrl?: string | null;
+    role: string;
+  }
+): void => {
+  if (!io) return;
+
+  // Notify existing party members of new member
+  io.to(`party:${partyId}`).emit('party:member:joined', {
+    partyId,
+    member,
+  });
+
+  // Tell the new member's socket to join the party room
+  io.to(`user:${member.userId}`).emit('party:join:room', {
+    partyId,
+  });
+};
+
+/**
+ * Emit member left party - notifies existing members
+ */
+export const emitMemberLeftParty = (
+  partyId: string,
+  userId: string
+): void => {
+  if (!io) return;
+
+  // Notify existing party members
+  io.to(`party:${partyId}`).emit('party:member:left', {
+    partyId,
+    userId,
+  });
+
+  // Tell the leaving member's socket to leave the party room
+  io.to(`user:${userId}`).emit('party:leave:room', {
+    partyId,
   });
 };
 

@@ -187,6 +187,8 @@ model User {
   partyMemberships  PartyMembership[]
   partyFollows      PartyFollow[]
   partyJoinRequests PartyJoinRequest[]
+  partyBansReceived PartyBan[] @relation("BannedFromParty")
+  partyBansIssued   PartyBan[] @relation("PartyBanner")
 
   // Races
   raceFollows     RaceFollow[]
@@ -205,7 +207,6 @@ model User {
   chatMessages    ChatMessage[]
   chatReactions   ChatReaction[]
   conversationSettings      ConversationSettings[] @relation("UserConversationSettings")
-  otherConversationSettings ConversationSettings[] @relation("OtherUserConversationSettings")
 
   // Icebreakers
   icebreakers     Icebreaker[]
@@ -299,6 +300,9 @@ model Party {
   // Icebreakers
   icebreakers     Icebreaker[]
 
+  // Banned members
+  bans            PartyBan[]
+
   @@index([name])
   @@index([handle])
   @@index([deletedAt])
@@ -334,6 +338,22 @@ model PartyJoinRequest {
 
   @@unique([userId, partyId])
   @@index([partyId, status])
+}
+
+model PartyBan {
+  id        String   @id @default(uuid())
+  userId    String
+  partyId   String
+  bannedBy  String   // User ID of admin who banned
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation("BannedFromParty", fields: [userId], references: [id], onDelete: Cascade)
+  party     Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  banner    User     @relation("PartyBanner", fields: [bannedBy], references: [id], onDelete: Cascade)
+
+  @@unique([userId, partyId])
+  @@index([partyId])
 }
 
 // =============================================================================
@@ -1180,7 +1200,7 @@ model StoryView {
 model ConversationSettings {
   id            String    @id @default(uuid())
   userId        String
-  otherUserId   String
+  otherUserId   String    // Can be either a User ID (for DM conversations) or Party ID (for party chats)
 
   isPinned      Boolean   @default(false)
   isMuted       Boolean   @default(false)
@@ -1190,7 +1210,7 @@ model ConversationSettings {
   updatedAt     DateTime  @updatedAt
 
   user          User      @relation("UserConversationSettings", fields: [userId], references: [id], onDelete: Cascade)
-  otherUser     User      @relation("OtherUserConversationSettings", fields: [otherUserId], references: [id], onDelete: Cascade)
+  // Note: otherUserId is NOT a foreign key - it can store User IDs or Party IDs
 
   @@unique([userId, otherUserId])
   @@index([userId])

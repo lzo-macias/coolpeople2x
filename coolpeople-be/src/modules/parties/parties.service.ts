@@ -4,9 +4,9 @@
  */
 
 import { prisma } from '../../lib/prisma.js';
-import { getIO } from '../../lib/socket.js';
+import { getIO, emitMemberJoinedParty, emitMemberLeftParty, emitPartyChatMessage } from '../../lib/socket.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
-import { ADMIN_PERMISSIONS, DEFAULT_MEMBER_PERMISSIONS, POINT_WEIGHTS } from '../../config/constants.js';
+import { ADMIN_PERMISSIONS, LEADER_PERMISSIONS, DEFAULT_MEMBER_PERMISSIONS, POINT_WEIGHTS } from '../../config/constants.js';
 import { recordPointEvent } from '../points/points.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import type {
@@ -21,6 +21,7 @@ import type {
   PartyRaceResponse,
   PartyReviewResponse,
   FullPartyProfileResponse,
+  BannedMemberResponse,
 } from './parties.types.js';
 
 // =============================================================================
@@ -270,12 +271,12 @@ export const createParty = async (
       },
     });
 
-    // Creator gets all permissions (admin)
+    // Creator gets leader permissions
     await tx.partyMembership.create({
       data: {
         userId: creatorId,
         partyId: newParty.id,
-        permissions: ADMIN_PERMISSIONS,
+        permissions: LEADER_PERMISSIONS,
       },
     });
 
@@ -555,16 +556,45 @@ export const unfollowParty = async (
 
 export const joinParty = async (
   userId: string,
-  partyId: string
-): Promise<{ joined: boolean; requested: boolean }> => {
+  partyId: string,
+  asAdmin: boolean = false
+): Promise<{ joined: boolean; requested: boolean; upgraded?: boolean }> => {
   const party = await getPartyOrThrow(partyId);
 
-  // Check not already a member
+  // Check if user is banned from this party
+  const existingBan = await prisma.partyBan.findUnique({
+    where: { userId_partyId: { userId, partyId } },
+  });
+  if (existingBan) {
+    throw new ForbiddenError('You are banned from this party');
+  }
+
+  // Check if already a member
   const existingMembership = await prisma.partyMembership.findUnique({
     where: { userId_partyId: { userId, partyId } },
   });
+
   if (existingMembership) {
-    throw new ConflictError('Already a member of this party');
+    // Leaders cannot be changed via invites
+    if (existingMembership.permissions.includes('leader')) {
+      return { joined: true, requested: false, upgraded: false };
+    }
+
+    // If accepting an admin invite, upgrade to admin
+    if (asAdmin) {
+      await prisma.partyMembership.update({
+        where: { id: existingMembership.id },
+        data: { permissions: ADMIN_PERMISSIONS },
+      });
+      return { joined: true, requested: false, upgraded: true };
+    }
+
+    // If accepting a regular member invite, set to default member permissions
+    await prisma.partyMembership.update({
+      where: { id: existingMembership.id },
+      data: { permissions: DEFAULT_MEMBER_PERMISSIONS },
+    });
+    return { joined: true, requested: false, upgraded: false };
   }
 
   if (party.isPrivate) {
@@ -590,6 +620,8 @@ export const joinParty = async (
   }
 
   // Public party: join immediately
+  const newPermissions = asAdmin ? ADMIN_PERMISSIONS : DEFAULT_MEMBER_PERMISSIONS;
+
   await prisma.$transaction(async (tx) => {
     // Handle leaving previous party (deletes it if user was last member)
     await handleLeavePreviousParty(tx, userId);
@@ -598,7 +630,7 @@ export const joinParty = async (
       data: {
         userId,
         partyId,
-        permissions: DEFAULT_MEMBER_PERMISSIONS,
+        permissions: newPermissions,
       },
     });
 
@@ -608,6 +640,23 @@ export const joinParty = async (
       data: { partyId },
     });
   });
+
+  // Emit socket event so new member joins chat room and existing members are notified
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true, displayName: true, avatarUrl: true },
+  });
+
+  if (user) {
+    const role = asAdmin ? 'Admin' : 'Member';
+    emitMemberJoinedParty(partyId, {
+      userId,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      role,
+    });
+  }
 
   return { joined: true, requested: false };
 };
@@ -655,12 +704,16 @@ export const leaveParty = async (
     return;
   }
 
-  // Prevent the last admin from leaving (if there are other members)
-  if (membership.permissions.includes('admin')) {
+  // Prevent the last admin/leader from leaving (if there are other members)
+  const hasAdminOrLeader = membership.permissions.includes('leader') || membership.permissions.includes('admin');
+  if (hasAdminOrLeader) {
     const adminCount = await prisma.partyMembership.count({
       where: {
         partyId,
-        permissions: { has: 'admin' },
+        OR: [
+          { permissions: { has: 'admin' } },
+          { permissions: { has: 'leader' } },
+        ],
       },
     });
     if (adminCount <= 1) {
@@ -671,11 +724,14 @@ export const leaveParty = async (
   // Clear user's primary party affiliation if leaving their primary party
   await prisma.$transaction([
     prisma.partyMembership.delete({ where: { id: membership.id } }),
-    prisma.user.update({
+    prisma.user.updateMany({
       where: { id: userId, partyId },
       data: { partyId: null },
     }),
   ]);
+
+  // Emit socket event so member leaves chat room and existing members are notified
+  emitMemberLeftParty(partyId, userId);
 };
 
 // -----------------------------------------------------------------------------
@@ -737,13 +793,14 @@ export const updateMemberPermissions = async (
     throw new ForbiddenError('Cannot modify your own permissions');
   }
 
-  // Cannot remove admin from another admin (only they can demote themselves or transfer)
+  // Only leaders can modify other leaders/admins
   const actorMembership = await getMembershipOrThrow(actorId, partyId);
-  if (
-    targetMembership.permissions.includes('admin') &&
-    !actorMembership.permissions.includes('admin')
-  ) {
-    throw new ForbiddenError('Cannot modify admin permissions');
+  const targetIsLeader = targetMembership.permissions.includes('leader');
+  const actorIsLeader = actorMembership.permissions.includes('leader');
+
+  // Only leader can modify another leader
+  if (targetIsLeader && !actorIsLeader) {
+    throw new ForbiddenError('Cannot modify leader permissions');
   }
 
   const updated = await prisma.partyMembership.update({
@@ -784,15 +841,167 @@ export const removeMember = async (
     throw new ForbiddenError('Cannot remove yourself. Use leave instead.');
   }
 
-  // Cannot remove another admin unless you are also admin
-  if (targetMembership.permissions.includes('admin')) {
-    const actorMembership = await getMembershipOrThrow(actorId, partyId);
-    if (!actorMembership.permissions.includes('admin')) {
-      throw new ForbiddenError('Only admins can remove other admins');
-    }
+  // Cannot remove a leader (only leader can remove themselves by deleting party)
+  // Admins can be removed by leaders
+  const actorMembership = await getMembershipOrThrow(actorId, partyId);
+  const targetIsLeader = targetMembership.permissions.includes('leader');
+  const actorIsLeader = actorMembership.permissions.includes('leader');
+
+  if (targetIsLeader) {
+    throw new ForbiddenError('Cannot remove the party leader');
+  }
+
+  // Only leaders and admins can remove admins
+  const targetIsAdmin = targetMembership.permissions.includes('admin');
+  const actorIsAdmin = actorMembership.permissions.includes('admin');
+  if (targetIsAdmin && !actorIsLeader && !actorIsAdmin) {
+    throw new ForbiddenError('Only leaders and admins can remove other admins');
   }
 
   await prisma.partyMembership.delete({ where: { id: targetMembership.id } });
+};
+
+// -----------------------------------------------------------------------------
+// Ban Member
+// Removes member and adds to ban list
+// -----------------------------------------------------------------------------
+
+export const banMember = async (
+  partyId: string,
+  targetUserId: string,
+  actorId: string,
+  reason?: string
+): Promise<void> => {
+  await getPartyOrThrow(partyId);
+
+  // Check if already banned
+  const existingBan = await prisma.partyBan.findUnique({
+    where: { userId_partyId: { userId: targetUserId, partyId } },
+  });
+  if (existingBan) {
+    throw new ForbiddenError('User is already banned from this party');
+  }
+
+  // Cannot ban yourself
+  if (targetUserId === actorId) {
+    throw new ForbiddenError('Cannot ban yourself');
+  }
+
+  const actorMembership = await getMembershipOrThrow(actorId, partyId);
+  const actorIsLeader = actorMembership.permissions.includes('leader');
+  const actorIsAdmin = actorMembership.permissions.includes('admin');
+
+  // Check if target is a member
+  const targetMembership = await prisma.partyMembership.findUnique({
+    where: { userId_partyId: { userId: targetUserId, partyId } },
+  });
+
+  if (targetMembership) {
+    const targetIsLeader = targetMembership.permissions.includes('leader');
+    const targetIsAdmin = targetMembership.permissions.includes('admin');
+
+    if (targetIsLeader) {
+      throw new ForbiddenError('Cannot ban the party leader');
+    }
+
+    // Only leaders can ban admins
+    if (targetIsAdmin && !actorIsLeader) {
+      throw new ForbiddenError('Only leaders can ban admins');
+    }
+
+    // Remove membership
+    await prisma.partyMembership.delete({ where: { id: targetMembership.id } });
+  }
+
+  // Update user's primary party affiliation to independent (null) if they were affiliated with this party
+  await prisma.user.updateMany({
+    where: {
+      id: targetUserId,
+      partyId: partyId,
+    },
+    data: {
+      partyId: null,
+    },
+  });
+
+  // Create ban record
+  await prisma.partyBan.create({
+    data: {
+      userId: targetUserId,
+      partyId,
+      bannedBy: actorId,
+      reason,
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
+// Unban Member
+// -----------------------------------------------------------------------------
+
+export const unbanMember = async (
+  partyId: string,
+  targetUserId: string,
+  actorId: string
+): Promise<void> => {
+  await getPartyOrThrow(partyId);
+  await getMembershipOrThrow(actorId, partyId); // Verify actor is a member
+
+  const ban = await prisma.partyBan.findUnique({
+    where: { userId_partyId: { userId: targetUserId, partyId } },
+  });
+
+  if (!ban) {
+    throw new NotFoundError('Ban record');
+  }
+
+  await prisma.partyBan.delete({ where: { id: ban.id } });
+};
+
+// -----------------------------------------------------------------------------
+// List Banned Members
+// -----------------------------------------------------------------------------
+
+export const listBannedMembers = async (
+  partyId: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ bans: BannedMemberResponse[]; nextCursor: string | null }> => {
+  await getPartyOrThrow(partyId);
+
+  const bans = await prisma.partyBan.findMany({
+    where: { partyId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: { id: true, username: true, displayName: true, avatarUrl: true },
+      },
+    },
+  });
+
+  const hasMore = bans.length > limit;
+  const results = hasMore ? bans.slice(0, -1) : bans;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return {
+    bans: results.map((b) => ({
+      id: b.id,
+      userId: b.user.id,
+      username: b.user.username,
+      displayName: b.user.displayName,
+      avatarUrl: b.user.avatarUrl,
+      bannedBy: {
+        id: b.bannedBy,
+        username: '',
+        displayName: '',
+      },
+      reason: b.reason,
+      bannedAt: b.createdAt,
+    })),
+    nextCursor,
+  };
 };
 
 // =============================================================================
@@ -893,6 +1102,22 @@ export const approveJoinRequest = async (
     body: `Your request to join ${party?.name ?? 'a party'} was approved`,
     data: { partyId },
   }).catch(() => {});
+
+  // Emit socket event so new member joins chat room and existing members are notified
+  const user = await prisma.user.findUnique({
+    where: { id: request.userId },
+    select: { username: true, displayName: true, avatarUrl: true },
+  });
+
+  if (user) {
+    emitMemberJoinedParty(partyId, {
+      userId: request.userId,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      role: 'Member',
+    });
+  }
 };
 
 // -----------------------------------------------------------------------------
@@ -984,17 +1209,18 @@ export const sendChatMessage = async (
   const membership = await getMembershipOrThrow(userId, partyId);
 
   // Chat mode enforcement
+  const hasLeader = membership.permissions.includes('leader');
   const hasAdmin = membership.permissions.includes('admin');
   const hasModerate = membership.permissions.includes('moderate');
   const hasChat = membership.permissions.includes('chat');
 
   if (party.chatMode === 'ADMIN_ONLY') {
-    if (!hasAdmin && !hasModerate) {
+    if (!hasLeader && !hasAdmin && !hasModerate) {
       throw new ForbiddenError('Only admins and moderators can send messages in this chat');
     }
   } else {
     // OPEN or CYCLE (treat CYCLE as OPEN for MVP)
-    if (!hasChat && !hasAdmin && !hasModerate) {
+    if (!hasChat && !hasLeader && !hasAdmin && !hasModerate) {
       throw new ForbiddenError('You do not have chat permission');
     }
   }
@@ -1022,19 +1248,13 @@ export const sendChatMessage = async (
 
   // Emit real-time chat message via WebSocket
   try {
-    const io = getIO();
-    if (io) {
-      io.to(`party:${partyId}`).emit('chat:message', {
-        partyId,
-        message: {
-          id: message.id,
-          userId,
-          content: message.content,
-          createdAt: message.createdAt,
-          user: message.user,
-        },
-      });
-    }
+    emitPartyChatMessage(partyId, {
+      id: message.id,
+      senderId: userId,
+      senderUsername: message.user.username || message.user.displayName || 'Member',
+      content: message.content,
+      createdAt: message.createdAt,
+    });
   } catch {
     // Don't fail on WebSocket errors
   }
@@ -1066,10 +1286,11 @@ export const deleteChatMessage = async (
     throw new NotFoundError('Message');
   }
 
-  // Check permission: own message or admin/moderate
+  // Check permission: own message or leader/admin/moderate
   if (message.userId !== userId) {
     const membership = await getMembershipOrThrow(userId, partyId);
     if (
+      !membership.permissions.includes('leader') &&
       !membership.permissions.includes('admin') &&
       !membership.permissions.includes('moderate')
     ) {

@@ -89,13 +89,17 @@ export const PARTY_PERMISSIONS = {
   CHAT: 'chat',           // Can send messages in group chat
   INVITE: 'invite',       // Can invite new members
   MODERATE: 'moderate',   // Can remove posts, mute members, delete violating reviews
-  ADMIN: 'admin',         // Full control: edit settings, manage permissions, remove members
+  ADMIN: 'admin',         // Admin control: edit settings, manage permissions, remove members (can be tiered: admin1, admin2, etc.)
+  LEADER: 'leader',       // Party creator only - full control, cannot be removed
 } as const;
 
 export type PartyPermission = typeof PARTY_PERMISSIONS[keyof typeof PARTY_PERMISSIONS];
 
-export const DEFAULT_MEMBER_PERMISSIONS: PartyPermission[] = ['view'];
-export const ADMIN_PERMISSIONS: PartyPermission[] = Object.values(PARTY_PERMISSIONS);
+export const DEFAULT_MEMBER_PERMISSIONS: PartyPermission[] = ['view', 'chat'];
+// Admin permissions - everything except leader
+export const ADMIN_PERMISSIONS: PartyPermission[] = ['view', 'post', 'chat', 'invite', 'moderate', 'admin'];
+// Leader permissions - party creator gets everything
+export const LEADER_PERMISSIONS: PartyPermission[] = Object.values(PARTY_PERMISSIONS);
 
 // -----------------------------------------------------------------------------
 // Chat Modes

@@ -87,15 +87,91 @@ export const getConversations = async (
     }
   }
 
-  if (unblockedPartnerIds.length === 0) {
-    return { conversations: [], nextCursor: null };
-  }
-
   // Build conversations with last message, unread count, and settings
   const conversations: ConversationResponse[] = [];
 
   // Convert Set to array for Prisma queries
   const deletedMessageIdsArray = Array.from(deletedMessageIds);
+
+  // --- Include Party Group Chat ---
+  // Check if user is in a party and include the party group chat
+  const membership = await prisma.partyMembership.findFirst({
+    where: { userId: currentUserId },
+    include: {
+      party: {
+        include: {
+          groupChat: {
+            include: {
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                include: {
+                  user: {
+                    select: { id: true, username: true, displayName: true, avatarUrl: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (membership?.party?.groupChat) {
+    const party = membership.party;
+    const groupChat = party.groupChat;
+    const lastChatMessage = groupChat.messages[0];
+
+    // Get conversation settings for party chat (using party.id as otherUserId)
+    const partySettings = await prisma.conversationSettings.findUnique({
+      where: {
+        userId_otherUserId: { userId: currentUserId, otherUserId: party.id },
+      },
+    });
+
+    // Create a party chat conversation entry
+    const partyChatConversation: ConversationResponse = {
+      id: `party-${party.id}`,
+      partyId: party.id,
+      isPartyChat: true,
+      otherUser: {
+        id: party.id,
+        username: party.name,
+        displayName: party.name,
+        avatarUrl: party.avatarUrl,
+      },
+      lastMessage: lastChatMessage
+        ? {
+            id: lastChatMessage.id,
+            senderId: lastChatMessage.userId,
+            receiverId: party.id,
+            content: lastChatMessage.content,
+            metadata: null,
+            readAt: null,
+            createdAt: lastChatMessage.createdAt,
+          }
+        : {
+            id: `party-welcome-${party.id}`,
+            senderId: party.id,
+            receiverId: currentUserId,
+            content: `Welcome to ${party.name}!`,
+            metadata: null,
+            readAt: new Date(),
+            createdAt: party.createdAt,
+          },
+      unreadCount: 0, // Party chat doesn't track individual read status
+      isPinned: partySettings?.isPinned ?? false,
+      isMuted: partySettings?.isMuted ?? false,
+      isHidden: partySettings?.isHidden ?? false,
+    };
+    conversations.push(partyChatConversation);
+  }
+  // --- End Party Group Chat ---
+
+  if (unblockedPartnerIds.length === 0 && conversations.length === 0) {
+    return { conversations: [], nextCursor: null };
+  }
 
   for (const partnerId of unblockedPartnerIds) {
     // Find last message that hasn't been deleted by the current user
@@ -149,7 +225,7 @@ export const getConversations = async (
     });
   }
 
-  // Sort by most recent message
+  // Sort by most recent message (party chat will stay at top due to isPinned sorting in frontend)
   conversations.sort(
     (a, b) => b.lastMessage.createdAt.getTime() - a.lastMessage.createdAt.getTime()
   );

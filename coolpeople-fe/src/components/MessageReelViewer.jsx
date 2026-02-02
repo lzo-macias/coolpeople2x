@@ -5,6 +5,7 @@ import '../styling/ReelActions.css'
 import ReelActions from './ReelActions'
 import CommentsSection from './CommentsSection'
 import { getPartyColor } from '../data/mockData'
+import { reelsApi, partiesApi } from '../services/api'
 
 function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite, senderUser, currentUserAvatar, onTrackActivity, onLikeChange, onCommentAdded }) {
   // Track video load errors to fallback to thumbnail
@@ -27,11 +28,14 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const [touchDeltaY, setTouchDeltaY] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [localStats, setLocalStats] = useState({}) // Track local like/comment counts per message
+  const [joinStatus, setJoinStatus] = useState({}) // Track join status per party { partyId: 'idle' | 'joining' | 'joined' | 'requested' }
   const containerRef = useRef(null)
   const videoRef = useRef(null)
 
   const currentMessage = videoMessages[currentIndex]
   const isPartyInvite = currentMessage?.metadata?.type === 'party_invite'
+  // Get reel ID from message or metadata (party invites should include reelId)
+  const reelId = currentMessage?.reelId || currentMessage?.metadata?.reelId || null
 
   // Track if video is ready to play
   const [videoReady, setVideoReady] = useState(false)
@@ -41,6 +45,35 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     setVideoError(false)
     setVideoReady(false)
   }, [currentIndex, currentMessage])
+
+  // Fetch reel stats from backend when reelId is available
+  useEffect(() => {
+    const fetchReelStats = async () => {
+      if (!reelId) return
+
+      try {
+        console.log('Fetching reel stats for:', reelId)
+        const response = await reelsApi.getReel(reelId)
+        const reel = response.data?.reel || response.reel || response.data || response
+
+        if (reel) {
+          console.log('Reel stats fetched:', reel)
+          setLocalStats(prev => ({
+            ...prev,
+            [reelId]: {
+              likes: reel.likeCount || reel.stats?.likes || 0,
+              comments: reel.commentCount || reel.stats?.comments || 0,
+              isLiked: reel.isLiked || false
+            }
+          }))
+        }
+      } catch (error) {
+        console.log('Could not fetch reel stats:', error.message)
+      }
+    }
+
+    fetchReelStats()
+  }, [reelId])
 
   // Handle swipe navigation
   const handleTouchStart = (e) => {
@@ -145,49 +178,71 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const user = getUser()
   const isMirrored = currentMessage.isMirrored || currentMessage.metadata?.introVideoMirrored
 
-  // Debug log
-  console.log('MessageReelViewer - videoUrl:', videoUrl?.substring(0, 100), 'videoError:', videoError, 'videoReady:', videoReady, 'hasBase64:', !!currentMessage.metadata?.introVideoBase64, 'thumbnail:', thumbnail?.substring(0, 50))
+  // Debug log - important for troubleshooting action buttons
+  console.log('MessageReelViewer - reelId:', reelId, 'isPartyInvite:', isPartyInvite, 'videoError:', videoError, 'videoReady:', videoReady)
+  if (!reelId && isPartyInvite) {
+    console.warn('⚠️ Party invite has no reelId - likes/comments will NOT save to backend. This invite was created before the reel was saved.')
+  }
 
-  // Get stats for current message (from local state or default to 0)
-  const messageStats = localStats[currentMessage.id] || { likes: 0, comments: 0, isLiked: false }
+  // Get stats for current reel (from local state or from reel data)
+  const reelData = currentMessage?.reel || currentMessage?.metadata?.reel || {}
+  const defaultStats = {
+    likes: reelData.likeCount || reelData.stats?.likes || 0,
+    comments: reelData.commentCount || reelData.stats?.comments || 0,
+    isLiked: reelData.isLiked || false
+  }
+  const messageStats = localStats[reelId || currentMessage.id] || defaultStats
 
   const mockReel = {
-    id: currentMessage.id,
+    id: reelId, // Use the reel ID if available
     videoUrl: videoUrl,
     thumbnail: thumbnail,
     user: user,
     isMirrored: isMirrored,
     isLiked: messageStats.isLiked,
     stats: {
-      reposts: '0',
+      reposts: reelData.repostCount?.toString() || '0',
       likes: messageStats.likes.toString(),
       comments: messageStats.comments.toString(),
-      shares: '0'
+      shares: reelData.shareCount?.toString() || '0'
     }
   }
 
+  // Consistent key for localStats - prefer reelId if available
+  const statsKey = reelId || currentMessage?.id
+
   // Handle like change from ReelActions
-  const handleLocalLikeChange = (reelId, liked) => {
+  const handleLocalLikeChange = (changedReelId, liked) => {
+    const stateKey = statsKey
+    console.log('Like change - key:', stateKey, 'liked:', liked)
     setLocalStats(prev => {
-      const current = prev[reelId] || { likes: 0, comments: 0, isLiked: false }
-      const newLikes = liked ? current.likes + 1 : Math.max(0, current.likes - 1)
-      return {
+      const current = prev[stateKey] || defaultStats
+      const newLikes = liked ? (current.likes || 0) + 1 : Math.max(0, (current.likes || 0) - 1)
+      const updated = {
         ...prev,
-        [reelId]: { ...current, likes: newLikes, isLiked: liked }
+        [stateKey]: { ...current, likes: newLikes, isLiked: liked }
       }
+      console.log('Updated localStats:', updated)
+      return updated
     })
     // Also propagate to parent if provided
-    onLikeChange?.(reelId, liked)
+    if (changedReelId) {
+      onLikeChange?.(changedReelId, liked)
+    }
   }
 
   // Handle comment added from CommentsSection
   const handleLocalCommentAdded = () => {
+    const stateKey = statsKey
+    console.log('Comment added - key:', stateKey)
     setLocalStats(prev => {
-      const current = prev[currentMessage.id] || { likes: 0, comments: 0, isLiked: false }
-      return {
+      const current = prev[stateKey] || defaultStats
+      const updated = {
         ...prev,
-        [currentMessage.id]: { ...current, comments: current.comments + 1 }
+        [stateKey]: { ...current, comments: (current.comments || 0) + 1 }
       }
+      console.log('Updated localStats:', updated)
+      return updated
     })
     // Also propagate to parent if provided
     onCommentAdded?.()
@@ -330,19 +385,73 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
         {/* Bottom info - margin-top auto pushes to bottom */}
         <div className="reel-bottom" style={{ marginTop: 'auto' }}>
           <div className="reel-info">
-            {/* Join as Admin button - above user row */}
-            {isPartyInvite && !currentMessage.isOwn && (
-              <button
-                className="nominate-btn"
-                onClick={() => {
-                  onAcceptInvite?.(currentMessage)
-                  onClose()
-                }}
-                style={{ marginBottom: '12px', alignSelf: 'flex-start' }}
-              >
-                <span>{currentMessage.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party'}</span>
-              </button>
-            )}
+            {/* Join Party button - above user row */}
+            {isPartyInvite && !currentMessage.isOwn && (() => {
+              const partyId = currentMessage.metadata.partyId
+              const status = joinStatus[partyId] || 'idle'
+              const isAdmin = currentMessage.metadata.role === 'admin'
+
+              const handleJoinParty = async () => {
+                if (!partyId || status === 'joining' || status === 'joined') return
+
+                setJoinStatus(prev => ({ ...prev, [partyId]: 'joining' }))
+
+                try {
+                  console.log('Joining party:', partyId, 'as admin:', isAdmin)
+                  const response = await partiesApi.joinParty(partyId, { asAdmin: isAdmin })
+                  console.log('Join response:', response)
+
+                  // Response is { success: true, data: { joined, requested, upgraded } }
+                  const result = response.data || response
+
+                  if (result.joined) {
+                    setJoinStatus(prev => ({ ...prev, [partyId]: 'joined' }))
+                    onAcceptInvite?.(currentMessage)
+                  } else if (result.requested) {
+                    setJoinStatus(prev => ({ ...prev, [partyId]: 'requested' }))
+                  }
+                } catch (error) {
+                  console.error('Failed to join party:', error)
+                  setJoinStatus(prev => ({ ...prev, [partyId]: 'idle' }))
+                }
+              }
+
+              return (
+                <button
+                  className="join-party-btn"
+                  onClick={handleJoinParty}
+                  disabled={status === 'joining' || status === 'joined'}
+                  style={{
+                    marginBottom: '12px',
+                    alignSelf: 'flex-start',
+                    background: status === 'joined'
+                      ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
+                      : status === 'requested'
+                        ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
+                        : 'linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '11px 16px',
+                    color: '#fff',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    cursor: status === 'joining' || status === 'joined' ? 'default' : 'pointer',
+                    opacity: status === 'joining' ? 0.7 : 1,
+                    transition: 'opacity 0.2s ease',
+                  }}
+                >
+                  {status === 'joining' ? (
+                    'Joining...'
+                  ) : status === 'joined' ? (
+                    'Joined!'
+                  ) : status === 'requested' ? (
+                    'Request Sent'
+                  ) : (
+                    isAdmin ? 'Join as Admin' : 'Join Party'
+                  )}
+                </button>
+              )
+            })()}
             <div className="reel-user-row">
               <img
                 src={user.avatar || 'https://i.pravatar.cc/40?img=1'}

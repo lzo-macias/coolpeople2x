@@ -68,6 +68,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
   const baseComments = apiComments || mockBaseComments
 
   const handleReply = (commentId, username) => {
+    console.log('Replying to comment:', commentId, 'user:', username)
     setReplyingTo({ commentId, username })
     setCommentText(`@${username} `)
     inputRef.current?.focus()
@@ -84,14 +85,15 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
         const parentCommentId = replyingTo.commentId
         setReplyingTo(null)
 
-        // Sync with API first, then update UI
-        try {
-          if (reel?.id) {
+        if (reel?.id) {
+          // Sync with API first, then update UI
+          try {
+            console.log('Adding reply to reel:', reel.id, 'parent:', parentCommentId)
             const response = await commentsApi.addComment(reel.id, {
               content: text,
               parentId: parentCommentId,
             })
-            console.log('Reply saved:', response)
+            console.log('Reply saved successfully:', response)
 
             // Get the created comment from response
             const createdComment = response.data?.comment || response.comment || response.data
@@ -106,10 +108,14 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
               likes: 0,
               party: null
             }
-            setCommentReplies(prev => ({
-              ...prev,
-              [parentCommentId]: [...(prev[parentCommentId] || []), newReply]
-            }))
+            setCommentReplies(prev => {
+              const updated = {
+                ...prev,
+                [parentCommentId]: [...(prev[parentCommentId] || []), newReply]
+              }
+              console.log('Updated commentReplies:', updated)
+              return updated
+            })
 
             // Scroll to the reply
             setTimeout(() => {
@@ -120,9 +126,24 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             // Notify parent about comment added
             onCommentAdded?.()
             onTrackActivity?.('comment', reel)
+          } catch (error) {
+            console.error('Add reply API error:', error.message, error)
+            // Still add locally as fallback
+            const newReply = {
+              id: newId,
+              username: 'You',
+              avatar: 'https://i.pravatar.cc/40?img=20',
+              text: text,
+              likes: 0,
+              party: null
+            }
+            setCommentReplies(prev => ({
+              ...prev,
+              [parentCommentId]: [...(prev[parentCommentId] || []), newReply]
+            }))
           }
-        } catch (error) {
-          console.error('Add reply error:', error)
+        } else {
+          console.warn('Cannot save reply - no reel ID available')
           // Still add locally as fallback
           const newReply = {
             id: newId,
@@ -139,11 +160,12 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
         }
       } else {
         // Adding a new top-level comment
-        // Sync with API first, then update UI
-        try {
-          if (reel?.id) {
+        if (reel?.id) {
+          // Sync with API first, then update UI
+          try {
+            console.log('Adding comment to reel:', reel.id)
             const response = await commentsApi.addComment(reel.id, { content: text })
-            console.log('Comment saved:', response)
+            console.log('Comment saved successfully:', response)
 
             // Get the created comment from response
             const createdComment = response.data?.comment || response.comment || response.data
@@ -170,9 +192,22 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             // Notify parent about comment added
             onCommentAdded?.()
             onTrackActivity?.('comment', reel)
+          } catch (error) {
+            console.error('Add comment API error:', error.message, error)
+            // Still add locally as fallback
+            const newComment = {
+              id: newId,
+              username: 'You',
+              avatar: 'https://i.pravatar.cc/40?img=20',
+              text: text,
+              likes: 0,
+              party: null,
+              profileType: 'participant'
+            }
+            setUserComments(prev => [...prev, newComment])
           }
-        } catch (error) {
-          console.error('Add comment error:', error)
+        } else {
+          console.warn('Cannot save comment - no reel ID available. This invite may have been created before the reel was saved.')
           // Still add locally as fallback
           const newComment = {
             id: newId,

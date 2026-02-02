@@ -374,14 +374,36 @@ export const partiesApi = {
 
   getMembers: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/members${cursor ? `?cursor=${cursor}` : ''}`),
 
+  updateMemberPermissions: (partyId, userId, permissions) => apiFetch(`/api/parties/${partyId}/members/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ permissions }),
+  }),
+
+  removeMember: (partyId, userId) => apiFetch(`/api/parties/${partyId}/members/${userId}`, {
+    method: 'DELETE',
+  }),
+
+  // Ban operations
+  banMember: (partyId, userId, reason) => apiFetch(`/api/parties/${partyId}/bans/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
+
+  unbanMember: (partyId, userId) => apiFetch(`/api/parties/${partyId}/bans/${userId}`, {
+    method: 'DELETE',
+  }),
+
+  getBannedMembers: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/bans${cursor ? `?cursor=${cursor}` : ''}`),
+
   getFollowers: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/followers${cursor ? `?cursor=${cursor}` : ''}`),
 
   getRaces: (partyId) => apiFetch(`/api/parties/${partyId}/races`),
 
   getReviews: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/reviews${cursor ? `?cursor=${cursor}` : ''}`),
 
-  joinParty: (partyId) => apiFetch(`/api/parties/${partyId}/join`, {
+  joinParty: (partyId, options = {}) => apiFetch(`/api/parties/${partyId}/join`, {
     method: 'POST',
+    body: JSON.stringify(options),
   }),
 
   leaveParty: (partyId) => apiFetch(`/api/parties/${partyId}/leave`, {
@@ -393,6 +415,18 @@ export const partiesApi = {
   }),
 
   unfollowParty: (partyId) => apiFetch(`/api/parties/${partyId}/follow`, {
+    method: 'DELETE',
+  }),
+
+  // Party Group Chat
+  getChatMessages: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/chat/messages${cursor ? `?cursor=${cursor}` : ''}`),
+
+  sendChatMessage: (partyId, content) => apiFetch(`/api/parties/${partyId}/chat/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  }),
+
+  deleteChatMessage: (partyId, messageId) => apiFetch(`/api/parties/${partyId}/chat/messages/${messageId}`, {
     method: 'DELETE',
   }),
 };

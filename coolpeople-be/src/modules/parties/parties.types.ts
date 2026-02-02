@@ -99,6 +99,25 @@ export interface UpdateMemberPermissionsRequest {
 }
 
 // -----------------------------------------------------------------------------
+// Banned Member Response
+// -----------------------------------------------------------------------------
+
+export interface BannedMemberResponse {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bannedBy: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
+  reason: string | null;
+  bannedAt: Date;
+}
+
+// -----------------------------------------------------------------------------
 // Party Follower Response
 // -----------------------------------------------------------------------------
 

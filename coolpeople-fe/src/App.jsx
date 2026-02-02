@@ -1275,14 +1275,14 @@ function AppContent() {
         </div>
       </div>
 
-      {!isInConversation && !showCreateScreen && !showConversationOverlay && (
+      {!isInConversation && !showCreateScreen && !showConversationOverlay &&
+       !showProfile && !showPartyProfile && !showParticipantProfile && (
         <BottomNav
           currentPage={PAGES[currentPage]}
           onNavigate={handleNavClick}
           onCreateClick={() => setShowCreateScreen(true)}
           theme={
-            // Profile overlays always use dark theme
-            (showProfile || showPartyProfile || showParticipantProfile || showComments)
+            showComments
               ? 'dark'
               : PAGES[currentPage] === 'scoreboard'
                 ? 'light'
@@ -1345,16 +1345,122 @@ function AppContent() {
                     ? partyData.postSettings.postTo
                     : [partyData.postSettings.postTo || 'Your Feed']
 
-                  // Create the intro post, passing partyData so it can be added to party posts
-                  handlePostCreated({
+                  // Create the intro reel first via API to get the reel ID
+                  let introReelId = null
+                  try {
+                    const reelData = {
+                      videoUrl: partyData.introVideo,
+                      title: `Welcome to ${partyData.name}!`,
+                      description: partyData.bio || '',
+                      partyId: createdParty.id,
+                      duration: 30,
+                      isMirrored: partyData.introVideoMirrored || false,
+                    }
+                    console.log('Creating intro reel:', reelData)
+                    const reelResult = await reelsApi.createReel(reelData)
+                    // Backend returns { success: true, data: { reel: {...} } } or { reel: {...} }
+                    const createdReel = reelResult.data?.reel || reelResult.reel || reelResult.data || reelResult
+                    introReelId = createdReel?.id
+                    console.log('Intro reel created with ID:', introReelId)
+                  } catch (reelError) {
+                    console.error('Failed to create intro reel:', reelError)
+                  }
+
+                  // Now send invites with the reel ID
+                  const sendPartyInvites = async () => {
+                    const allInvites = []
+                    const adminInvites = partyData.adminInvites || []
+                    const memberInvites = partyData.memberInvites || []
+
+                    console.log('Sending invites - adminCount:', adminInvites.length, 'memberCount:', memberInvites.length, 'reelId:', introReelId)
+                    if (!introReelId) {
+                      console.warn('⚠️ No reelId available for invites - action buttons will not save to backend!')
+                    }
+
+                    // Send admin invites
+                    for (const admin of adminInvites) {
+                      allInvites.push(
+                        messagesApi.sendMessage({
+                          receiverId: admin.id,
+                          content: `Party invite: ${partyData.name}`,
+                          metadata: {
+                            type: 'party_invite',
+                            partyId: createdParty.id,
+                            partyHandle: partyData.handle,
+                            partyName: partyData.name,
+                            role: 'admin',
+                            partyColor: partyData.color,
+                            partyAvatar: partyData.photo,
+                            introVideoBase64: partyData.introVideo,
+                            introVideoMirrored: partyData.introVideoMirrored,
+                            reelId: introReelId, // Include reel ID for action buttons
+                          }
+                        }).catch(err => console.log(`Failed to send admin invite to ${admin.username}:`, err))
+                      )
+                    }
+
+                    // Send member invites
+                    for (const member of memberInvites) {
+                      allInvites.push(
+                        messagesApi.sendMessage({
+                          receiverId: member.id,
+                          content: `Party invite: ${partyData.name}`,
+                          metadata: {
+                            type: 'party_invite',
+                            partyId: createdParty.id,
+                            partyHandle: partyData.handle,
+                            partyName: partyData.name,
+                            role: 'member',
+                            partyColor: partyData.color,
+                            partyAvatar: partyData.photo,
+                            introVideoBase64: partyData.introVideo,
+                            introVideoMirrored: partyData.introVideoMirrored,
+                            reelId: introReelId, // Include reel ID for action buttons
+                          }
+                        }).catch(err => console.log(`Failed to send member invite to ${member.username}:`, err))
+                      )
+                    }
+
+                    // Send all invites in parallel
+                    await Promise.all(allInvites)
+                    console.log(`Sent ${adminInvites.length} admin invites and ${memberInvites.length} member invites with reelId: ${introReelId}`)
+                  }
+
+                  // Send invites (don't block on this)
+                  sendPartyInvites()
+
+                  // Also update local state for immediate display
+                  const timestamp = Date.now()
+                  const newReel = {
+                    id: introReelId || `reel-${timestamp}`,
                     videoUrl: partyData.introVideo,
+                    thumbnail: partyData.introVideo,
+                    user: {
+                      ...currentUser,
+                      party: fullPartyData.name,
+                    },
                     title: `Welcome to ${partyData.name}!`,
                     caption: partyData.bio || '',
-                    postTo: postToArray,
-                    sendTo: partyData.postSettings.sendTo || [],
+                    stats: { votes: '0', likes: '1', comments: '0', shazam: '0', shares: '0' },
+                    isLiked: true,
                     targetRace: partyData.postSettings.target || null,
+                    createdAt: new Date().toISOString(),
                     isMirrored: partyData.introVideoMirrored || false,
-                  }, fullPartyData)
+                  }
+
+                  // Add to feed if posting to feed
+                  if (postToArray.includes('Your Feed')) {
+                    setReels(prev => [newReel, ...prev])
+                  }
+
+                  // Add to party posts
+                  setPartyPosts(prev => [newReel, ...prev])
+
+                  // Add to user's posts
+                  setUserPosts(prev => [newReel, ...prev])
+
+                  setShowCreateScreen(false)
+                  setCurrentPage(1)
                 } else {
                   setShowCreateScreen(false)
                 }

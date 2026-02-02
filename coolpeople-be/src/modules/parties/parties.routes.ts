@@ -170,6 +170,37 @@ router.delete(
 );
 
 // =============================================================================
+// BANS
+// =============================================================================
+
+// POST /api/parties/:id/bans/:userId - Ban member (admin/moderate)
+router.post(
+  '/:id/bans/:userId',
+  requireAuth,
+  validate(partyMemberParamSchema),
+  requirePartyPermission('admin', 'moderate'),
+  partiesController.banMember
+);
+
+// DELETE /api/parties/:id/bans/:userId - Unban member (admin/moderate)
+router.delete(
+  '/:id/bans/:userId',
+  requireAuth,
+  validate(partyMemberParamSchema),
+  requirePartyPermission('admin', 'moderate'),
+  partiesController.unbanMember
+);
+
+// GET /api/parties/:id/bans - List banned members (admin/moderate)
+router.get(
+  '/:id/bans',
+  requireAuth,
+  validate(listMembersQuerySchema),
+  requirePartyPermission('admin', 'moderate'),
+  partiesController.listBannedMembers
+);
+
+// =============================================================================
 // JOIN REQUESTS (Private Parties)
 // =============================================================================
 

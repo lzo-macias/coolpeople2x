@@ -58,6 +58,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
     // Sync with API
     try {
       if (reel?.id) {
+        console.log('Like API call - reelId:', reel.id, 'wasLiked:', wasLiked)
         if (wasLiked) {
           await reelsApi.unlikeReel(reel.id)
           onLikeChange?.(reel.id, false)
@@ -65,10 +66,13 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
           await reelsApi.likeReel(reel.id)
           onLikeChange?.(reel.id, true)
         }
+        console.log('Like API call successful')
+      } else {
+        console.warn('Like action - no reel ID, cannot sync to backend. This invite may have been created before the reel was saved.')
       }
     } catch (error) {
       // Revert on error
-      console.log('Like error:', error.message)
+      console.error('Like API error:', error.message, error)
       setIsLiked(wasLiked)
       const revertCount = parseInt(likeCount.replace(/,/g, '')) || 0
       const revertedCount = Math.max(0, revertCount + (wasLiked ? 1 : -1))
@@ -79,13 +83,17 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   const handleRepost = async () => {
     try {
       if (reel?.id) {
+        console.log('Repost API call - reelId:', reel.id)
         await reelsApi.repostReel(reel.id)
         if (onTrackActivity && reel) {
           onTrackActivity('repost', reel)
         }
+        console.log('Repost API call successful')
+      } else {
+        console.warn('Repost action - no reel ID, cannot sync to backend')
       }
     } catch (error) {
-      console.log('Repost error:', error.message)
+      console.error('Repost error:', error.message, error)
     }
     setShowRepostMenu(false)
   }
@@ -93,13 +101,17 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   const handleShare = async () => {
     try {
       if (reel?.id) {
+        console.log('Share API call - reelId:', reel.id)
         await reelsApi.shareReel(reel.id)
         if (onTrackActivity && reel) {
           onTrackActivity('share', reel)
         }
+        console.log('Share API call successful')
+      } else {
+        console.warn('Share action - no reel ID, cannot sync to backend')
       }
     } catch (error) {
-      console.log('Share error:', error.message)
+      console.error('Share error:', error.message, error)
     }
   }
 

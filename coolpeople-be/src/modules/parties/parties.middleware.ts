@@ -38,8 +38,8 @@ export const requirePartyPermission = (...requiredPermissions: PartyPermission[]
       throw new ForbiddenError('You are not a member of this party');
     }
 
-    // Admin permission grants everything
-    if (membership.permissions.includes('admin')) {
+    // Leader or admin permission grants everything
+    if (membership.permissions.includes('leader') || membership.permissions.includes('admin')) {
       return next();
     }
 
