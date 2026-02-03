@@ -113,6 +113,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [isJoining, setIsJoining] = useState(false)
   const [canChat, setCanChat] = useState(true) // Whether user has chat permission in party
   const [convertedToParty, setConvertedToParty] = useState(null) // Party info if groupchat was converted
+  const [partyName, setPartyName] = useState(conversation.party?.name || null) // Party name if groupchat converted to party
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
@@ -263,6 +264,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               msg.metadata?.type === 'party_invite'
             )
             if (partyConversionMsg && partyConversionMsg.metadata) {
+              // Set the party name in the header
+              setPartyName(partyConversionMsg.metadata.partyName)
+
               // Check if current user has already joined this party
               const convertedPartyId = partyConversionMsg.metadata.partyId
               const hasJoined = currentUser?.partyId === convertedPartyId
@@ -1030,7 +1034,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 )}
               </div>
               <span className="conversation-username">
-                {recipients.length} people
+                {partyName || `${recipients.length} people`}
               </span>
             </>
           ) : (
@@ -1460,8 +1464,32 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 const result = await onPartyCreatedFromGroupchat(partyData, conversation.groupChatId, memberIds)
                 if (result?.success) {
                   console.log('Party created successfully:', result.party)
+                  // Update header to show party name
+                  setPartyName(partyData.name)
                   // Close the settings
                   setShowPartySettings(false)
+                  // Refetch messages to show the invite message sent by creator
+                  setTimeout(async () => {
+                    try {
+                      const response = await groupchatsApi.getMessages(conversation.groupChatId)
+                      const messages = response.data
+                      if (messages && Array.isArray(messages)) {
+                        const transformed = messages.map(msg => ({
+                          id: msg.id,
+                          text: msg.content,
+                          metadata: msg.metadata || null,
+                          isOwn: msg.user?.id === currentUser?.id,
+                          timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                          createdAt: msg.createdAt,
+                          senderName: msg.user?.username || msg.user?.displayName,
+                          senderAvatar: msg.user?.avatarUrl,
+                        })).reverse()
+                        setFetchedMessages(transformed)
+                      }
+                    } catch (err) {
+                      console.error('Failed to refetch messages after party creation:', err)
+                    }
+                  }, 500) // Small delay to ensure message is saved
                 }
               }
             }}

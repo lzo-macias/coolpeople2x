@@ -909,26 +909,49 @@ function AppContent() {
   }
 
   const handleOptIn = async () => {
-    setHasOptedIn(true)
-    // Auto-enroll in CoolPeople race when becoming a candidate
-    setUserRacesCompeting(prev => prev.includes('CP') ? prev : [...prev, 'CP'])
-    handleCloseParticipantProfile()
+    // Save to backend first
+    if (!authUser?.id) {
+      console.error('Cannot become candidate: no user ID')
+      return
+    }
 
-    // Save to backend
-    if (authUser?.id) {
-      try {
-        await usersApi.becomeCandidate(authUser.id)
-      } catch (error) {
-        console.error('Failed to become candidate:', error)
-      }
+    try {
+      await usersApi.becomeCandidate(authUser.id)
+
+      // Only update local state after API succeeds
+      setHasOptedIn(true)
+      // Auto-enroll in CoolPeople race when becoming a candidate
+      setUserRacesCompeting(prev => prev.includes('CP') ? prev : [...prev, 'CP'])
+      handleCloseParticipantProfile()
+
+      // Refresh user data from backend to ensure consistency
+      await refreshUser()
+    } catch (error) {
+      console.error('Failed to become candidate:', error)
+      // Don't update local state if API fails
     }
   }
 
   // Handle opting out from candidate back to participant
-  const handleOptOut = () => {
-    setHasOptedIn(false)
-    // Note: Per backend spec, points are frozen (decay still active), reviews remain permanent
-    // User can now choose to go private again if they want
+  const handleOptOut = async () => {
+    if (!authUser?.id) {
+      console.error('Cannot revert to participant: no user ID')
+      return
+    }
+
+    try {
+      await usersApi.revertToParticipant(authUser.id)
+
+      // Only update local state after API succeeds
+      setHasOptedIn(false)
+      // Note: Per backend spec, points are frozen (decay still active), reviews remain permanent
+      // User can now choose to go private again if they want
+
+      // Refresh user data from backend to ensure consistency
+      await refreshUser()
+    } catch (error) {
+      console.error('Failed to revert to participant:', error)
+    }
   }
 
   // Handle clicking on a username in comments
@@ -1762,6 +1785,8 @@ function AppContent() {
                 setShowConversationOverlay(true)
                 console.log('Opening conversation overlay with:', user.username)
               }}
+              onAvatarChange={handleAvatarChange}
+              onBioChange={handleBioChange}
             />
           </div>
         </div>

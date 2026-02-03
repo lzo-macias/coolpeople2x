@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import EditBio from './EditBio'
+import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 import CandidateProfile from './CandidateProfile'
 import { getPartyColor } from '../data/mockData'
@@ -435,6 +435,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       avatar: displayAvatar,
       party: userParty?.name || null, // Use user's party if they have one
       bio: currentUser?.bio || bioText, // Use persisted bio from currentUser, fallback to local state
+      status: 'Candidate', // User has opted in, so they're a Candidate
       nominations: '0',
       following: currentUser?.following || profileData.following,
       followers: currentUser?.followers || profileData.followers,
@@ -715,16 +716,34 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
         )}
       </div>
 
-      {/* Edit Bio Overlay - for development */}
-      {showEditBio && (
-        <div className="edit-bio-overlay">
-          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-          <EditBio />
-        </div>
+      {/* Edit Profile Overlay - rendered via portal to escape transformed parent */}
+      {showEditBio && createPortal(
+        <div className="edit-bio-overlay-portal">
+          <EditProfile
+            candidate={{
+              id: currentUser?.id || currentUser?.userId,
+              username: profileData.username,
+              bio: bioText,
+              avatar: displayAvatar,
+              party: currentParty,
+              status: 'Participant',
+            }}
+            profileSections={{}}
+            onSave={(updatedData) => {
+              if (updatedData.bio !== undefined) {
+                setBioText(updatedData.bio)
+                onBioChange?.(updatedData.bio)
+              }
+              if (updatedData.avatar) {
+                setCustomAvatar(updatedData.avatar)
+                onAvatarChange?.(updatedData.avatar)
+              }
+            }}
+            onClose={() => setShowEditBio(false)}
+            onOptOut={null}
+          />
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Single Post View - rendered via portal to escape transformed parent */}

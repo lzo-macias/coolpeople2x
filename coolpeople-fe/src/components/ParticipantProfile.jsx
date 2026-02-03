@@ -4,7 +4,7 @@ import '../styling/ParticipantProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
 import { getPartyColor } from '../data/mockData'
 import { usersApi } from '../services/api'
-import EditBio from './EditBio'
+import EditProfile from './EditProfile'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -77,6 +77,8 @@ function ParticipantProfile({
   onProfileLoaded,
   onFollowChange,
   onMessageUser,
+  onAvatarChange,
+  onBioChange,
 }) {
   // Merge passed participant with defaults, preferring cached data
   const participant = { ...mockParticipant, ...passedParticipant, ...cachedProfile }
@@ -245,7 +247,23 @@ function ParticipantProfile({
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Own Profile */}
+        {isOwnProfile && (
+          <div className="participant-actions">
+            <button className="participant-action-btn share">share</button>
+            <button className="participant-action-btn edit" onClick={() => setShowEditBio(true)}>edit</button>
+            <button className="participant-action-btn invite">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="9" cy="7" r="4" />
+                <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="16" y1="11" x2="22" y2="11" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Action Buttons - Other Profile */}
         {!isOwnProfile && (
           <div className="participant-actions">
             <button
@@ -642,16 +660,32 @@ function ParticipantProfile({
         )}
       </div>
 
-      {/* Edit Bio Overlay - for development */}
-      {showEditBio && (
-        <div className="edit-bio-overlay">
-          <button className="edit-bio-close" onClick={() => setShowEditBio(false)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-          <EditBio />
-        </div>
+      {/* Edit Profile Overlay - rendered via portal */}
+      {showEditBio && createPortal(
+        <div className="edit-bio-overlay-portal">
+          <EditProfile
+            candidate={{
+              id: participant.id || participant.userId,
+              username: participant.username,
+              bio: participant.bio,
+              avatar: participant.avatar,
+              party: participant.party || 'Independent',
+              status: 'Participant',
+            }}
+            profileSections={{}}
+            onSave={(updatedData) => {
+              if (updatedData.bio !== undefined) {
+                onBioChange?.(updatedData.bio)
+              }
+              if (updatedData.avatar) {
+                onAvatarChange?.(updatedData.avatar)
+              }
+            }}
+            onClose={() => setShowEditBio(false)}
+            onOptOut={null}
+          />
+        </div>,
+        document.getElementById('modal-root') || document.body
       )}
 
       {/* Nominations Modal */}

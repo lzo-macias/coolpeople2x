@@ -43,6 +43,8 @@
   flex-direction: column;
   gap: 8px;
   align-items: center;
+  width: 140px;
+  flex-shrink: 0;
 }
 
 .profile-right {
@@ -365,6 +367,10 @@ button.profile-bio.empty {
   cursor: pointer;
   padding: 0;
   transition: opacity 0.2s ease;
+  max-width: 140px;
+  text-align: center;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .profile-party-btn:hover {

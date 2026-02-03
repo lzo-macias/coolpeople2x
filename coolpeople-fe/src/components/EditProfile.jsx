@@ -33,8 +33,8 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
     bio: candidate?.bio || '',
     avatar: candidate?.avatar || '',
     party: candidate?.party || 'Independent',
-    status: 'Candidate',
-    privacy: 'Public',
+    status: candidate?.status || 'Participant',
+    privacy: candidate?.privacy || 'Public',
   })
 
   // Username change tracking (can only change once every 2 weeks)

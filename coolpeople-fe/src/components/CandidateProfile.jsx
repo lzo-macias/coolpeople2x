@@ -458,6 +458,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       change: '+0.00',
       races: [],
       bio: '',
+      status: 'Candidate', // Default for CandidateProfile
       sparklineData: [],
       postImages: [],
       isFollowing: false,
@@ -501,6 +502,10 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         isFollowing: fetchedProfile.isFollowing ?? passedCandidate?.isFollowing ?? defaults.isFollowing,
         isFavorited: fetchedProfile.isFavorited ?? passedCandidate?.isFavorited ?? defaults.isFavorited,
         userType: fetchedProfile.userType,
+        // Map userType to status for EditProfile compatibility
+        status: fetchedProfile.userType === 'CANDIDATE' ? 'Candidate' :
+                fetchedProfile.userType === 'PARTICIPANT' ? 'Participant' :
+                passedCandidate?.status || defaults.status,
       }
     }
 
@@ -515,6 +520,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       racesCompeting: passedCandidate?.racesCompeting || [],
       racesFollowing: passedCandidate?.racesFollowing || [],
       racesWon: passedCandidate?.racesWon || [],
+      status: passedCandidate?.status || defaults.status,
     }
   }, [fetchedProfile, fetchedPosts, fetchedReviews, passedCandidate])
 

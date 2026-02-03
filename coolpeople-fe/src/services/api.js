@@ -122,6 +122,10 @@ export const usersApi = {
     method: 'POST',
     body: JSON.stringify({ acceptTerms: true }),
   }),
+
+  revertToParticipant: (userId) => apiFetch(`/api/users/${userId}/revert-participant`, {
+    method: 'POST',
+  }),
 };
 
 // =============================================================================

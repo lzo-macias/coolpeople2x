@@ -449,11 +449,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             recipients: recipients,
             allMembers: gc.members, // All members including current user
             createdById: gc.createdById, // Creator of the groupchat
+            party: gc.party, // Party info if converted
             user: {
               id: gc.id,
               username: recipients.map(m => m.username).join(', '),
-              avatar: recipients[0]?.avatarUrl,
-              displayName: `${gc.members.length} people`,
+              avatar: gc.party?.avatarUrl || recipients[0]?.avatarUrl,
+              displayName: gc.name || gc.party?.name || `${gc.members.length} people`,
             },
             lastMessage: message.content,
             lastMessageAt: message.createdAt,
@@ -573,11 +574,13 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               recipients: recipients,
               allMembers: gc.members, // All members including current user
               createdById: gc.createdById, // Creator of the groupchat
+              party: gc.party, // Party info if converted
+              partyId: gc.partyId || gc.party?.id, // Party ID for membership check
               user: {
                 id: gc.id,
                 username: recipients.map(m => m.username).join(', '),
-                avatar: recipients[0]?.avatarUrl,
-                displayName: `${gc.members.length} people`,
+                avatar: gc.party?.avatarUrl || recipients[0]?.avatarUrl,
+                displayName: gc.name || gc.party?.name || `${gc.members.length} people`,
               },
               lastMessage: gc.lastMessage?.content || '',
               lastMessageAt: gc.lastMessage?.createdAt,
@@ -922,6 +925,51 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setActiveConversation(null)
     activeConversationRef.current = null // Clear ref when closing conversation
     onConversationChange?.(false)
+  }
+
+  // Wrapper to also update messages list when party is created from groupchat
+  const handlePartyCreatedFromGroupchat = async (partyData, groupChatId, memberIds) => {
+    const result = await onPartyCreatedFromGroupchat?.(partyData, groupChatId, memberIds)
+    if (result?.success) {
+      // Update messages list with the new party data
+      setMessages(prev => prev.map(m => {
+        if (m.groupChatId === groupChatId || m.id === `groupchat-${groupChatId}`) {
+          return {
+            ...m,
+            party: {
+              id: result.party?.id,
+              name: partyData.name,
+              handle: partyData.handle,
+              avatarUrl: partyData.photo,
+              color: partyData.color,
+            },
+            user: {
+              ...m.user,
+              displayName: partyData.name,
+            },
+          }
+        }
+        return m
+      }))
+      // Update active conversation if it's the one that was converted
+      if (activeConversation && (activeConversation.groupChatId === groupChatId || activeConversation.id === `groupchat-${groupChatId}`)) {
+        setActiveConversation(prev => ({
+          ...prev,
+          party: {
+            id: result.party?.id,
+            name: partyData.name,
+            handle: partyData.handle,
+            avatarUrl: partyData.photo,
+            color: partyData.color,
+          },
+          user: {
+            ...prev.user,
+            displayName: partyData.name,
+          },
+        }))
+      }
+    }
+    return result
   }
 
   const handleUnpin = async (message, e) => {
@@ -1406,12 +1454,13 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         recipients: recipients,
         allMembers: groupChat.members, // All members including current user
         createdById: groupChat.createdById, // Creator of the groupchat
+        party: groupChat.party, // Party info if converted
         // For display purposes
         user: {
           id: groupChat.id,
           username: recipients.map(m => m.username).join(', '),
-          avatar: recipients[0]?.avatarUrl,
-          displayName: `${groupChat.members.length} people`,
+          avatar: groupChat.party?.avatarUrl || recipients[0]?.avatarUrl,
+          displayName: groupChat.name || groupChat.party?.name || `${groupChat.members.length} people`,
         },
         lastMessage: groupChat.lastMessage?.content || '',
         lastMessageAt: groupChat.lastMessage?.createdAt,
@@ -1456,7 +1505,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         currentUserId={currentUser?.id}
         currentUserAvatar={currentUser?.avatar}
         onCreateGroupChat={handleCreateGroupChat}
-        onPartyCreatedFromGroupchat={onPartyCreatedFromGroupchat}
+        onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
       />
     )
   }
@@ -2216,6 +2265,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               <MessageItem
                 key={message.id}
                 message={message}
+                userParty={userParty}
                 isPinned={isPinned}
                 isSilenced={isSilenced}
                 isHidden={isHidden}
@@ -2234,9 +2284,26 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   )
 }
 
-function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActive, onClick, onUnpin, onUnmute, onLongPress }) {
-  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat } = message
-  const partyColor = getPartyColor(user?.party)
+function MessageItem({ message, userParty, isPinned, isSilenced, isHidden, isLongPressActive, onClick, onUnpin, onUnmute, onLongPress }) {
+  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat, isGroupChat, party, partyId } = message
+  const partyColor = getPartyColor(party || user?.party)
+
+  // Display name: party name if converted to party, else user displayName, else username
+  const displayName = party?.name || user?.displayName || user?.username
+
+  // Check if this chat belongs to the user's current party
+  // Compare using party object or partyId field - userParty uses 'id' not 'partyId'
+  const chatPartyId = party?.id || partyId
+  const myPartyId = userParty?.id
+
+  const isMyPartyChat = Boolean(userParty && chatPartyId && (
+    // Match by ID (primary check)
+    chatPartyId === myPartyId ||
+    // Match by name as fallback (handles edge cases)
+    (party?.name && userParty?.name && party.name.toLowerCase() === userParty.name.toLowerCase()) ||
+    // Match by handle as fallback
+    (party?.handle && userParty?.handle && party.handle.toLowerCase() === userParty.handle.toLowerCase())
+  ))
   const longPressTimer = useRef(null)
   const itemRef = useRef(null)
 
@@ -2291,11 +2358,11 @@ function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActiv
           className="message-avatar"
           style={{ borderColor: partyColor }}
         >
-          {user?.avatar ? (
-            <img src={user.avatar} alt={user?.username} />
+          {party?.avatarUrl || user?.avatar ? (
+            <img src={party?.avatarUrl || user.avatar} alt={displayName} />
           ) : (
             <div className="message-avatar-placeholder">
-              {isPartyChat ? '🎉' : (user?.username?.[0] || '?')}
+              {isPartyChat || party ? '🎉' : (user?.username?.[0] || '?')}
             </div>
           )}
         </div>
@@ -2303,8 +2370,23 @@ function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActiv
 
       <div className="message-content">
         <div className="message-username-row">
-          <span className="message-username">{user?.username}</span>
-          {isOnline && !isPartyChat && <span className="message-online-dot" />}
+          <span className="message-username">{displayName}</span>
+          {isMyPartyChat && (
+            <span
+              className="message-party-tag"
+              style={userParty?.color ? {
+                background: `linear-gradient(135deg, ${userParty.color} 0%, ${userParty.color}CC 100%)`,
+                color: '#fff',
+                boxShadow: `0 1px 3px ${userParty.color}50`
+              } : {}}
+            >
+              <svg viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              Party
+            </span>
+          )}
+          {isOnline && !isPartyChat && !isGroupChat && !isMyPartyChat && <span className="message-online-dot" />}
         </div>
         <span className="message-preview">{lastMessage || 'No messages yet'}</span>
       </div>
