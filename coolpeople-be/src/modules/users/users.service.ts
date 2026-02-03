@@ -873,6 +873,13 @@ export const becomeCandidate = async (userId: string): Promise<PrivateProfile> =
       : []),
   ]);
 
+  // Transfer any pending points accumulated while user was a PARTICIPANT
+  const { transferPendingPoints } = await import('../points/points.service.js');
+  const { transferred, totalPoints } = await transferPendingPoints(userId);
+  if (transferred > 0) {
+    console.log(`Transferred ${transferred} pending point events (${totalPoints} total points) for user ${userId}`);
+  }
+
   return getPrivateProfile(userId);
 };
 

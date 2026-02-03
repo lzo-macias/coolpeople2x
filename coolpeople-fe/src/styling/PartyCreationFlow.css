@@ -276,6 +276,17 @@
   }
 }
 
+.party-input-checking {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: 500;
+  color: #888;
+  padding: 4px 10px;
+}
+
 .party-desc-input {
   width: 100%;
   padding: 12px 0;

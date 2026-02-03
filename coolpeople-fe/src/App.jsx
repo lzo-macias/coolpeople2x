@@ -612,11 +612,15 @@ function AppContent() {
 
       // Save to backend
       try {
+        // Only include partyId if user selected a party destination (not just "Your Feed")
+        const isPostingToParty = effectiveParty && postToArray.some(target =>
+          target !== 'Your Feed' && (target.includes(effectiveParty.name) || target.includes('Party'))
+        )
         const reelData = {
           videoUrl: postData.videoUrl,
           title: postData.title || '',
           description: postData.caption || '', // Backend expects 'description' not 'caption'
-          partyId: effectiveParty?.id || null,
+          partyId: isPostingToParty ? effectiveParty.id : null,
           duration: 30, // Default duration
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
         }
@@ -631,6 +635,19 @@ function AppContent() {
         console.log('Saving reel to backend:', reelData)
         const result = await reelsApi.createReel(reelData)
         console.log('Reel saved successfully:', result)
+
+        // Update local reel ID with the real UUID from backend
+        const backendReelId = result.data?.reel?.id || result.reel?.id || result.data?.id
+        if (backendReelId) {
+          const tempId = newReel.id
+          // Update in reels feed
+          setReels(prev => prev.map(r => r.id === tempId ? { ...r, id: backendReelId } : r))
+          // Update in user posts
+          setUserPosts(prev => prev.map(r => r.id === tempId ? { ...r, id: backendReelId } : r))
+          // Update in party posts
+          setPartyPosts(prev => prev.map(r => r.id === tempId ? { ...r, id: backendReelId } : r))
+          console.log('Updated local reel ID from', tempId, 'to', backendReelId)
+        }
       } catch (error) {
         console.error('Failed to save post to backend:', error)
       }
@@ -908,6 +925,44 @@ function AppContent() {
     setIsOwnParticipantProfile(false)
   }
 
+  // Handle switching between CandidateProfile and ParticipantProfile when userType changes
+  const handleUserTypeChange = (newUserType, profileData) => {
+    // Normalize party to string (API returns object {id, name})
+    const normalizedParty = profileData.party?.name || (typeof profileData.party === 'string' ? profileData.party : null)
+
+    if (newUserType === 'CANDIDATE') {
+      // Switch from ParticipantProfile to CandidateProfile
+      setShowParticipantProfile(false)
+      setActiveParticipant(null)
+      setActiveCandidate({
+        ...profileData,
+        id: profileData.id || profileData.userId,
+        userId: profileData.userId || profileData.id,
+        username: profileData.username,
+        avatar: profileData.avatarUrl || profileData.avatar,
+        party: normalizedParty || 'Independent',
+      })
+      setShowProfile(true)
+      // Update cache with new data
+      updateUserProfileCache(profileData.id || profileData.userId, profileData)
+    } else if (newUserType === 'PARTICIPANT') {
+      // Switch from CandidateProfile to ParticipantProfile
+      setShowProfile(false)
+      setActiveCandidate(null)
+      setActiveParticipant({
+        ...profileData,
+        id: profileData.id || profileData.userId,
+        userId: profileData.userId || profileData.id,
+        username: profileData.username,
+        avatar: profileData.avatarUrl || profileData.avatar,
+        party: normalizedParty,
+      })
+      setShowParticipantProfile(true)
+      // Update cache with new data
+      updateUserProfileCache(profileData.id || profileData.userId, profileData)
+    }
+  }
+
   const handleOptIn = async () => {
     // Save to backend first
     if (!authUser?.id) {
@@ -1049,6 +1104,34 @@ function AppContent() {
       party: score.party || 'The Pink Lady Party',
     })
     setShowProfile(true)
+  }
+
+  // Handle hiding posts from feed
+  const handleHideReel = (reelId, hideType, userId) => {
+    // Find current reel index before removing
+    const currentIndex = reels.findIndex(r => r.id === reelId)
+
+    if (hideType === 'user' && userId) {
+      // Hide all posts from this user
+      setReels(prev => prev.filter(reel => {
+        const reelUserId = reel.user?.id || reel.userId
+        return reelUserId !== userId
+      }))
+    } else {
+      // Hide just this post
+      setReels(prev => prev.filter(reel => reel.id !== reelId))
+    }
+
+    // Scroll to next reel (same position since current one is removed)
+    if (reelsFeedRef.current && currentIndex >= 0) {
+      setTimeout(() => {
+        const reelHeight = window.innerHeight
+        reelsFeedRef.current?.scrollTo({
+          top: currentIndex * reelHeight,
+          behavior: 'smooth'
+        })
+      }, 100)
+    }
   }
 
   // Centralized user profile cache management
@@ -1277,6 +1360,8 @@ function AppContent() {
                 onPartyClick={handleReelPartyClick}
                 onEngagementClick={handleEngagementClick}
                 onTrackActivity={trackActivity}
+                onHide={handleHideReel}
+                userRacesFollowing={userRacesFollowing}
               />
             ))}
           </div>
@@ -1704,6 +1789,7 @@ function AppContent() {
               setShowConversationOverlay(true)
               console.log('Opening conversation overlay with:', user.username)
             }}
+            onUserTypeChange={handleUserTypeChange}
           />
         </div>
       )}
@@ -1787,6 +1873,7 @@ function AppContent() {
               }}
               onAvatarChange={handleAvatarChange}
               onBioChange={handleBioChange}
+              onUserTypeChange={handleUserTypeChange}
             />
           </div>
         </div>

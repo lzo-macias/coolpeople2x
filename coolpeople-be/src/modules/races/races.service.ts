@@ -430,15 +430,13 @@ export const nominateCandidate = async (
   const race = await prisma.race.findUnique({ where: { id: raceId } });
   if (!race) throw new NotFoundError('Race');
 
-  // Verify nominee is a candidate
+  // Verify nominee exists (can be either PARTICIPANT or CANDIDATE)
   const nominee = await prisma.user.findUnique({
     where: { id: nomineeId },
     select: { id: true, username: true, displayName: true, avatarUrl: true, userType: true },
   });
   if (!nominee) throw new NotFoundError('Nominee');
-  if (nominee.userType !== 'CANDIDATE') {
-    throw new ForbiddenError('Can only nominate candidates');
-  }
+  // Allow nominations for all users - PARTICIPANT users will get points saved as pending
 
   // Verify reel exists
   const reel = await prisma.reel.findUnique({ where: { id: reelId } });
@@ -470,22 +468,29 @@ export const nominateCandidate = async (
       sourceReelId: reelId,
     }).catch(() => {});
 
-    // Nomination notification
+    // Nomination notification - different message for PARTICIPANT vs CANDIDATE
     const nominator = await prisma.user.findUnique({
       where: { id: nominatorId },
       select: { username: true, avatarUrl: true },
     });
+
+    const isParticipant = nominee.userType === 'PARTICIPANT';
+    const notificationBody = isParticipant
+      ? `${nominator?.username ?? 'Someone'} nominated you for ${race.title}! Opt-in as a candidate to claim your points.`
+      : `${nominator?.username ?? 'Someone'} nominated you for ${race.title}`;
+
     createNotification({
       userId: nomineeId,
       type: 'NOMINATION',
-      title: 'You were nominated!',
-      body: `${nominator?.username ?? 'Someone'} nominated you for ${race.title}`,
+      title: isParticipant ? 'You were nominated! 🎉' : 'You were nominated!',
+      body: notificationBody,
       data: {
         raceId,
         nominatorId,
         reelId,
         actorUsername: nominator?.username,
         actorAvatarUrl: nominator?.avatarUrl,
+        isParticipant,
       },
     }).catch(() => {});
 

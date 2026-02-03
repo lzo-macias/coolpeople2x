@@ -126,10 +126,16 @@ const handleLeavePreviousParty = async (
     await tx.pointLedger.deleteMany({ where: { partyId: oldPartyId } });
     await tx.raceCompetitor.deleteMany({ where: { partyId: oldPartyId } });
 
-    // Soft delete the party
+    // Soft delete the party and free up name/handle for reuse
+    const deletedSuffix = `_deleted_${Date.now()}`;
+    const oldParty = await tx.party.findUnique({ where: { id: oldPartyId } });
     await tx.party.update({
       where: { id: oldPartyId },
-      data: { deletedAt: new Date() },
+      data: {
+        deletedAt: new Date(),
+        name: `${oldParty?.name}${deletedSuffix}`,
+        handle: `${oldParty?.handle}${deletedSuffix}`,
+      },
     });
   }
 };
@@ -146,6 +152,8 @@ export const checkPartyNameAvailability = async (
   name?: string,
   handle?: string
 ): Promise<{ available: boolean; takenBy: 'name' | 'handle' | null }> => {
+  console.log('🔍 checkPartyNameAvailability called:', { name, handle });
+
   // Check handle first (more specific)
   if (handle) {
     const existingByHandle = await prisma.party.findFirst({
@@ -153,9 +161,11 @@ export const checkPartyNameAvailability = async (
         handle: handle.toLowerCase(),
         deletedAt: null,
       },
-      select: { id: true },
+      select: { id: true, name: true, handle: true },
     });
+    console.log('🔍 Handle check result:', existingByHandle);
     if (existingByHandle) {
+      console.log('🚨 Handle taken by:', existingByHandle);
       return { available: false, takenBy: 'handle' };
     }
   }
@@ -167,13 +177,29 @@ export const checkPartyNameAvailability = async (
         name: { equals: name, mode: 'insensitive' },
         deletedAt: null,
       },
-      select: { id: true },
+      select: { id: true, name: true, handle: true },
     });
+    console.log('🔍 Name check result:', existingByName);
     if (existingByName) {
+      console.log('🚨 Name taken by:', existingByName);
       return { available: false, takenBy: 'name' };
     }
   }
 
+  // Also check for ANY party with this name (including soft-deleted) to understand the constraint
+  if (name) {
+    const anyWithName = await prisma.party.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+      },
+      select: { id: true, name: true, handle: true, deletedAt: true },
+    });
+    if (anyWithName) {
+      console.log('⚠️ Found party with this name (may be deleted):', anyWithName);
+    }
+  }
+
+  console.log('✅ Name/handle available');
   return { available: true, takenBy: null };
 };
 
@@ -228,10 +254,16 @@ export const cleanupOrphanedParties = async (): Promise<{
       // Note: Posts (Reels) are NOT deleted - they remain associated with the user
       // The partyId on Reel is just for categorization, not ownership
 
-      // Soft delete the party
+      // Soft delete the party and free up name/handle for reuse
+      const deletedSuffix = `_deleted_${Date.now()}`;
+      const party = await tx.party.findUnique({ where: { id: partyId } });
       await tx.party.update({
         where: { id: partyId },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          name: `${party?.name}${deletedSuffix}`,
+          handle: `${party?.handle}${deletedSuffix}`,
+        },
       });
     }
   });
@@ -477,10 +509,16 @@ export const deleteParty = async (partyId: string): Promise<void> => {
   await getPartyOrThrow(partyId);
 
   await prisma.$transaction(async (tx) => {
-    // Soft delete the party
+    // Soft delete the party and free up name/handle for reuse
+    const deletedSuffix = `_deleted_${Date.now()}`;
+    const party = await tx.party.findUnique({ where: { id: partyId } });
     await tx.party.update({
       where: { id: partyId },
-      data: { deletedAt: new Date() },
+      data: {
+        deletedAt: new Date(),
+        name: `${party?.name}${deletedSuffix}`,
+        handle: `${party?.handle}${deletedSuffix}`,
+      },
     });
 
     // Remove from race competitions
@@ -741,10 +779,16 @@ export const leaveParty = async (
       await tx.pointLedger.deleteMany({ where: { partyId } });
       await tx.raceCompetitor.deleteMany({ where: { partyId } });
 
-      // Soft delete the party
+      // Soft delete the party and free up name/handle for reuse
+      const deletedSuffix = `_deleted_${Date.now()}`;
+      const party = await tx.party.findUnique({ where: { id: partyId } });
       await tx.party.update({
         where: { id: partyId },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          name: `${party?.name}${deletedSuffix}`,
+          handle: `${party?.handle}${deletedSuffix}`,
+        },
       });
     });
     return;

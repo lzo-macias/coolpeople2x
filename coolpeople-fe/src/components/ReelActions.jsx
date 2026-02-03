@@ -1,26 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelActions.css'
 import { getPartyColor } from '../data/mockData'
-import { reelsApi, usersApi } from '../services/api'
+import { reelsApi, usersApi, messagesApi, groupchatsApi, searchApi, reportsApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
-// Mock recent contacts for share sheet (users, parties, group chats)
-const recentContacts = [
-  { id: 1, name: 'jordy.t', avatar: 'https://i.pravatar.cc/80?img=1', active: '12m', type: 'user' },
-  { id: 2, name: 'Pink Lady Party', avatar: 'https://i.pravatar.cc/80?img=20', active: null, type: 'party' },
-  { id: 3, name: 'NYC Progressives', avatar: 'https://i.pravatar.cc/80?img=21', active: null, type: 'group', memberCount: 24 },
-  { id: 4, name: 'Elias', avatar: 'https://i.pravatar.cc/80?img=2', active: null, type: 'user' },
-  { id: 5, name: 'Green Coalition', avatar: 'https://i.pravatar.cc/80?img=22', active: null, type: 'party' },
-  { id: 6, name: 'thatgirl.s...', avatar: 'https://i.pravatar.cc/80?img=3', active: null, type: 'user' },
-  { id: 7, name: 'Policy Nerds', avatar: 'https://i.pravatar.cc/80?img=23', active: '5m', type: 'group', memberCount: 8 },
-  { id: 8, name: 'sethclash', avatar: 'https://i.pravatar.cc/80?img=4', active: null, type: 'user' },
-  { id: 9, name: 'willow.s', avatar: 'https://i.pravatar.cc/80?img=5', active: null, type: 'user' },
-  { id: 10, name: 'Liberty Party', avatar: 'https://i.pravatar.cc/80?img=24', active: null, type: 'party' },
-  { id: 11, name: 'maya.2024', avatar: 'https://i.pravatar.cc/80?img=7', active: '3m', type: 'user' },
-  { id: 12, name: 'Local Activists', avatar: 'https://i.pravatar.cc/80?img=25', active: null, type: 'group', memberCount: 156 },
-]
+// Helper to format "active" time from lastMessageAt
+const formatActiveTime = (dateString) => {
+  if (!dateString) return null
+  const now = new Date()
+  const date = new Date(dateString)
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 60) return `${diffMins}m`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d`
+  return null
+}
 
-function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange }) {
+function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange, onHide, isPageActive }) {
+  const { user: authUser } = useAuth()
   const partyColor = getPartyColor(user?.party)
   const [isLiked, setIsLiked] = useState(reel?.isLiked || false)
   const [likeCount, setLikeCount] = useState(stats?.likes || '9,999')
@@ -29,12 +30,220 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   const [selectedContacts, setSelectedContacts] = useState([])
   const [createGroupExpanded, setCreateGroupExpanded] = useState(false)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
+  const [showDotsMenu, setShowDotsMenu] = useState(false)
+  const [showHideModal, setShowHideModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [isSaved, setIsSaved] = useState(reel?.isSaved || false)
+  const [selectedReportReason, setSelectedReportReason] = useState(null)
+  const [recentContacts, setRecentContacts] = useState([])
+  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [dotsMenuPosition, setDotsMenuPosition] = useState({})
+  const searchTimeoutRef = useRef(null)
+  const dotsButtonRef = useRef(null)
+
+  // Search for users/parties when typing
+  const handleSearch = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const res = await searchApi.search(query, { limit: 20 })
+      const results = []
+      const seenIds = new Set()
+
+      // Process search results
+      if (res.data) {
+        // Handle users
+        if (res.data.users) {
+          res.data.users.forEach(u => {
+            if (!seenIds.has(`user-${u.id}`)) {
+              seenIds.add(`user-${u.id}`)
+              results.push({
+                id: `user-${u.id}`,
+                odId: u.id,
+                name: u.handle || u.username || u.displayName || 'User',
+                avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}`,
+                active: null,
+                type: 'user',
+              })
+            }
+          })
+        }
+        // Handle parties
+        if (res.data.parties) {
+          res.data.parties.forEach(p => {
+            if (!seenIds.has(`party-${p.id}`)) {
+              seenIds.add(`party-${p.id}`)
+              results.push({
+                id: `party-${p.id}`,
+                odId: p.id,
+                name: p.name || p.handle || 'Party',
+                avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/80?u=party-${p.id}`,
+                active: null,
+                type: 'party',
+              })
+            }
+          })
+        }
+      }
+      setSearchResults(results)
+    } catch (e) {
+      console.warn('Search failed:', e)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }, [])
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    if (searchQuery.length >= 2) {
+      searchTimeoutRef.current = setTimeout(() => {
+        handleSearch(searchQuery)
+      }, 300)
+    } else {
+      setSearchResults([])
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [searchQuery, handleSearch])
+
+  // Fetch real contacts when share sheet opens
+  const fetchShareContacts = useCallback(async () => {
+    if (!authUser?.id) return
+    setLoadingContacts(true)
+
+    try {
+      const contacts = []
+      const seenIds = new Set()
+
+      // 1. Fetch recent DM conversations (users)
+      try {
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data) {
+          conversationsRes.data.forEach(conv => {
+            const otherUser = conv.otherUser
+            if (otherUser && !seenIds.has(`user-${otherUser.id}`)) {
+              seenIds.add(`user-${otherUser.id}`)
+              contacts.push({
+                id: `user-${otherUser.id}`,
+                odId: otherUser.id,
+                name: otherUser.handle || otherUser.name || 'User',
+                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/80?u=${otherUser.id}`,
+                active: formatActiveTime(conv.lastMessageAt),
+                type: 'user',
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch conversations:', e)
+      }
+
+      // 2. Fetch group chats
+      try {
+        const groupChatsRes = await groupchatsApi.getAll()
+        if (groupChatsRes.data) {
+          groupChatsRes.data.forEach(gc => {
+            if (!seenIds.has(`group-${gc.id}`)) {
+              seenIds.add(`group-${gc.id}`)
+              contacts.push({
+                id: `group-${gc.id}`,
+                odId: gc.id,
+                name: gc.name || 'Group Chat',
+                avatar: gc.avatarUrl || gc.avatar || `https://i.pravatar.cc/80?u=group-${gc.id}`,
+                active: formatActiveTime(gc.lastMessageAt),
+                type: 'group',
+                memberCount: gc.memberCount || gc.members?.length || 0,
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch group chats:', e)
+      }
+
+      // 3. Fetch following (users the current user follows)
+      try {
+        const followingRes = await usersApi.getFollowing(authUser.id)
+        if (followingRes.data) {
+          followingRes.data.slice(0, 20).forEach(f => {
+            const followedUser = f.following || f
+            if (followedUser && !seenIds.has(`user-${followedUser.id}`)) {
+              seenIds.add(`user-${followedUser.id}`)
+              contacts.push({
+                id: `user-${followedUser.id}`,
+                odId: followedUser.id,
+                name: followedUser.handle || followedUser.name || 'User',
+                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/80?u=${followedUser.id}`,
+                active: null,
+                type: 'user',
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch following:', e)
+      }
+
+      setRecentContacts(contacts)
+    } catch (error) {
+      console.error('Error fetching share contacts:', error)
+    } finally {
+      setLoadingContacts(false)
+    }
+  }, [authUser?.id])
+
+  // Fetch contacts when share sheet opens (always refresh to get latest follows)
+  useEffect(() => {
+    if (showShareSheet) {
+      fetchShareContacts()
+      // Clear search when opening
+      setSearchQuery('')
+      setSearchResults([])
+    }
+  }, [showShareSheet, fetchShareContacts])
 
   // Sync liked state and count when reel changes (e.g., scrolling to different reel or reload)
   useEffect(() => {
     setIsLiked(reel?.isLiked || false)
     setLikeCount(stats?.likes || '0')
   }, [reel?.id, reel?.isLiked, stats?.likes])
+
+  // Calculate dots menu position when it opens
+  useEffect(() => {
+    if (showDotsMenu && dotsButtonRef.current) {
+      const rect = dotsButtonRef.current.getBoundingClientRect()
+      setDotsMenuPosition({
+        position: 'fixed',
+        bottom: window.innerHeight - rect.top + 4,
+        right: window.innerWidth - rect.left + 8,
+      })
+    }
+  }, [showDotsMenu])
+
+  // Close dots menu when page becomes inactive (user navigates away)
+  useEffect(() => {
+    if (!isPageActive) {
+      setShowDotsMenu(false)
+      setShowHideModal(false)
+      setShowReportModal(false)
+    }
+  }, [isPageActive])
 
   const handleLike = async () => {
     // Optimistic update
@@ -184,13 +393,166 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
       </button>
 
       {/* Three dots menu */}
-      <button className="action-btn dots-btn">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="19" cy="12" r="2" />
-        </svg>
-      </button>
+      <div className="dots-btn-wrapper" ref={dotsButtonRef}>
+        <button className="action-btn dots-btn" onClick={() => setShowDotsMenu(true)}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="19" cy="12" r="2" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Dots Menu - Portaled */}
+      {showDotsMenu && createPortal(
+        <>
+          <div className="dots-menu-backdrop" onClick={() => setShowDotsMenu(false)} />
+          <div className="dots-menu-popup" style={dotsMenuPosition}>
+            <button className="dots-menu-item" onClick={async () => {
+              setShowDotsMenu(false)
+              if (!reel?.id) return
+              try {
+                if (isSaved) {
+                  await reelsApi.unsaveReel(reel.id)
+                  setIsSaved(false)
+                } else {
+                  await reelsApi.saveReel(reel.id)
+                  setIsSaved(true)
+                }
+              } catch (error) {
+                console.error('Save error:', error)
+              }
+            }}>
+              {isSaved ? 'Unsave' : 'Save'}
+            </button>
+            <button className="dots-menu-item" onClick={() => {
+              setShowDotsMenu(false)
+              setShowHideModal(true)
+            }}>
+              Hide
+            </button>
+            <button className="dots-menu-item report" onClick={() => {
+              setShowDotsMenu(false)
+              setShowReportModal(true)
+            }}>
+              Report
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Hide Modal */}
+      {showHideModal && createPortal(
+        <div className="modal-overlay" onClick={() => setShowHideModal(false)}>
+          <div className="modal-content hide-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Hide</h3>
+            <div className="hide-options">
+              <button className="hide-option" onClick={async () => {
+                setShowHideModal(false)
+                if (!user?.id) return
+                try {
+                  await reelsApi.hideUser(user.id)
+                  if (onTrackActivity) onTrackActivity('hide_user', reel)
+                  if (onHide) onHide(reel?.id, 'user', user.id)
+                } catch (error) {
+                  console.error('Hide user error:', error)
+                }
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="7" r="4" />
+                  <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
+                  <path d="M2 2l20 20" />
+                </svg>
+                <div className="hide-option-text">
+                  <span className="hide-option-title">Hide posts from this user</span>
+                </div>
+              </button>
+              <button className="hide-option" onClick={async () => {
+                setShowHideModal(false)
+                if (!reel?.id) return
+                try {
+                  await reelsApi.hideReel(reel.id, 'not_interested')
+                  if (onTrackActivity) onTrackActivity('hide', reel)
+                  if (onHide) onHide(reel?.id, 'post')
+                } catch (error) {
+                  console.error('Hide reel error:', error)
+                }
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 3l18 18" />
+                </svg>
+                <div className="hide-option-text">
+                  <span className="hide-option-title">Hide posts like this</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && createPortal(
+        <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
+          <div className="modal-content report-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Report this post</h3>
+            <p>Why are you reporting this?</p>
+            <div className="report-options">
+              {[
+                { value: 'spam', label: 'Spam' },
+                { value: 'harassment', label: 'Harassment or bullying' },
+                { value: 'hate_speech', label: 'Hate speech' },
+                { value: 'violence', label: 'Violence or dangerous content' },
+                { value: 'nudity', label: 'Nudity or sexual content' },
+                { value: 'misinformation', label: 'False information' },
+                { value: 'other', label: 'Other' },
+              ].map((reason) => (
+                <button
+                  key={reason.value}
+                  className={`report-option ${selectedReportReason === reason.value ? 'selected' : ''}`}
+                  onClick={() => setSelectedReportReason(reason.value)}
+                >
+                  {reason.label}
+                  {selectedReportReason === reason.value && (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={() => {
+                setShowReportModal(false)
+                setSelectedReportReason(null)
+              }}>
+                Cancel
+              </button>
+              <button
+                className={`modal-submit ${selectedReportReason ? 'active' : ''}`}
+                disabled={!selectedReportReason}
+                onClick={async () => {
+                  if (!reel?.id || !selectedReportReason) return
+                  try {
+                    await reportsApi.reportReel(reel.id, selectedReportReason)
+                    setShowReportModal(false)
+                    setSelectedReportReason(null)
+                    // Remove reel from feed after reporting
+                    if (onHide) onHide(reel.id, 'post')
+                  } catch (error) {
+                    console.error('Report error:', error)
+                  }
+                }}
+              >
+                Submit Report
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Repost Menu */}
       {showRepostMenu && createPortal(
@@ -241,7 +603,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search"
+                  placeholder="Search users & parties..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -263,114 +625,220 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
             {/* Create Group Expanded View */}
             {createGroupExpanded ? (
               <div className="create-group-content">
-                {/* Parties */}
-                <div className="share-section">
-                  <h4 className="share-section-title">Parties</h4>
-                  <div className="share-section-row">
-                    {recentContacts
-                      .filter(c => c.type === 'party' && c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((contact) => (
-                        <button
-                          key={contact.id}
-                          className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedContacts(prev =>
-                              prev.includes(contact.id)
-                                ? prev.filter(id => id !== contact.id)
-                                : [...prev, contact.id]
-                            )
-                          }}
-                        >
-                          <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
-                            <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
-                            {contact.active && <span className="share-contact-active">{contact.active}</span>}
-                          </div>
-                          <span className="share-contact-name">{contact.name}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                {isSearching ? (
+                  <div className="share-contacts-loading" style={{ padding: '40px 20px', textAlign: 'center' }}>Searching...</div>
+                ) : searchQuery.length >= 2 ? (
+                  // Show search results grouped by type
+                  <>
+                    {/* Search Results - Parties */}
+                    {searchResults.filter(c => c.type === 'party').length > 0 && (
+                      <div className="share-section">
+                        <h4 className="share-section-title">Parties</h4>
+                        <div className="share-section-row">
+                          {searchResults
+                            .filter(c => c.type === 'party')
+                            .map((contact) => (
+                              <button
+                                key={contact.id}
+                                className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedContacts(prev =>
+                                    prev.includes(contact.id)
+                                      ? prev.filter(id => id !== contact.id)
+                                      : [...prev, contact.id]
+                                  )
+                                }}
+                              >
+                                <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                                  <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                                </div>
+                                <span className="share-contact-name">{contact.name}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
 
-                {/* Users */}
-                <div className="share-section">
-                  <h4 className="share-section-title">Users</h4>
-                  <div className="share-section-row">
-                    {recentContacts
-                      .filter(c => c.type === 'user' && c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((contact) => (
-                        <button
-                          key={contact.id}
-                          className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedContacts(prev =>
-                              prev.includes(contact.id)
-                                ? prev.filter(id => id !== contact.id)
-                                : [...prev, contact.id]
-                            )
-                          }}
-                        >
-                          <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
-                            <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
-                            {contact.active && <span className="share-contact-active">{contact.active}</span>}
-                          </div>
-                          <span className="share-contact-name">{contact.name}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                    {/* Search Results - Users */}
+                    {searchResults.filter(c => c.type === 'user').length > 0 && (
+                      <div className="share-section">
+                        <h4 className="share-section-title">Users</h4>
+                        <div className="share-section-row">
+                          {searchResults
+                            .filter(c => c.type === 'user')
+                            .map((contact) => (
+                              <button
+                                key={contact.id}
+                                className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedContacts(prev =>
+                                    prev.includes(contact.id)
+                                      ? prev.filter(id => id !== contact.id)
+                                      : [...prev, contact.id]
+                                  )
+                                }}
+                              >
+                                <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                                  <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                                </div>
+                                <span className="share-contact-name">{contact.name}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
 
-                {/* Group Chats */}
-                <div className="share-section">
-                  <h4 className="share-section-title">Group Chats</h4>
-                  <div className="share-section-row">
-                    {recentContacts
-                      .filter(c => c.type === 'group' && c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((contact) => (
-                        <button
-                          key={contact.id}
-                          className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedContacts(prev =>
-                              prev.includes(contact.id)
-                                ? prev.filter(id => id !== contact.id)
-                                : [...prev, contact.id]
-                            )
-                          }}
-                        >
-                          <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
-                            <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
-                            {contact.active && <span className="share-contact-active">{contact.active}</span>}
-                          </div>
-                          <span className="share-contact-name">{contact.name}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                    {searchResults.length === 0 && (
+                      <div className="share-contacts-empty" style={{ padding: '40px 20px', textAlign: 'center' }}>No results for "{searchQuery}"</div>
+                    )}
+                  </>
+                ) : (
+                  // Show recent contacts grouped by type
+                  <>
+                    {/* Parties */}
+                    <div className="share-section">
+                      <h4 className="share-section-title">Parties</h4>
+                      <div className="share-section-row">
+                        {recentContacts
+                          .filter(c => c.type === 'party')
+                          .map((contact) => (
+                            <button
+                              key={contact.id}
+                              className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedContacts(prev =>
+                                  prev.includes(contact.id)
+                                    ? prev.filter(id => id !== contact.id)
+                                    : [...prev, contact.id]
+                                )
+                              }}
+                            >
+                              <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                                <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                                {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                              </div>
+                              <span className="share-contact-name">{contact.name}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Users */}
+                    <div className="share-section">
+                      <h4 className="share-section-title">Users</h4>
+                      <div className="share-section-row">
+                        {recentContacts
+                          .filter(c => c.type === 'user')
+                          .map((contact) => (
+                            <button
+                              key={contact.id}
+                              className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedContacts(prev =>
+                                  prev.includes(contact.id)
+                                    ? prev.filter(id => id !== contact.id)
+                                    : [...prev, contact.id]
+                                )
+                              }}
+                            >
+                              <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                                <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                                {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                              </div>
+                              <span className="share-contact-name">{contact.name}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Group Chats */}
+                    <div className="share-section">
+                      <h4 className="share-section-title">Group Chats</h4>
+                      <div className="share-section-row">
+                        {recentContacts
+                          .filter(c => c.type === 'group')
+                          .map((contact) => (
+                            <button
+                              key={contact.id}
+                              className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedContacts(prev =>
+                                  prev.includes(contact.id)
+                                    ? prev.filter(id => id !== contact.id)
+                                    : [...prev, contact.id]
+                                )
+                              }}
+                            >
+                              <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                                <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                                {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                              </div>
+                              <span className="share-contact-name">{contact.name}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
-              /* Recent contacts grid */
+              /* Recent contacts grid - shows search results when searching, otherwise recent contacts */
               <div className="share-contacts-grid">
-              {recentContacts
-                .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((contact) => (
-                  <button
-                    key={contact.id}
-                    className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''} ${contact.type}`}
-                    onClick={() => {
-                      setSelectedContacts(prev =>
-                        prev.includes(contact.id)
-                          ? prev.filter(id => id !== contact.id)
-                          : [...prev, contact.id]
-                      )
-                    }}
-                  >
-                    <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
-                      <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
-                      {contact.active && <span className="share-contact-active">{contact.active}</span>}
-                    </div>
-                    <span className="share-contact-name">{contact.name}</span>
-                  </button>
-                ))}
+                {loadingContacts && recentContacts.length === 0 ? (
+                  <div className="share-contacts-loading">Loading contacts...</div>
+                ) : isSearching ? (
+                  <div className="share-contacts-loading">Searching...</div>
+                ) : searchQuery.length >= 2 ? (
+                  // Show search results when searching
+                  searchResults.length === 0 ? (
+                    <div className="share-contacts-empty">No results for "{searchQuery}"</div>
+                  ) : (
+                    searchResults.map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''} ${contact.type}`}
+                        onClick={() => {
+                          setSelectedContacts(prev =>
+                            prev.includes(contact.id)
+                              ? prev.filter(id => id !== contact.id)
+                              : [...prev, contact.id]
+                          )
+                        }}
+                      >
+                        <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                          {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                  )
+                ) : recentContacts.length === 0 ? (
+                  <div className="share-contacts-empty">No contacts yet</div>
+                ) : (
+                  // Show recent contacts (local filter for quick matching)
+                  recentContacts
+                    .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${selectedContacts.includes(contact.id) ? 'selected' : ''} ${contact.type}`}
+                        onClick={() => {
+                          setSelectedContacts(prev =>
+                            prev.includes(contact.id)
+                              ? prev.filter(id => id !== contact.id)
+                              : [...prev, contact.id]
+                          )
+                        }}
+                      >
+                        <div className={`share-contact-avatar-wrap ${selectedContacts.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                          {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                )}
               </div>
             )}
 

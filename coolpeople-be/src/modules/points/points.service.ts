@@ -26,6 +26,27 @@ export const recordPointEvent = async (params: RecordPointEventParams): Promise<
   let ledger;
 
   if (targetUserId) {
+    // Check if user is a PARTICIPANT - if so, save to pending points
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { userType: true },
+    });
+
+    if (user?.userType === 'PARTICIPANT') {
+      // Save to pending points instead of actual ledger
+      await prisma.pendingPoints.create({
+        data: {
+          userId: targetUserId,
+          raceId,
+          action: action as any,
+          points,
+          sourceUserId,
+          sourceReelId,
+        },
+      });
+      return; // Don't create actual ledger for participants
+    }
+
     ledger = await prisma.pointLedger.findUnique({
       where: { userId_raceId: { userId: targetUserId, raceId } },
     });
@@ -329,4 +350,123 @@ const getPeriodDateFilter = (period: string): Date | null => {
     default:
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
+};
+
+// -----------------------------------------------------------------------------
+// Transfer Pending Points
+// Called when a PARTICIPANT opts-in to become a CANDIDATE
+// -----------------------------------------------------------------------------
+
+export const transferPendingPoints = async (userId: string): Promise<{ transferred: number; totalPoints: number }> => {
+  // Get all pending points for this user
+  const pendingPoints = await prisma.pendingPoints.findMany({
+    where: { userId },
+  });
+
+  if (pendingPoints.length === 0) {
+    return { transferred: 0, totalPoints: 0 };
+  }
+
+  let totalPointsTransferred = 0;
+
+  // Transfer each pending point event
+  for (const pending of pendingPoints) {
+    try {
+      // Now that user is a CANDIDATE, record the point event normally
+      // First ensure they're a competitor in the race (join CoolPeople by default)
+      const existingCompetitor = await prisma.raceCompetitor.findUnique({
+        where: { raceId_userId: { raceId: pending.raceId, userId } },
+      });
+
+      if (!existingCompetitor) {
+        // Auto-join the race as a competitor
+        await prisma.raceCompetitor.create({
+          data: { raceId: pending.raceId, userId },
+        });
+      }
+
+      // Find or create ledger
+      let ledger = await prisma.pointLedger.findUnique({
+        where: { userId_raceId: { userId, raceId: pending.raceId } },
+      });
+
+      if (!ledger) {
+        ledger = await prisma.pointLedger.create({
+          data: { userId, raceId: pending.raceId, totalPoints: 0, tier: 'BRONZE' },
+        });
+      }
+
+      const expiresAt = new Date(Date.now() + POINT_DECAY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+      // Create point event and update ledger
+      const newTotal = ledger.totalPoints + pending.points;
+      const newTier = getTierFromPoints(newTotal);
+
+      await prisma.$transaction([
+        prisma.pointEvent.create({
+          data: {
+            ledgerId: ledger.id,
+            action: pending.action,
+            points: pending.points,
+            sourceUserId: pending.sourceUserId,
+            sourceReelId: pending.sourceReelId,
+            expiresAt,
+          },
+        }),
+        prisma.pointLedger.update({
+          where: { id: ledger.id },
+          data: {
+            totalPoints: { increment: pending.points },
+            tier: newTier,
+          },
+        }),
+        // Delete the pending point record
+        prisma.pendingPoints.delete({
+          where: { id: pending.id },
+        }),
+      ]);
+
+      totalPointsTransferred += pending.points;
+    } catch (error) {
+      console.error(`Failed to transfer pending point ${pending.id}:`, error);
+    }
+  }
+
+  return { transferred: pendingPoints.length, totalPoints: totalPointsTransferred };
+};
+
+// -----------------------------------------------------------------------------
+// Get Pending Points Summary
+// For displaying to PARTICIPANT users how many points they'll get on opt-in
+// -----------------------------------------------------------------------------
+
+export const getPendingPointsSummary = async (userId: string): Promise<{ totalPending: number; byRace: { raceId: string; raceName: string; points: number }[] }> => {
+  const pending = await prisma.pendingPoints.groupBy({
+    by: ['raceId'],
+    where: { userId },
+    _sum: { points: true },
+  });
+
+  if (pending.length === 0) {
+    return { totalPending: 0, byRace: [] };
+  }
+
+  // Get race names
+  const raceIds = pending.map((p) => p.raceId);
+  const races = await prisma.race.findMany({
+    where: { id: { in: raceIds } },
+    select: { id: true, title: true },
+  });
+
+  const raceMap = new Map(races.map((r) => [r.id, r.title]));
+
+  const byRace = pending.map((p) => ({
+    raceId: p.raceId,
+    raceName: raceMap.get(p.raceId) || 'Unknown Race',
+    points: p._sum.points || 0,
+  }));
+
+  const totalPending = byRace.reduce((sum, r) => sum + r.points, 0);
+
+  return { totalPending, byRace };
 };

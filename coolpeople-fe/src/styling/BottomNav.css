@@ -11,7 +11,7 @@
   padding: 12px 8px 24px;
   background-color: var(--bg-secondary);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 1001; /* Above overlays */
+  z-index: 100; /* Below native share sheets, above app content */
 }
 
 .nav-item {

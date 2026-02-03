@@ -50,4 +50,11 @@ router.get(
   pointsController.getSparkline
 );
 
+// GET /api/points/pending - Get pending points for current user (PARTICIPANT only)
+router.get(
+  '/pending',
+  requireAuth,
+  pointsController.getPendingPoints
+);
+
 export default router;

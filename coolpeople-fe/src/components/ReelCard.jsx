@@ -171,14 +171,10 @@ const parseNominations = (str) => parseInt(str.replace(/,/g, ''), 10)
 // Helper to format number to nomination string
 const formatNominations = (num) => num.toLocaleString()
 
-// Mock followed races for main nominate button (empty = just CoolPeople)
-const mockFollowedRaces = [
-  { id: 'mayor', name: 'Mayor Race', icon: 'https://i.pravatar.cc/40?img=60' },
-  { id: 'council', name: 'City Council', icon: 'https://i.pravatar.cc/40?img=52' },
-  { id: 'pinklady', name: 'The Pink Lady', icon: 'https://i.pravatar.cc/40?img=47' },
-]
+// Default race for nominations
+const DEFAULT_RACE = { id: 'coolpeople', name: 'CoolPeople', icon: '/coolpeople-icon.png' }
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onHide, userRacesFollowing = [] }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -238,11 +234,11 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [raceFollowed, setRaceFollowed] = useState(false)
   const [raceParticipating, setRaceParticipating] = useState(false)
   const [raceScoreboard, setRaceScoreboard] = useState([])
-  const [followedRaces, setFollowedRaces] = useState([])
 
-  // Record view when reel becomes visible
+  // Record view when reel becomes visible (only for valid UUIDs, not temp IDs)
   useEffect(() => {
-    if (isVisible && reel?.id) {
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (isVisible && reel?.id && uuidPattern.test(reel.id)) {
       const recordView = async () => {
         try {
           await reelsApi.recordView(reel.id, { watchPercent: 0 })
@@ -283,25 +279,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     fetchScoreboard()
   }, [showRaceModal, reel?.targetRace])
 
-  // Fetch followed races for nomination
-  useEffect(() => {
-    const fetchFollowedRaces = async () => {
-      try {
-        const response = await racesApi.listRaces({ type: 'followed' })
-        if (response.data && response.data.length > 0) {
-          setFollowedRaces(response.data.map(r => ({
-            id: r.id,
-            name: r.title,
-            icon: r.bannerUrl || 'https://i.pravatar.cc/40?img=60',
-          })))
-        }
-      } catch (error) {
-        console.log('Using mock followed races:', error.message)
-      }
-    }
-    fetchFollowedRaces()
-  }, [])
-
+  
   // Mock race deadline (290 days from now for demo)
   const [raceDeadline] = useState(() => {
     const deadline = new Date()
@@ -456,9 +434,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         {/* Top engagement sparkline charts */}
         <EngagementScoreBar scores={data.engagementScores} onItemClick={(score) => { pauseVideo(); onEngagementClick?.(score) }} />
 
-        {/* Right side actions - move down when no nominate button (participant posts) */}
-        <div className={`reel-actions-container ${data.user?.isParticipant ? 'no-nominate' : ''}`}>
-          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} onLikeChange={onLikeChange} />
+        {/* Right side actions */}
+        <div className="reel-actions-container">
+          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} onLikeChange={onLikeChange} onHide={onHide} isPageActive={isPageActive} />
         </div>
 
         {/* Bottom info */}
@@ -502,9 +480,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             <p className="reel-title">{data.title}</p>
             <p className="reel-caption">{data.caption}</p>
           </div>
-          {/* Hide nominate button for participant posts (they can't be nominated as candidates) */}
-          {!data.user?.isParticipant && (
-            <button
+          {/* Nominate button */}
+          <button
               className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
               onClick={() => {
                 if (hasNominatedPoster) return // Already nominated
@@ -516,12 +493,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   if (onTrackActivity) {
                     onTrackActivity('nominate', data)
                   }
-                } else if ((followedRaces.length > 0 || mockFollowedRaces.length > 0)) {
-                  // No target race but has followed races, show race selection first
-                  setShowNominateRaceSelect(true)
                 } else {
-                  // No followed races, go to quote screen with no race
-                  setShowQuoteNominate(true)
+                  // No target race - show race selection with default + user's followed races
+                  setShowNominateRaceSelect(true)
                 }
               }}
             >
@@ -531,7 +505,6 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 <span>Nominate</span>
               )}
             </button>
-          )}
         </div>
       </div>
 
@@ -733,8 +706,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   <span className="nominate-race-tag">Current</span>
                 </button>
               )}
-              {/* Followed races - use API data with mock fallback */}
-              {(followedRaces.length > 0 ? followedRaces : mockFollowedRaces).map(race => (
+              {/* Default CoolPeople race */}
+              <button
+                className="nominate-race-item"
+                onClick={() => {
+                  setSelectedRaceForNomination(DEFAULT_RACE)
+                  setShowNominateRaceSelect(false)
+                  setShowNominateOptions(true)
+                }}
+              >
+                <span className="nominate-race-dot"></span>
+                <span className="nominate-race-name">{DEFAULT_RACE.name}</span>
+                <span className="nominate-race-tag">Default</span>
+              </button>
+              {/* User's followed races */}
+              {userRacesFollowing.map(race => (
                 <button
                   key={race.id}
                   className="nominate-race-item"
@@ -744,7 +730,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     setShowNominateOptions(true)
                   }}
                 >
-                  <img src={race.icon} alt={race.name} className="nominate-race-icon" />
+                  <img src={race.avatarUrl || race.icon || `https://i.pravatar.cc/40?u=${race.id}`} alt={race.name} className="nominate-race-icon" />
                   <span className="nominate-race-name">{race.name}</span>
                 </button>
               ))}

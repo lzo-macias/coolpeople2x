@@ -362,7 +362,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
@@ -401,6 +401,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         const profileRes = await usersApi.getUser(userId)
         // Backend returns { success: true, data: { user: profile } }
         const profileData = profileRes.data?.user || profileRes.user || profileRes.data || profileRes
+
+        // If user is a PARTICIPANT (not CANDIDATE), switch to ParticipantProfile
+        if (profileData.userType === 'PARTICIPANT' && onUserTypeChange) {
+          onUserTypeChange('PARTICIPANT', {
+            ...profileData,
+            id: profileData.id || userId,
+            userId: profileData.userId || userId,
+          })
+          return // Exit early - parent will switch to ParticipantProfile
+        }
+
         setFetchedProfile(profileData)
 
         // Update the centralized cache with fresh data

@@ -198,7 +198,7 @@ export const reelsApi = {
 
   hideUser: (userId) => apiFetch('/api/reels/hide-user', {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ hiddenUserId: userId }),
   }),
 };
 
@@ -515,6 +515,9 @@ export const messagesApi = {
 
 export const pointsApi = {
   getSparkline: (ledgerId) => apiFetch(`/api/points/sparkline/${ledgerId}`),
+
+  // Get pending points for PARTICIPANT users (points accumulated until they opt-in)
+  getPendingPoints: () => apiFetch('/api/points/pending'),
 };
 
 // =============================================================================
@@ -679,6 +682,40 @@ export const groupchatsApi = {
 };
 
 // =============================================================================
+// Reports API
+// =============================================================================
+
+export const reportsApi = {
+  // Create a report
+  create: (data) => apiFetch('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  // Convenience method for reporting a reel
+  reportReel: (reelId, reason, description) => apiFetch('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify({
+      targetType: 'REEL',
+      targetId: reelId,
+      reason,
+      description,
+    }),
+  }),
+
+  // Convenience method for reporting a user
+  reportUser: (userId, reason, description) => apiFetch('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify({
+      targetType: 'USER',
+      targetId: userId,
+      reason,
+      description,
+    }),
+  }),
+};
+
+// =============================================================================
 // Export all APIs
 // =============================================================================
 
@@ -698,4 +735,5 @@ export default {
   reviews: reviewsApi,
   icebreakers: icebreakersApi,
   groupchats: groupchatsApi,
+  reports: reportsApi,
 };

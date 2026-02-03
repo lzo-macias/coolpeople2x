@@ -64,3 +64,13 @@ export const getSparkline = async (req: Request, res: Response): Promise<void> =
   const data = await pointsService.getSparklineData(ledgerId, period);
   sendSuccess(res, { sparkline: data });
 };
+
+// -----------------------------------------------------------------------------
+// GET /api/points/pending - Get pending points for current user
+// Shows points accumulated while user was a PARTICIPANT
+// -----------------------------------------------------------------------------
+
+export const getPendingPoints = async (req: Request, res: Response): Promise<void> => {
+  const summary = await pointsService.getPendingPointsSummary(req.user!.userId);
+  sendSuccess(res, summary);
+};

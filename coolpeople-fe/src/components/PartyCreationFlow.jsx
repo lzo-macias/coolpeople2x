@@ -561,11 +561,17 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     onComplete?.(partyData)
   }
 
-  // Check party name availability on blur
-  const handleNameBlur = async () => {
-    const name = partyName.trim()
+  // Debounce refs for real-time validation
+  const nameCheckTimeoutRef = useRef(null)
+  const handleCheckTimeoutRef = useRef(null)
+
+  // Check party name availability (debounced, called on every keystroke)
+  const checkNameAvailability = useCallback(async (name) => {
+    console.log('🔍 checkNameAvailability called with:', name)
     if (!name || name.length < 2) {
+      console.log('🔍 Name too short, skipping check')
       setNameWarning('')
+      setIsCheckingName(false)
       return
     }
 
@@ -573,56 +579,107 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     try {
       // Format name the same way we'll submit it
       const formattedName = `${formatPartyName(name)} Party`
-      const result = await partiesApi.checkName(formattedName, null)
-      if (!result.available && result.takenBy === 'name') {
-        setNameWarning('Party name taken')
+      console.log('🔍 Checking formatted name:', formattedName)
+      const response = await partiesApi.checkName(formattedName, null)
+      console.log('🔍 Name check raw response:', response)
+      // API returns { success: true, data: { available, takenBy } }
+      const result = response.data || response
+      console.log('🔍 Name check result:', result)
+      if (!result.available) {
+        console.log('🚨 Name NOT available, takenBy:', result.takenBy)
+        setNameWarning('Party name already taken')
       } else {
+        console.log('✅ Name is available')
         setNameWarning('')
       }
     } catch (error) {
-      console.error('Error checking party name:', error)
+      console.error('❌ Error checking party name:', error)
       setNameWarning('')
     } finally {
       setIsCheckingName(false)
     }
-  }
+  }, [])
 
-  // Check party handle availability on blur
-  const handleHandleBlur = async () => {
-    const handle = partyHandle.trim()
+  // Check party handle availability (debounced, called on every keystroke)
+  const checkHandleAvailability = useCallback(async (handle) => {
+    console.log('🔍 checkHandleAvailability called with:', handle)
     if (!handle || handle.length < 3) {
+      console.log('🔍 Handle too short, skipping check')
       setHandleWarning('')
+      setIsCheckingHandle(false)
       return
     }
 
     setIsCheckingHandle(true)
     try {
-      const result = await partiesApi.checkName(null, handle)
-      if (!result.available && result.takenBy === 'handle') {
-        setHandleWarning('Handle taken')
+      console.log('🔍 Checking handle:', handle)
+      const response = await partiesApi.checkName(null, handle)
+      console.log('🔍 Handle check raw response:', response)
+      // API returns { success: true, data: { available, takenBy } }
+      const result = response.data || response
+      console.log('🔍 Handle check result:', result)
+      if (!result.available) {
+        console.log('🚨 Handle NOT available, takenBy:', result.takenBy)
+        setHandleWarning('Handle already taken')
       } else {
+        console.log('✅ Handle is available')
         setHandleWarning('')
       }
     } catch (error) {
-      console.error('Error checking party handle:', error)
+      console.error('❌ Error checking party handle:', error)
       setHandleWarning('')
     } finally {
       setIsCheckingHandle(false)
     }
-  }
+  }, [])
 
-  // Clear warnings when input changes
+  // Handle name change with debounced validation
   const handleNameChange = (e) => {
-    setPartyName(e.target.value)
-    if (nameWarning) setNameWarning('')
+    const value = e.target.value
+    console.log('📝 Name changed to:', value)
+    setPartyName(value)
+
+    // Clear previous timeout
+    if (nameCheckTimeoutRef.current) {
+      clearTimeout(nameCheckTimeoutRef.current)
+    }
+
+    // Debounce the API call (300ms)
+    console.log('📝 Setting name check timeout...')
+    nameCheckTimeoutRef.current = setTimeout(() => {
+      console.log('📝 Name timeout fired, calling checkNameAvailability')
+      checkNameAvailability(value.trim())
+    }, 300)
   }
 
+  // Handle handle change with debounced validation
   const handleHandleChange = (e) => {
-    setPartyHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
-    if (handleWarning) setHandleWarning('')
+    const value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
+    console.log('📝 Handle changed to:', value)
+    setPartyHandle(value)
+
+    // Clear previous timeout
+    if (handleCheckTimeoutRef.current) {
+      clearTimeout(handleCheckTimeoutRef.current)
+    }
+
+    // Debounce the API call (300ms)
+    console.log('📝 Setting handle check timeout...')
+    handleCheckTimeoutRef.current = setTimeout(() => {
+      console.log('📝 Handle timeout fired, calling checkHandleAvailability')
+      checkHandleAvailability(value.trim())
+    }, 300)
   }
 
-  const canCreate = partyHandle.trim().length >= 3 && !nameWarning && !handleWarning
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (nameCheckTimeoutRef.current) clearTimeout(nameCheckTimeoutRef.current)
+      if (handleCheckTimeoutRef.current) clearTimeout(handleCheckTimeoutRef.current)
+    }
+  }, [])
+
+  const canCreate = partyHandle.trim().length >= 3 && !nameWarning && !handleWarning && !isCheckingName && !isCheckingHandle
 
   return (
     <div className="party-screen">
@@ -738,10 +795,12 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             placeholder="partyhandle"
             value={partyHandle}
             onChange={handleHandleChange}
-            onBlur={handleHandleBlur}
             maxLength={20}
           />
-          {handleWarning && (
+          {isCheckingHandle && (
+            <span className="party-input-checking">Checking...</span>
+          )}
+          {handleWarning && !isCheckingHandle && (
             <span className="party-input-warning">{handleWarning}</span>
           )}
         </div>
@@ -754,11 +813,13 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             placeholder="Party Name"
             value={partyName}
             onChange={handleNameChange}
-            onBlur={handleNameBlur}
             maxLength={30}
           />
           <span className="party-name-suffix">Party</span>
-          {nameWarning && (
+          {isCheckingName && (
+            <span className="party-input-checking">Checking...</span>
+          )}
+          {nameWarning && !isCheckingName && (
             <span className="party-input-warning">{nameWarning}</span>
           )}
         </div>

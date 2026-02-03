@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ParticipantProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
@@ -79,9 +79,63 @@ function ParticipantProfile({
   onMessageUser,
   onAvatarChange,
   onBioChange,
+  onUserTypeChange,
 }) {
-  // Merge passed participant with defaults, preferring cached data
-  const participant = { ...mockParticipant, ...passedParticipant, ...cachedProfile }
+  // State for fetched profile data
+  const [fetchedProfile, setFetchedProfile] = useState(null)
+
+  // Fetch fresh profile data from API to check if userType has changed
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      const userId = passedParticipant?.userId || passedParticipant?.id
+      if (!userId) return
+
+      try {
+        const profileRes = await usersApi.getUser(userId)
+        const profileData = profileRes.data?.user || profileRes.user || profileRes.data || profileRes
+
+        // If user is now a CANDIDATE (opted in), switch to CandidateProfile
+        if (profileData.userType === 'CANDIDATE' && onUserTypeChange) {
+          onUserTypeChange('CANDIDATE', {
+            ...profileData,
+            id: profileData.id || userId,
+            userId: profileData.userId || userId,
+          })
+          return // Exit early - parent will switch to CandidateProfile
+        }
+
+        setFetchedProfile(profileData)
+
+        // Update the centralized cache with fresh data
+        if (onProfileLoaded && profileData) {
+          onProfileLoaded({
+            ...profileData,
+            id: profileData.id || userId,
+            userId: profileData.userId || userId,
+          })
+        }
+      } catch (error) {
+        console.log('Failed to fetch profile:', error.message)
+      }
+    }
+
+    fetchProfileData()
+  }, [passedParticipant?.userId, passedParticipant?.id])
+
+  // Merge passed participant with defaults, preferring fetched data, then cached data
+  // Normalize party to string (API returns object {id, name})
+  const normalizeParty = (p) => {
+    if (!p) return null
+    if (typeof p === 'string') return p
+    return p.name || null
+  }
+  const participant = {
+    ...mockParticipant,
+    ...passedParticipant,
+    ...cachedProfile,
+    ...fetchedProfile,
+    party: normalizeParty(fetchedProfile?.party) || normalizeParty(cachedProfile?.party) || normalizeParty(passedParticipant?.party) || mockParticipant.party,
+  }
 
   const [activeTab, setActiveTab] = useState('posts')
   const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter

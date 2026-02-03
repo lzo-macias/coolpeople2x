@@ -200,6 +200,7 @@ model User {
 
   // Points
   pointLedgers    PointLedger[]
+  pendingPoints   PendingPoints[]
 
   // Messaging
   dmsSent         DirectMessage[] @relation("DMSender")
@@ -409,6 +410,7 @@ model Race {
 
   // Points
   pointLedgers    PointLedger[]
+  pendingPoints   PendingPoints[]
 
   // Ballots
   ballots         Ballot[]
@@ -854,6 +856,28 @@ model PointEvent {
   @@index([ledgerId, createdAt])  // For sparkline queries
   @@index([createdAt])            // For decay processing
   @@index([expiresAt, isExpired]) // For decay job queries
+}
+
+// Pending points for PARTICIPANT users (saved until they opt-in as CANDIDATE)
+model PendingPoints {
+  id              String      @id @default(uuid())
+  userId          String
+  raceId          String
+
+  action          PointAction
+  points          Float
+
+  // Reference to what triggered this (for auditing)
+  sourceUserId    String?     // Who caused this event (e.g., nominator)
+  sourceReelId    String?     // Related reel if applicable
+
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race            Race        @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, raceId])
 }
 
 // =============================================================================
