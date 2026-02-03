@@ -1014,8 +1014,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         </button>
 
         <div className="conversation-user-info">
-          {isGroupChat && recipients.length > 1 ? (
-            // Show stacked avatars for groupchat
+          {isGroupChat || isPartyChat || conversation.party ? (
+            // Show stacked avatars for groupchat/party
             <>
               <div className="conversation-avatar-group">
                 {recipients.slice(0, 3).map((recipient, idx) => (
@@ -1034,7 +1034,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 )}
               </div>
               <span className="conversation-username">
-                {partyName || `${recipients.length} people`}
+                {convertedToParty?.partyName || partyName || conversation.party?.name || `${recipients.length} people`}
               </span>
             </>
           ) : (
@@ -1397,14 +1397,23 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         document.body
       )}
 
+      {/* Show PartySettings only if user has joined the party, otherwise show ChatSettings */}
       {showPartySettings && createPortal(
-        isPartyChat ? (
-          <PartySettings
-            party={{
-              name: conversation.partyName || user?.username,
-              avatar: conversation.partyAvatar || user?.avatar,
-              color: conversation.partyColor || '#EC4899'
-            }}
+        (() => {
+          // Determine the party ID for this chat
+          const chatPartyId = convertedToParty?.partyId || conversation.party?.id || conversation.partyId
+          // Check if current user has joined this party
+          const userHasJoinedParty = currentUser?.partyId && chatPartyId && currentUser.partyId === chatPartyId
+          // Show PartySettings if: it's a party chat OR user has joined the converted party
+          const showPartySettingsModal = isPartyChat || userHasJoinedParty
+
+          return showPartySettingsModal ? (
+            <PartySettings
+              party={{
+                name: convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName || user?.username,
+                avatar: convertedToParty?.partyAvatar || conversation.party?.avatarUrl || conversation.partyAvatar || user?.avatar,
+                color: convertedToParty?.partyColor || conversation.party?.color || conversation.partyColor || '#EC4899'
+              }}
             isAdmin={true}
             onClose={() => setShowPartySettings(false)}
             conversation={conversation}
@@ -1494,7 +1503,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               }
             }}
           />
-        ),
+        )
+        })(),
         document.body
       )}
 

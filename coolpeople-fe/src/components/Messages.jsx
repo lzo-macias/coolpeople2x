@@ -2265,7 +2265,6 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               <MessageItem
                 key={message.id}
                 message={message}
-                userParty={userParty}
                 isPinned={isPinned}
                 isSilenced={isSilenced}
                 isHidden={isHidden}
@@ -2284,26 +2283,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   )
 }
 
-function MessageItem({ message, userParty, isPinned, isSilenced, isHidden, isLongPressActive, onClick, onUnpin, onUnmute, onLongPress }) {
-  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat, isGroupChat, party, partyId } = message
+function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActive, onClick, onUnpin, onUnmute, onLongPress }) {
+  const { user, lastMessage, timestamp, unreadCount, isOnline, hasUnread, isPartyChat, isGroupChat, party } = message
   const partyColor = getPartyColor(party || user?.party)
 
   // Display name: party name if converted to party, else user displayName, else username
   const displayName = party?.name || user?.displayName || user?.username
-
-  // Check if this chat belongs to the user's current party
-  // Compare using party object or partyId field - userParty uses 'id' not 'partyId'
-  const chatPartyId = party?.id || partyId
-  const myPartyId = userParty?.id
-
-  const isMyPartyChat = Boolean(userParty && chatPartyId && (
-    // Match by ID (primary check)
-    chatPartyId === myPartyId ||
-    // Match by name as fallback (handles edge cases)
-    (party?.name && userParty?.name && party.name.toLowerCase() === userParty.name.toLowerCase()) ||
-    // Match by handle as fallback
-    (party?.handle && userParty?.handle && party.handle.toLowerCase() === userParty.handle.toLowerCase())
-  ))
   const longPressTimer = useRef(null)
   const itemRef = useRef(null)
 
@@ -2371,22 +2356,7 @@ function MessageItem({ message, userParty, isPinned, isSilenced, isHidden, isLon
       <div className="message-content">
         <div className="message-username-row">
           <span className="message-username">{displayName}</span>
-          {isMyPartyChat && (
-            <span
-              className="message-party-tag"
-              style={userParty?.color ? {
-                background: `linear-gradient(135deg, ${userParty.color} 0%, ${userParty.color}CC 100%)`,
-                color: '#fff',
-                boxShadow: `0 1px 3px ${userParty.color}50`
-              } : {}}
-            >
-              <svg viewBox="0 0 24 24">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-              </svg>
-              Party
-            </span>
-          )}
-          {isOnline && !isPartyChat && !isGroupChat && !isMyPartyChat && <span className="message-online-dot" />}
+          {isOnline && !isPartyChat && !isGroupChat && <span className="message-online-dot" />}
         </div>
         <span className="message-preview">{lastMessage || 'No messages yet'}</span>
       </div>

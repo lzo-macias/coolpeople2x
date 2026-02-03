@@ -653,6 +653,38 @@ export const joinParty = async (
       where: { id: userId },
       data: { partyId },
     });
+
+    // Add user to the party's groupchat if one exists (from converted groupchat)
+    const partyGroupChat = await tx.userGroupChat.findUnique({
+      where: { partyId },
+    });
+
+    if (partyGroupChat) {
+      // Check if user is already a member (shouldn't happen, but be safe)
+      const existingMember = await tx.userGroupChatMember.findUnique({
+        where: {
+          groupChatId_userId: {
+            groupChatId: partyGroupChat.id,
+            userId,
+          },
+        },
+      });
+
+      if (!existingMember) {
+        await tx.userGroupChatMember.create({
+          data: {
+            groupChatId: partyGroupChat.id,
+            userId,
+          },
+        });
+      } else if (existingMember.leftAt) {
+        // User was previously a member but left - rejoin them
+        await tx.userGroupChatMember.update({
+          where: { id: existingMember.id },
+          data: { leftAt: null },
+        });
+      }
+    }
   });
 
   // Emit socket event so new member joins chat room and existing members are notified
@@ -762,13 +794,29 @@ export const leaveParty = async (
   }
 
   // Clear user's primary party affiliation if leaving their primary party
-  await prisma.$transaction([
-    prisma.partyMembership.delete({ where: { id: membership.id } }),
-    prisma.user.updateMany({
+  await prisma.$transaction(async (tx) => {
+    await tx.partyMembership.delete({ where: { id: membership.id } });
+    await tx.user.updateMany({
       where: { id: userId, partyId },
       data: { partyId: null },
-    }),
-  ]);
+    });
+
+    // Remove user from the party's groupchat if one exists
+    const partyGroupChat = await tx.userGroupChat.findUnique({
+      where: { partyId },
+    });
+
+    if (partyGroupChat) {
+      // Mark user as left (soft delete) so they don't see new messages
+      await tx.userGroupChatMember.updateMany({
+        where: {
+          groupChatId: partyGroupChat.id,
+          userId,
+        },
+        data: { leftAt: new Date() },
+      });
+    }
+  });
 
   // Emit socket event so member leaves chat room and existing members are notified
   emitMemberLeftParty(partyId, userId);

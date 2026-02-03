@@ -8,6 +8,10 @@ import '../styling/ChatSettings.css'
 function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, groupChatCreatorId = null, onClose, conversation, onSettingsChange, groupChatId = null, currentUserId = null, onPartyCreated = null }) {
   const [activeSection, setActiveSection] = useState(null)
 
+  // Debug: Check if Create Party should show
+  const isCreator = currentUserId && groupChatCreatorId && currentUserId === groupChatCreatorId
+  console.log('ChatSettings - isGroupChat:', isGroupChat, 'currentUserId:', currentUserId, 'groupChatCreatorId:', groupChatCreatorId, 'isCreator:', isCreator)
+
   // Get party color - gray for independent, party color otherwise
   const partyColor = getPartyColor(chat?.party)
 
