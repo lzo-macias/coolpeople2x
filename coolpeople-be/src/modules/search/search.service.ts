@@ -94,12 +94,17 @@ const searchUsers = async (
   limit: number,
   blockedIds: string[]
 ): Promise<SearchUserResult[]> => {
+  // If query is empty or just whitespace, return all users (for invite modals)
+  const hasQuery = query && query.trim().length > 0;
+
   const users = await prisma.user.findMany({
     where: {
-      OR: [
-        { username: { contains: query, mode: 'insensitive' } },
-        { displayName: { contains: query, mode: 'insensitive' } },
-      ],
+      ...(hasQuery && {
+        OR: [
+          { username: { contains: query, mode: 'insensitive' } },
+          { displayName: { contains: query, mode: 'insensitive' } },
+        ],
+      }),
       ...(blockedIds.length > 0 && { id: { notIn: blockedIds } }),
     },
     take: limit,

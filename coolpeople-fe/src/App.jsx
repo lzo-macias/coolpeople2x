@@ -22,7 +22,7 @@ import SinglePostView from './components/SinglePostView'
 import Login from './components/Login'
 import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi } from './services/api'
+import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
 import { mockReels, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
@@ -31,7 +31,7 @@ const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile'
 
 function AppContent() {
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
-  const { user: authUser, isAuthenticated, loading: authLoading } = useAuth()
+  const { user: authUser, isAuthenticated, loading: authLoading, refreshUser, updateUser } = useAuth()
   const [authView, setAuthView] = useState('login') // 'login' or 'register'
   const [currentPage, setCurrentPage] = useState(1) // Start on home
   const [showComments, setShowComments] = useState(false)
@@ -65,6 +65,7 @@ function AppContent() {
   const [partyProfiles, setPartyProfiles] = useState({}) // Party profiles cache (populated from API)
   const [userProfilesCache, setUserProfilesCache] = useState({}) // Centralized user profiles cache
   const [scoreboardRefreshKey, setScoreboardRefreshKey] = useState(0) // Triggers scoreboard refetch when changed
+  const [conversationsRefreshKey, setConversationsRefreshKey] = useState(0) // Triggers conversations refetch
   const [messageTargetUser, setMessageTargetUser] = useState(null) // User to start conversation with
   const [showConversationOverlay, setShowConversationOverlay] = useState(false) // Show conversation as overlay
   const [overlayConversation, setOverlayConversation] = useState(null) // Conversation data for overlay
@@ -114,7 +115,12 @@ function AppContent() {
       }
     }
     fetchConversations()
-  }, [isAuthenticated])
+  }, [isAuthenticated, conversationsRefreshKey])
+
+  // Callback to refresh conversations (e.g., after joining a party)
+  const refreshConversations = () => {
+    setConversationsRefreshKey(prev => prev + 1)
+  }
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -405,6 +411,71 @@ function AppContent() {
     racesFollowing: userRacesFollowing,
     racesCompeting: userRacesCompeting,
     points: userPoints,
+  }
+
+  // Handle party creation from groupchat - converts groupchat to party chat
+  const handlePartyCreatedFromGroupchat = async (partyData, groupChatId, memberIds) => {
+    try {
+      // 1. Create the party in backend, passing groupChatId to convert existing chat
+      const createPayload = {
+        name: partyData.name,
+        handle: partyData.handle,
+        description: partyData.bio || '',
+        isPrivate: partyData.privacy === 'private',
+        chatMode: partyData.type === 'closed' ? 'ADMIN_ONLY' : 'OPEN',
+        groupChatId: groupChatId, // Convert existing groupchat to party chat
+      }
+      if (partyData.photo && typeof partyData.photo === 'string') {
+        createPayload.avatarUrl = partyData.photo
+      }
+      console.log('Creating party from groupchat:', createPayload)
+      const response = await partiesApi.createParty(createPayload)
+      const createdParty = response.data?.party || response.party || response.data || response
+
+      // 2. Update creator's party affiliation locally
+      const fullPartyData = {
+        id: createdParty.id,
+        name: partyData.name,
+        handle: partyData.handle,
+        bio: partyData.bio,
+        photo: partyData.photo,
+        color: partyData.color,
+        type: partyData.type,
+        privacy: partyData.privacy,
+        stats: partyData.stats,
+        isNewParty: true,
+      }
+      setUserParty(fullPartyData)
+
+      // Refresh auth user to get updated partyId from backend
+      await refreshUser()
+      console.log('Party affiliation updated for creator')
+
+      // 3. Send invite message to the groupchat (now party chat)
+      // This message serves as the invite for all members to join
+      await groupchatsApi.sendMessage(
+        groupChatId,
+        `This group is now ${partyData.name}! Accept the invite to continue seeing messages.`,
+        {
+          type: 'party_invite',
+          partyId: createdParty.id,
+          partyHandle: partyData.handle,
+          partyName: partyData.name,
+          partyColor: partyData.color,
+          partyAvatar: partyData.photo,
+          fromGroupChat: true,
+        }
+      )
+      console.log('Sent party conversion message to groupchat')
+
+      // 4. Refresh conversations to show updated chat name
+      refreshConversations()
+
+      return { success: true, party: createdParty }
+    } catch (error) {
+      console.error('Failed to create party from groupchat:', error)
+      return { success: false, error }
+    }
   }
 
   // Handle avatar change from MyProfile - saves to backend
@@ -1248,6 +1319,7 @@ function AppContent() {
             }}
             onOpenProfile={handleOpenProfile}
             onTrackActivity={trackActivity}
+            onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
           />
         </div>
 
@@ -1627,6 +1699,7 @@ function AppContent() {
               onMemberClick={handleOpenProfile}
               onOpenComments={handleOpenComments}
               isOwnParty={userParty && (activeParty?.name === userParty.name || activeParty?.handle === userParty.handle)}
+              onPartyJoined={refreshConversations}
             />
           </div>
         </div>
@@ -1727,6 +1800,7 @@ function AppContent() {
             }}
             currentUserId={currentUser?.id}
             currentUserAvatar={currentUser?.avatar}
+            onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
           />
         </div>
       )}

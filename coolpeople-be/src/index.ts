@@ -31,6 +31,7 @@ import { messagesRouter } from './modules/messages/index.js';
 import { reportsRouter } from './modules/reports/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
 import { searchRouter } from './modules/search/index.js';
+import groupchatsRoutes from './modules/groupchats/groupchats.routes.js';
 
 // Jobs
 import { startStoryExpiryJob, stopStoryExpiryJob } from './jobs/storyExpiry.job.js';
@@ -104,6 +105,7 @@ app.use('/api/messages', messagesRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/groupchats', groupchatsRoutes);
 
 // Temporary root route
 app.get('/', (_req, res) => {

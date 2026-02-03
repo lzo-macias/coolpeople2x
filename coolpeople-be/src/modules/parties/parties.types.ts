@@ -82,6 +82,7 @@ export interface CreatePartyRequest {
   bannerUrl?: string;
   isPrivate?: boolean;
   chatMode?: string;
+  groupChatId?: string; // If provided, convert this existing groupchat to be the party's chat
 }
 
 export interface UpdatePartyRequest {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { mockMessages, getPartyColor } from '../data/mockData'
-import { messagesApi, storiesApi, notificationsApi, searchApi } from '../services/api'
+import { messagesApi, storiesApi, notificationsApi, searchApi, groupchatsApi } from '../services/api'
 import {
   initializeSocket,
   disconnectSocket,
@@ -11,6 +11,7 @@ import {
   onNotification,
   onUserStatus,
   onPartyMessage,
+  onGroupChatMessage,
   isConnected,
 } from '../services/socket'
 import Conversation from './Conversation'
@@ -40,7 +41,7 @@ const mockActivityNotifications = {
   ballots: [],
 }
 
-function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted, onViewReel, onViewComments, onOpenProfile, isActive, onTrackActivity }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted, onViewReel, onViewComments, onOpenProfile, isActive, onTrackActivity, onPartyCreatedFromGroupchat }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
@@ -106,8 +107,13 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   // Sort messages by most recent
   const sortMessages = (messagesList) => {
     return [...messagesList].sort((a, b) => {
-      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt) : new Date(0)
-      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt) : new Date(0)
+      // For party chats without messages, use joinedAt or current time to put them at top
+      const aTime = a.lastMessageAt
+        ? new Date(a.lastMessageAt)
+        : (a.isPartyChat && a.joinedAt ? new Date(a.joinedAt) : new Date(0))
+      const bTime = b.lastMessageAt
+        ? new Date(b.lastMessageAt)
+        : (b.isPartyChat && b.joinedAt ? new Date(b.joinedAt) : new Date(0))
       return bTime - aTime
     })
   }
@@ -404,6 +410,75 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       })
     })
 
+    const cleanupGroupChatMessage = onGroupChatMessage(async ({ groupChatId, message }) => {
+      // Update or create user groupchat in messages list
+      setMessages(prev => {
+        const existingIndex = prev.findIndex(m => m.groupChatId === groupChatId)
+
+        // Check if this groupchat is currently active
+        const isActiveConversation = activeConversationRef.current &&
+          activeConversationRef.current.groupChatId === groupChatId
+
+        const shouldIncrementUnread = message.user?.id !== currentUser?.id && !isActiveConversation
+
+        if (existingIndex >= 0) {
+          // Update existing groupchat
+          const updated = [...prev]
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            lastMessage: message.content,
+            lastMessageAt: message.createdAt,
+            timestamp: formatTimestamp(message.createdAt),
+            hasUnread: shouldIncrementUnread ? true : updated[existingIndex].hasUnread,
+            unreadCount: shouldIncrementUnread ? (updated[existingIndex].unreadCount || 0) + 1 : updated[existingIndex].unreadCount,
+          }
+          return sortMessages(updated)
+        }
+
+        // Groupchat not found in list - fetch it from API and add it
+        // This happens when you receive a message from a new groupchat you were added to
+        groupchatsApi.get(groupChatId).then(response => {
+          const gc = response.data
+          if (!gc) return
+
+          const recipients = gc.members.filter(m => m.id !== currentUser?.id)
+          const newGroupChat = {
+            id: `groupchat-${gc.id}`,
+            groupChatId: gc.id,
+            isGroupChat: true,
+            recipients: recipients,
+            allMembers: gc.members, // All members including current user
+            createdById: gc.createdById, // Creator of the groupchat
+            user: {
+              id: gc.id,
+              username: recipients.map(m => m.username).join(', '),
+              avatar: recipients[0]?.avatarUrl,
+              displayName: `${gc.members.length} people`,
+            },
+            lastMessage: message.content,
+            lastMessageAt: message.createdAt,
+            timestamp: formatTimestamp(message.createdAt),
+            unreadCount: shouldIncrementUnread ? 1 : 0,
+            hasUnread: shouldIncrementUnread,
+            isOnline: false,
+            isPinned: gc.isPinned || false,
+            isMuted: gc.isMuted || false,
+            isHidden: gc.isHidden || false,
+          }
+
+          setMessages(current => {
+            // Double check it wasn't added while we were fetching
+            if (current.some(m => m.groupChatId === groupChatId)) return current
+            return sortMessages([...current, newGroupChat])
+          })
+        }).catch(err => {
+          console.error('Failed to fetch groupchat:', err)
+        })
+
+        return prev
+      })
+    })
+
     // Cleanup on unmount
     return () => {
       cleanupNewMessage()
@@ -412,6 +487,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       cleanupNotification()
       cleanupUserStatus()
       cleanupPartyMessage()
+      cleanupGroupChatMessage()
     }
   }, [currentUser?.id, userParty])
 
@@ -431,14 +507,15 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   // Initial data fetch (one-time, not polling)
   useEffect(() => {
     const fetchInitialData = async () => {
+      let allConversations = []
+      const pinned = new Set()
+      const muted = new Set()
+      const hidden = new Set()
+
+      // Fetch regular DM conversations
       try {
-        // Fetch conversations
         const conversationsRes = await messagesApi.getConversations()
         if (conversationsRes.data && conversationsRes.data.length > 0) {
-          const pinned = new Set()
-          const muted = new Set()
-          const hidden = new Set()
-
           const transformedMessages = conversationsRes.data.map(conv => {
             const convId = conv.id || `conv-${conv.otherUser?.id}`
 
@@ -451,6 +528,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               id: convId,
               partyId: conv.partyId,
               isPartyChat: conv.isPartyChat || false,
+              joinedAt: conv.joinedAt, // For party chats - used for sorting new chats to top
               user: {
                 id: conv.otherUser?.id,
                 username: conv.otherUser?.username || conv.otherUser?.displayName,
@@ -468,14 +546,62 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               isHidden: conv.isHidden || false,
             }
           })
-
-          setMessages(sortMessages(transformedMessages))
-          setPinnedConversations(pinned)
-          setSilencedConversations(muted)
-          setHiddenConversations(hidden)
+          allConversations = [...allConversations, ...transformedMessages]
         }
       } catch (error) {
         console.log('Failed to fetch conversations:', error.message)
+      }
+
+      // Fetch user groupchats
+      try {
+        const groupchatsRes = await groupchatsApi.getAll()
+        if (groupchatsRes.data && groupchatsRes.data.length > 0) {
+          const transformedGroupchats = groupchatsRes.data.map(gc => {
+            // Filter out current user from recipients
+            const recipients = gc.members.filter(m => m.id !== currentUser?.id)
+            const gcId = `groupchat-${gc.id}`
+
+            // Track pinned, muted, hidden groupchats
+            if (gc.isPinned) pinned.add(gcId)
+            if (gc.isMuted) muted.add(gcId)
+            if (gc.isHidden) hidden.add(gcId)
+
+            return {
+              id: gcId,
+              groupChatId: gc.id,
+              isGroupChat: true,
+              recipients: recipients,
+              allMembers: gc.members, // All members including current user
+              createdById: gc.createdById, // Creator of the groupchat
+              user: {
+                id: gc.id,
+                username: recipients.map(m => m.username).join(', '),
+                avatar: recipients[0]?.avatarUrl,
+                displayName: `${gc.members.length} people`,
+              },
+              lastMessage: gc.lastMessage?.content || '',
+              lastMessageAt: gc.lastMessage?.createdAt,
+              timestamp: formatTimestamp(gc.lastMessage?.createdAt),
+              unreadCount: 0,
+              isOnline: false,
+              hasUnread: false,
+              isPinned: gc.isPinned || false,
+              isMuted: gc.isMuted || false,
+              isHidden: gc.isHidden || false,
+            }
+          })
+          allConversations = [...allConversations, ...transformedGroupchats]
+        }
+      } catch (error) {
+        console.log('Failed to fetch groupchats:', error.message)
+      }
+
+      // Set all conversations
+      if (allConversations.length > 0) {
+        setMessages(sortMessages(allConversations))
+        setPinnedConversations(pinned)
+        setSilencedConversations(muted)
+        setHiddenConversations(hidden)
       }
 
       try {
@@ -798,8 +924,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     onConversationChange?.(false)
   }
 
-  const handleUnpin = async (messageId, userId, e) => {
+  const handleUnpin = async (message, e) => {
     e.stopPropagation() // Prevent opening the conversation
+    const messageId = message.id
+    const userId = message.user?.id
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -808,32 +938,34 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(messageId)
-      if (userId) newSet.add(`conv-${userId}`) // Also add alternate ID format
+      if (userId) newSet.add(`conv-${userId}`)
       return newSet
     })
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(messageId)
-      if (userId) newSet.delete(`conv-${userId}`) // Also delete alternate ID format
+      if (userId) newSet.delete(`conv-${userId}`)
       return newSet
     })
 
     // Persist to backend
-    if (userId) {
-      try {
+    try {
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.unpin(groupChatId)
+      } else if (userId) {
         await messagesApi.unpinConversation(userId)
-      } catch (error) {
-        console.log('Failed to unpin conversation:', error.message)
       }
+    } catch (error) {
+      console.log('Failed to unpin conversation:', error.message)
     }
   }
 
-  const handleUnmute = async (messageId, e) => {
+  const handleUnmute = async (message, e) => {
     e.stopPropagation() // Prevent opening the conversation
-
-    // Find the message to get the user ID
-    const message = messages.find(m => m.id === messageId)
-    const userId = message?.user?.id
+    const messageId = message.id
+    const userId = message.user?.id
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -846,12 +978,14 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     })
 
     // Persist to backend
-    if (userId) {
-      try {
+    try {
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.unmute(groupChatId)
+      } else if (userId) {
         await messagesApi.unmuteConversation(userId)
-      } catch (error) {
-        console.log('Failed to unmute conversation:', error.message)
       }
+    } catch (error) {
+      console.log('Failed to unmute conversation:', error.message)
     }
   }
 
@@ -887,7 +1021,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handlePin = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -896,20 +1031,24 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(message.id)
-      newSet.add(`conv-${userId}`) // Also add alternate ID format
+      if (userId) newSet.add(`conv-${userId}`)
       return newSet
     })
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(message.id)
-      newSet.delete(`conv-${userId}`) // Also delete alternate ID format
+      if (userId) newSet.delete(`conv-${userId}`)
       return newSet
     })
     closeLongPressPopup()
 
     // Persist to backend
     try {
-      await messagesApi.pinConversation(userId)
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.pin(groupChatId)
+      } else if (userId) {
+        await messagesApi.pinConversation(userId)
+      }
     } catch (error) {
       console.log('Failed to pin conversation:', error.message)
     }
@@ -917,7 +1056,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handleUnpinFromPopup = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -926,20 +1066,24 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setUnpinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.add(message.id)
-      newSet.add(`conv-${userId}`) // Also add alternate ID format
+      if (userId) newSet.add(`conv-${userId}`)
       return newSet
     })
     setPinnedConversations(prev => {
       const newSet = new Set(prev)
       newSet.delete(message.id)
-      newSet.delete(`conv-${userId}`) // Also delete alternate ID format
+      if (userId) newSet.delete(`conv-${userId}`)
       return newSet
     })
     closeLongPressPopup()
 
     // Persist to backend
     try {
-      await messagesApi.unpinConversation(userId)
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.unpin(groupChatId)
+      } else if (userId) {
+        await messagesApi.unpinConversation(userId)
+      }
     } catch (error) {
       console.log('Failed to unpin conversation:', error.message)
     }
@@ -947,7 +1091,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handleSilence = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     const isCurrentlyMuted = silencedConversations.has(message.id) || message.isMuted
 
@@ -968,10 +1113,18 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Persist to backend
     try {
-      if (isCurrentlyMuted) {
-        await messagesApi.unmuteConversation(userId)
-      } else {
-        await messagesApi.muteConversation(userId)
+      if (isGroupChat && groupChatId) {
+        if (isCurrentlyMuted) {
+          await groupchatsApi.unmute(groupChatId)
+        } else {
+          await groupchatsApi.mute(groupChatId)
+        }
+      } else if (userId) {
+        if (isCurrentlyMuted) {
+          await messagesApi.unmuteConversation(userId)
+        } else {
+          await messagesApi.muteConversation(userId)
+        }
       }
     } catch (error) {
       console.log('Failed to toggle mute:', error.message)
@@ -980,7 +1133,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handleDeleteConversation = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Remove from local state immediately
     setMessages(prev => prev.filter(m => m.id !== message.id))
@@ -988,7 +1142,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Persist to backend
     try {
-      await messagesApi.deleteConversation(userId)
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.leave(groupChatId)
+      } else if (userId) {
+        await messagesApi.deleteConversation(userId)
+      }
     } catch (error) {
       console.log('Failed to delete conversation:', error.message)
     }
@@ -996,7 +1154,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handleHide = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -1011,7 +1170,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Persist to backend
     try {
-      await messagesApi.hideConversation(userId)
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.hide(groupChatId)
+      } else if (userId) {
+        await messagesApi.hideConversation(userId)
+      }
     } catch (error) {
       console.log('Failed to hide conversation:', error.message)
     }
@@ -1019,7 +1182,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const handleUnhide = async (message) => {
     const userId = message.user?.id
-    if (!userId) return
+    const isGroupChat = message.isGroupChat
+    const groupChatId = message.groupChatId
 
     // Update local state immediately
     setMessages(prev => prev.map(m =>
@@ -1034,7 +1198,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
     // Persist to backend
     try {
-      await messagesApi.unhideConversation(userId)
+      if (isGroupChat && groupChatId) {
+        await groupchatsApi.unhide(groupChatId)
+      } else if (userId) {
+        await messagesApi.unhideConversation(userId)
+      }
     } catch (error) {
       console.log('Failed to unhide conversation:', error.message)
     }
@@ -1139,7 +1307,9 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setMessages(prev => {
       // Check if conversation already exists
       const existingIndex = prev.findIndex(m =>
-        m.id === data.conversationId || m.user?.id === data.user.id
+        m.id === data.conversationId ||
+        m.user?.id === data.user?.id ||
+        (data.groupChatId && m.groupChatId === data.groupChatId)
       )
 
       if (existingIndex >= 0) {
@@ -1156,21 +1326,42 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       }
 
       // Add new conversation to the list
-      return sortMessages([...prev, {
-        id: data.conversationId,
-        user: data.user,
-        lastMessage: data.lastMessage,
-        lastMessageAt: data.lastMessageAt,
-        timestamp: formatTimestamp(data.lastMessageAt),
-        unreadCount: 0,
-        hasUnread: false,
-        isOnline: false,
-        isPinned: false,
-        isMuted: false,
-        isHidden: false,
-        isPartyChat: false,
-        partyId: null,
-      }])
+      if (data.isGroupChat && data.groupChatId) {
+        // Groupchat conversation
+        return sortMessages([...prev, {
+          id: data.conversationId,
+          groupChatId: data.groupChatId,
+          isGroupChat: true,
+          recipients: data.recipients || [],
+          user: data.user,
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+          timestamp: formatTimestamp(data.lastMessageAt),
+          unreadCount: 0,
+          hasUnread: false,
+          isOnline: false,
+          isPinned: false,
+          isMuted: false,
+          isHidden: false,
+        }])
+      } else {
+        // Regular DM conversation
+        return sortMessages([...prev, {
+          id: data.conversationId,
+          user: data.user,
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+          timestamp: formatTimestamp(data.lastMessageAt),
+          unreadCount: 0,
+          hasUnread: false,
+          isOnline: false,
+          isPinned: false,
+          isMuted: false,
+          isHidden: false,
+          isPartyChat: false,
+          partyId: null,
+        }])
+      }
     })
 
     // Update the active conversation with the real ID if it was a new conversation
@@ -1191,6 +1382,67 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     startConversationWith: startConversationWith?.username,
   })
 
+  // Handle creating a new groupchat from party settings
+  const handleCreateGroupChat = async (selectedMembers) => {
+    console.log('Creating groupchat with members:', selectedMembers)
+
+    try {
+      // Call API to create groupchat (or get existing one with same members)
+      const memberIds = selectedMembers.map(m => m.id)
+      const response = await groupchatsApi.create(memberIds)
+      const groupChat = response.data
+
+      console.log('Groupchat created/found:', groupChat)
+
+      // Filter out current user from recipients (for header display)
+      const recipients = groupChat.members.filter(m => m.id !== currentUser?.id)
+
+      // Create conversation object for the groupchat
+      const groupChatConversation = {
+        id: `groupchat-${groupChat.id}`,
+        groupChatId: groupChat.id,
+        isNew: !groupChat.lastMessage, // New if no messages yet
+        isGroupChat: true,
+        recipients: recipients,
+        allMembers: groupChat.members, // All members including current user
+        createdById: groupChat.createdById, // Creator of the groupchat
+        // For display purposes
+        user: {
+          id: groupChat.id,
+          username: recipients.map(m => m.username).join(', '),
+          avatar: recipients[0]?.avatarUrl,
+          displayName: `${groupChat.members.length} people`,
+        },
+        lastMessage: groupChat.lastMessage?.content || '',
+        lastMessageAt: groupChat.lastMessage?.createdAt,
+        timestamp: formatTimestamp(groupChat.lastMessage?.createdAt),
+        unreadCount: 0,
+        hasUnread: false,
+        isOnline: false,
+        isPinned: false,
+        isMuted: false,
+        isHidden: false,
+      }
+
+      // Add groupchat to messages list if not already present
+      setMessages(prev => {
+        const existingIndex = prev.findIndex(m => m.groupChatId === groupChat.id)
+        if (existingIndex >= 0) {
+          // Already exists, just return as-is
+          return prev
+        }
+        // Add new groupchat to the list
+        return sortMessages([...prev, groupChatConversation])
+      })
+
+      setActiveConversation(groupChatConversation)
+      activeConversationRef.current = groupChatConversation
+      onConversationChange?.(true)
+    } catch (error) {
+      console.error('Failed to create groupchat:', error)
+    }
+  }
+
   // Show conversation view if one is selected
   if (activeConversation) {
     console.log('>>> RENDERING CONVERSATION COMPONENT with user:', activeConversation.user?.username)
@@ -1203,6 +1455,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         onMessageSent={handleMessageSent}
         currentUserId={currentUser?.id}
         currentUserAvatar={currentUser?.avatar}
+        onCreateGroupChat={handleCreateGroupChat}
+        onPartyCreatedFromGroupchat={onPartyCreatedFromGroupchat}
       />
     )
   }
@@ -1967,8 +2221,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 isHidden={isHidden}
                 isLongPressActive={isLongPressActive}
                 onClick={() => handleOpenConversation(message)}
-                onUnpin={(e) => handleUnpin(message.id, message.user?.id, e)}
-                onUnmute={(e) => handleUnmute(message.id, e)}
+                onUnpin={(e) => handleUnpin(message, e)}
+                onUnmute={(e) => handleUnmute(message, e)}
                 onLongPress={handleLongPress}
               />
             )

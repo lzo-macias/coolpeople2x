@@ -4,6 +4,7 @@ import { getPartyColor } from '../data/mockData'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
 import { partiesApi, reelsApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -47,7 +48,9 @@ const formatRelativeTime = (dateStr) => {
 }
 
 // eslint-disable-next-line no-unused-vars
-function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false }) {
+function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false, onPartyJoined }) {
+  const { refreshUser } = useAuth()
+
   // State for fetched data
   const [partyData, setPartyData] = useState(null)
   const [members, setMembers] = useState([])
@@ -604,6 +607,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   try {
                     await partiesApi.joinParty(party.id)
                     setHasJoined(true)
+                    // Refresh user data to update party affiliation
+                    await refreshUser()
+                    // Refresh conversations to show party chat
+                    if (onPartyJoined) {
+                      onPartyJoined()
+                    }
                   } catch (err) {
                     console.error('Failed to join party:', err)
                   }

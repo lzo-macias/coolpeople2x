@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { getPartyColor } from '../data/mockData'
-import { messagesApi } from '../services/api'
+import { messagesApi, groupchatsApi } from '../services/api'
+import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/ChatSettings.css'
 
-function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSettingsChange }) {
+function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, groupChatCreatorId = null, onClose, conversation, onSettingsChange, groupChatId = null, currentUserId = null, onPartyCreated = null }) {
   const [activeSection, setActiveSection] = useState(null)
 
   // Get party color - gray for independent, party color otherwise
@@ -15,6 +17,66 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
     color: partyColor,
     notifications: !conversation?.isMuted, // Initialize from conversation settings
   })
+
+  // Add member slide-up state
+  const [showAddMemberPanel, setShowAddMemberPanel] = useState(false)
+  const [addMemberSearch, setAddMemberSearch] = useState('')
+  const [suggestedUsers, setSuggestedUsers] = useState([])
+  const [selectedUserIds, setSelectedUserIds] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [addingMembers, setAddingMembers] = useState(false)
+
+  // Party creation flow state (for converting groupchat to party)
+  const [showPartyCreationFlow, setShowPartyCreationFlow] = useState(false)
+
+  // Fetch suggested users when panel opens or search changes
+  useEffect(() => {
+    if (showAddMemberPanel && isGroupChat) {
+      const fetchSuggested = async () => {
+        setLoadingSuggestions(true)
+        try {
+          const response = await groupchatsApi.getSuggestedUsers(groupChatId, addMemberSearch)
+          setSuggestedUsers(response.data || [])
+        } catch (error) {
+          console.error('Failed to fetch suggested users:', error)
+          setSuggestedUsers([])
+        } finally {
+          setLoadingSuggestions(false)
+        }
+      }
+      const debounce = setTimeout(fetchSuggested, 300)
+      return () => clearTimeout(debounce)
+    }
+  }, [showAddMemberPanel, addMemberSearch, groupChatId, isGroupChat])
+
+  // Handle adding selected members
+  const handleAddMembers = async () => {
+    if (selectedUserIds.length === 0 || !groupChatId) return
+    setAddingMembers(true)
+    try {
+      await groupchatsApi.addMembers(groupChatId, selectedUserIds)
+      setShowAddMemberPanel(false)
+      setSelectedUserIds([])
+      setAddMemberSearch('')
+      // Notify parent to refresh members
+      if (onSettingsChange) {
+        onSettingsChange({ membersUpdated: true })
+      }
+    } catch (error) {
+      console.error('Failed to add members:', error)
+    } finally {
+      setAddingMembers(false)
+    }
+  }
+
+  // Toggle user selection
+  const toggleUserSelection = (userId) => {
+    setSelectedUserIds(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
 
   // Get the userId for API calls - for DMs it's the other user's ID
   const getConversationId = () => {
@@ -66,14 +128,23 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
   const [userSearchQuery, setUserSearchQuery] = useState('')
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
 
-  // Mock members data (for group chats)
-  const members = isGroupChat ? [
-    { id: 1, username: chat?.name || 'user1', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: true },
-    { id: 2, username: 'sarah.2024', avatar: 'https://i.pravatar.cc/40?img=5', isOwner: false },
-    { id: 3, username: 'mike_politics', avatar: 'https://i.pravatar.cc/40?img=8', isOwner: false },
-  ] : [
-    { id: 1, username: chat?.name || chat?.username || 'User', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: false },
-  ]
+  // Members data - use real groupChatMembers if provided, otherwise fallback to single user or mock
+  const members = isGroupChat && groupChatMembers && groupChatMembers.length > 0
+    ? groupChatMembers.map((m) => ({
+        id: m.id,
+        username: m.username || m.displayName,
+        avatar: m.avatarUrl || m.avatar || 'https://i.pravatar.cc/40',
+        isOwner: groupChatCreatorId ? m.id === groupChatCreatorId : false, // Creator is the owner
+      }))
+    : isGroupChat
+    ? [
+        { id: 1, username: chat?.name || 'user1', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: true },
+        { id: 2, username: 'sarah.2024', avatar: 'https://i.pravatar.cc/40?img=5', isOwner: false },
+        { id: 3, username: 'mike_politics', avatar: 'https://i.pravatar.cc/40?img=8', isOwner: false },
+      ]
+    : [
+        { id: 1, username: chat?.name || chat?.username || 'User', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: false },
+      ]
 
   // Tab state for Links & Content
   const [activeMediaTab, setActiveMediaTab] = useState('links')
@@ -292,18 +363,18 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
         </button>
         */}
 
-        {isGroupChat && (
-          <button className="chat-settings-row" onClick={() => setActiveSection('add-members')}>
+        {isGroupChat && currentUserId && groupChatCreatorId && currentUserId === groupChatCreatorId && (
+          <button className="chat-settings-row create-party-row" onClick={() => setShowPartyCreationFlow(true)}>
             <div className="chat-settings-row-left">
-              <span className="chat-settings-row-icon">
+              <span className="chat-settings-row-icon create-party-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="8.5" cy="7" r="4" />
-                  <line x1="20" y1="8" x2="20" y2="14" />
-                  <line x1="23" y1="11" x2="17" y2="11" />
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </span>
-              <span className="chat-settings-row-label">Add Members</span>
+              <span className="chat-settings-row-label">Create Party</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="chat-settings-chevron">
               <polyline points="9 18 15 12 9 6" />
@@ -428,7 +499,18 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
           </svg>
         </button>
         <h1 className="chat-settings-title">{isGroupChat ? 'Members' : 'Profile'}</h1>
-        <div style={{ width: 36 }} />
+        {isGroupChat ? (
+          <button className="chat-settings-add-btn" onClick={() => setShowAddMemberPanel(true)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="20" y1="8" x2="20" y2="14" />
+              <line x1="23" y1="11" x2="17" y2="11" />
+            </svg>
+          </button>
+        ) : (
+          <div style={{ width: 36 }} />
+        )}
       </div>
 
       {isGroupChat && (
@@ -468,6 +550,90 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
           </div>
         ))}
       </div>
+
+      {/* Add Member Slide-Up Panel */}
+      {showAddMemberPanel && (
+        <div className="add-member-overlay" onClick={() => setShowAddMemberPanel(false)}>
+          <div className="add-member-panel" onClick={e => e.stopPropagation()}>
+            <div className="add-member-header">
+              <div className="add-member-handle" />
+              <h2 className="add-member-title">Add Members</h2>
+              <button className="add-member-close" onClick={() => setShowAddMemberPanel(false)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="add-member-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={addMemberSearch}
+                onChange={(e) => setAddMemberSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="add-member-list">
+              {loadingSuggestions ? (
+                <div className="add-member-loading">Loading...</div>
+              ) : suggestedUsers.length === 0 ? (
+                <div className="add-member-empty">
+                  {addMemberSearch ? 'No users found' : 'No suggestions available'}
+                </div>
+              ) : (
+                suggestedUsers.map(user => {
+                  const isSelected = selectedUserIds.includes(user.id)
+                  return (
+                    <div
+                      key={user.id}
+                      className={`add-member-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => toggleUserSelection(user.id)}
+                    >
+                      <img
+                        src={user.avatarUrl || 'https://i.pravatar.cc/40'}
+                        alt={user.username}
+                        className="add-member-avatar"
+                      />
+                      <div className="add-member-info">
+                        <span className="add-member-username">{user.displayName || user.username}</span>
+                        <span className="add-member-source">
+                          {user.source === 'messaged' && 'Previously messaged'}
+                          {user.source === 'follower' && 'Follows you'}
+                          {user.source === 'following' && 'You follow'}
+                          {user.source === 'search' && `@${user.username}`}
+                          {user.source === 'suggested' && `@${user.username}`}
+                        </span>
+                      </div>
+                      <div className={`add-member-check ${isSelected ? 'checked' : ''}`}>
+                        {isSelected && (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <button
+              className={`add-member-done ${selectedUserIds.length > 0 ? 'active' : ''}`}
+              onClick={handleAddMembers}
+              disabled={selectedUserIds.length === 0 || addingMembers}
+            >
+              {addingMembers ? 'Adding...' : `Add ${selectedUserIds.length > 0 ? `(${selectedUserIds.length})` : ''}`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 
@@ -620,6 +786,47 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
     </div>
   )
 
+  // Prepare pre-filled data for party creation from groupchat
+  const getPartyPrefilledData = () => {
+    // Generate a default party name from member usernames
+    const memberNames = members.slice(0, 3).map(m => m.username.split(/[._]/)[0]).join(', ')
+    const defaultName = chatData.name !== 'Chat' ? chatData.name : `${memberNames}${members.length > 3 ? '...' : ''}`
+
+    // Convert members to the format PartyCreationFlow expects
+    const memberInvites = members
+      .filter(m => m.id !== currentUserId && !m.isOwner)
+      .map(m => ({
+        id: m.id,
+        username: m.username,
+        name: m.username,
+        avatar: m.avatar || `https://ui-avatars.com/api/?name=${m.username}&background=random`
+      }))
+
+    return {
+      defaultName,
+      memberInvites,
+      isFromGroupChat: true,
+      groupChatId,
+      groupChatName: chatData.name !== 'Chat' ? chatData.name : defaultName
+    }
+  }
+
+  // Handle party creation from groupchat
+  const handlePartyCreated = async (partyData) => {
+    setShowPartyCreationFlow(false)
+
+    // Call parent callback to handle:
+    // 1. Creating party in backend
+    // 2. Updating creator's party affiliation
+    // 3. Sending invites to all groupchat members
+    // 4. Sending message to groupchat
+    if (onPartyCreated) {
+      await onPartyCreated(partyData)
+    }
+
+    onClose()
+  }
+
   return (
     <div className="chat-settings">
       {activeSection === null && renderMainSettings()}
@@ -628,6 +835,17 @@ function ChatSettings({ chat, isGroupChat = false, onClose, conversation, onSett
       {activeSection === 'edit-profile' && renderPlaceholder('Edit Group')}
       {activeSection === 'add-members' && renderAddMembersSection()}
       {activeSection === 'send-to-users' && renderSendToUsersSection()}
+
+      {/* Party Creation Flow - for converting groupchat to party */}
+      {showPartyCreationFlow && createPortal(
+        <PartyCreationFlow
+          onClose={() => setShowPartyCreationFlow(false)}
+          onComplete={handlePartyCreated}
+          currentUserId={currentUserId}
+          prefilledData={getPartyPrefilledData()}
+        />,
+        document.body
+      )}
     </div>
   )
 }

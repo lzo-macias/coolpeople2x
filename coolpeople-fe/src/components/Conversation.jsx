@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
-import { messagesApi, partiesApi } from '../services/api'
+import { messagesApi, partiesApi, groupchatsApi } from '../services/api'
 import { joinPartyRoom, leavePartyRoom, onPartyMessage } from '../services/socket'
 import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket, onDmReactionAdded, onDmReactionRemoved } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
@@ -89,7 +89,7 @@ function AudioMessage({ src, duration }) {
   )
 }
 
-function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity }) {
+function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity, onCreateGroupChat, onPartyCreatedFromGroupchat }) {
   console.log('=== Conversation component rendered ===')
   console.log('conversation:', conversation)
   console.log('conversation.user:', conversation?.user)
@@ -112,6 +112,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [pendingInvite, setPendingInvite] = useState(null)
   const [isJoining, setIsJoining] = useState(false)
   const [canChat, setCanChat] = useState(true) // Whether user has chat permission in party
+  const [convertedToParty, setConvertedToParty] = useState(null) // Party info if groupchat was converted
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
@@ -123,6 +124,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const isPartyChat = conversation.isPartyChat || conversation.isParty || false
   const partyId = conversation.partyId || null
   const isNewConversation = conversation.isNew || conversationId?.startsWith('new-')
+  const isGroupChat = conversation.isGroupChat || false
+  const groupChatId = conversation.groupChatId || null
+  const recipients = conversation.recipients || []
 
   // Keep refs updated
   useEffect(() => {
@@ -190,6 +194,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       setShowJoinConfirmation(false)
       setPendingInvite(null)
       setReelViewerMessageId(null)
+      setConvertedToParty(null) // Clear the conversion banner
     } catch (error) {
       console.error('Failed to join party:', error)
       console.error('Error details:', error.message, error.response)
@@ -200,6 +205,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         setShowJoinConfirmation(false)
         setPendingInvite(null)
         setReelViewerMessageId(null)
+        setConvertedToParty(null) // Already a member, clear the banner
       } else {
         alert(`Failed to join party: ${error.message}`)
       }
@@ -217,18 +223,69 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   // Fetch messages from API on mount
   useEffect(() => {
     const fetchMessages = async () => {
+      // For groupchats, we need groupChatId
       // For party chats, we need a partyId; for DMs, we need user.id
+      if (isGroupChat && !groupChatId) {
+        setIsLoading(false)
+        return
+      }
       if (isPartyChat && !partyId) {
         setIsLoading(false)
         return
       }
-      if (!isPartyChat && !user?.id) {
+      if (!isGroupChat && !isPartyChat && !user?.id) {
         setIsLoading(false)
         return
       }
 
       try {
-        if (isPartyChat && partyId) {
+        if (isGroupChat && groupChatId) {
+          // Fetch user groupchat messages
+          const response = await groupchatsApi.getMessages(groupChatId)
+          const messages = response.data
+          if (messages && Array.isArray(messages)) {
+            // Transform groupchat messages to match expected format
+            // API returns messages sorted desc, so reverse for chronological order
+            const transformed = messages.map(msg => ({
+              id: msg.id,
+              text: msg.content,
+              metadata: msg.metadata || null,
+              isOwn: msg.user?.id === currentUserId,
+              timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              createdAt: msg.createdAt,
+              senderName: msg.user?.username || msg.user?.displayName,
+              senderAvatar: msg.user?.avatarUrl,
+            })).reverse()
+            setFetchedMessages(transformed)
+
+            // Check if this groupchat was converted to a party
+            const partyConversionMsg = messages.find(msg =>
+              msg.metadata?.type === 'party_invite'
+            )
+            if (partyConversionMsg && partyConversionMsg.metadata) {
+              // Check if current user has already joined this party
+              const convertedPartyId = partyConversionMsg.metadata.partyId
+              const hasJoined = currentUser?.partyId === convertedPartyId
+              if (!hasJoined) {
+                // Transform to the message format expected by handleJoinClick
+                const inviteMsg = {
+                  id: partyConversionMsg.id,
+                  text: partyConversionMsg.content,
+                  metadata: partyConversionMsg.metadata,
+                  isOwn: partyConversionMsg.user?.id === currentUserId,
+                }
+                setConvertedToParty({
+                  partyId: convertedPartyId,
+                  partyName: partyConversionMsg.metadata.partyName,
+                  partyHandle: partyConversionMsg.metadata.partyHandle,
+                  partyColor: partyConversionMsg.metadata.partyColor,
+                  partyAvatar: partyConversionMsg.metadata.partyAvatar,
+                  inviteMessage: inviteMsg,
+                })
+              }
+            }
+          }
+        } else if (isPartyChat && partyId) {
           // Fetch party chat messages
           const response = await partiesApi.getChatMessages(partyId)
           // API returns { success: true, data: [...messages...] }
@@ -291,7 +348,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     }
 
     fetchMessages()
-  }, [user?.id, currentUserId, isPartyChat, partyId])
+  }, [user?.id, currentUserId, isPartyChat, partyId, isGroupChat, groupChatId])
 
   // Check if current user has chat permission in party chat
   useEffect(() => {
@@ -333,15 +390,17 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
   // Join conversation room and listen for real-time messages
   useEffect(() => {
-    // For party chats, we need partyId; for DMs, we need user.id
+    // For party chats, we need partyId; for groupchats we need groupChatId; for DMs, we need user.id
     if (isPartyChat && !partyId) return
-    if (!isPartyChat && !user?.id) return
+    if (isGroupChat && !groupChatId) return
+    if (!isGroupChat && !isPartyChat && !user?.id) return
 
     // Ensure socket is initialized
     initializeSocket()
 
     let messageHandler = null
     let partyMessageHandler = null
+    let groupChatMessageHandler = null
     let connectHandler = null
     let isSetup = false
 
@@ -349,7 +408,44 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       if (isSetup || !socket) return
       isSetup = true
 
-      if (isPartyChat && partyId) {
+      if (isGroupChat && groupChatId) {
+        // Handler for incoming groupchat messages
+        groupChatMessageHandler = (data) => {
+          console.log('=== GROUPCHAT MESSAGE RECEIVED ===', data)
+
+          // Only process messages for this groupchat
+          if (data.groupChatId !== groupChatId) return
+
+          // Skip if this message is from us (we already added it locally)
+          if (data.user?.id === currentUserIdRef.current) {
+            console.log('Skipping - message is from me (already added locally)')
+            return
+          }
+
+          const newMsg = {
+            id: data.id,
+            text: data.content,
+            metadata: data.metadata || null,
+            isOwn: false,
+            timestamp: new Date(data.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: data.createdAt,
+            senderName: data.user?.username || data.user?.displayName,
+            senderAvatar: data.user?.avatarUrl,
+          }
+
+          // Check if message already exists to avoid duplicates
+          setFetchedMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) {
+              console.log('Skipping - duplicate message')
+              return prev
+            }
+            console.log('Groupchat message added to fetchedMessages')
+            return [...prev, newMsg]
+          })
+        }
+
+        socket.on('groupchat:message', groupChatMessageHandler)
+      } else if (isPartyChat && partyId) {
         // Join the party room for real-time updates
         joinPartyRoom(partyId)
 
@@ -497,7 +593,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
       clearTimeout(delayedSetup)
       if (isPartyChat && partyId) {
         leavePartyRoom(partyId)
-      } else {
+      } else if (!isGroupChat) {
         leaveConversation(otherUserIdRef.current)
       }
       const s = getSocket()
@@ -512,9 +608,12 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         if (partyMessageHandler) {
           s.off('party:message', partyMessageHandler)
         }
+        if (groupChatMessageHandler) {
+          s.off('groupchat:message', groupChatMessageHandler)
+        }
       }
     }
-  }, [otherUserId, isPartyChat, partyId])
+  }, [otherUserId, isPartyChat, partyId, isGroupChat, groupChatId])
 
   // Listen for real-time reaction updates (both DM and party chat)
   useEffect(() => {
@@ -691,6 +790,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     console.log('=== SENDING MESSAGE ===')
     console.log('My user ID:', currentUserId)
     console.log('Is party chat:', isPartyChat)
+    console.log('Is group chat:', isGroupChat)
+    console.log('Recipients:', recipients)
     console.log('Party ID:', partyId)
     console.log('Receiver (other user) ID:', user?.id)
     console.log('Message content:', messageContent)
@@ -709,7 +810,33 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     setReplyingTo(null)
 
     try {
-      if (isPartyChat && partyId) {
+      if (isGroupChat && groupChatId) {
+        // Send message to user groupchat via API
+        console.log('Sending message to groupchat:', groupChatId)
+
+        const response = await groupchatsApi.sendMessage(groupChatId, messageContent)
+        console.log('Groupchat API response:', response)
+
+        // Update the local message with the real ID from the server
+        const messageData = response.data
+        if (messageData?.id) {
+          setLocalMessages(prev => prev.map(msg =>
+            msg.id === newMessage.id ? { ...msg, id: messageData.id } : msg
+          ))
+        }
+
+        // Notify parent to update the messages list
+        onMessageSent?.({
+          conversationId: `groupchat-${groupChatId}`,
+          user: user,
+          recipients: recipients,
+          lastMessage: messageContent,
+          lastMessageAt: new Date().toISOString(),
+          isNew: isNewConversation,
+          isGroupChat: true,
+          groupChatId: groupChatId,
+        })
+      } else if (isPartyChat && partyId) {
         // Send party chat message
         const response = await partiesApi.sendChatMessage(partyId, messageContent)
         console.log('Party chat API response:', response)
@@ -883,10 +1010,38 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         </button>
 
         <div className="conversation-user-info">
-          <div className="conversation-avatar">
-            <img src={user.avatar} alt={user.username} />
-          </div>
-          <span className="conversation-username">{user.username}</span>
+          {isGroupChat && recipients.length > 1 ? (
+            // Show stacked avatars for groupchat
+            <>
+              <div className="conversation-avatar-group">
+                {recipients.slice(0, 3).map((recipient, idx) => (
+                  <div
+                    key={recipient.id}
+                    className="conversation-avatar-stacked"
+                    style={{ marginLeft: idx > 0 ? -12 : 0, zIndex: 3 - idx }}
+                  >
+                    <img src={recipient.avatarUrl || recipient.avatar} alt={recipient.username} />
+                  </div>
+                ))}
+                {recipients.length > 3 && (
+                  <div className="conversation-avatar-more" style={{ marginLeft: -12 }}>
+                    +{recipients.length - 3}
+                  </div>
+                )}
+              </div>
+              <span className="conversation-username">
+                {recipients.length} people
+              </span>
+            </>
+          ) : (
+            // Single user
+            <>
+              <div className="conversation-avatar">
+                <img src={user.avatar} alt={user.username} />
+              </div>
+              <span className="conversation-username">{user.username}</span>
+            </>
+          )}
         </div>
 
         <button className="conversation-menu-btn" onClick={() => setShowPartySettings(true)}>
@@ -898,6 +1053,38 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         </button>
       </div>
 
+      {/* Party Conversion Banner - shown when groupchat is converted to party */}
+      {isGroupChat && convertedToParty && (
+        <div className="party-conversion-banner" style={{
+          background: `linear-gradient(135deg, ${convertedToParty.partyColor || '#EC4899'}15, ${convertedToParty.partyColor || '#EC4899'}25)`,
+          borderLeft: `4px solid ${convertedToParty.partyColor || '#EC4899'}`,
+        }}>
+          <div className="party-conversion-icon" style={{ background: convertedToParty.partyColor || '#EC4899' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <div className="party-conversion-content">
+            <div className="party-conversion-title">
+              This group is now <strong style={{ color: convertedToParty.partyColor || '#EC4899' }}>{convertedToParty.partyName}</strong>
+            </div>
+            <div className="party-conversion-warning">
+              Join the party to continue seeing messages
+            </div>
+          </div>
+          <button
+            className="party-conversion-join-btn"
+            style={{ background: convertedToParty.partyColor || '#EC4899' }}
+            onClick={() => handleJoinClick(convertedToParty.inviteMessage)}
+          >
+            Join Party
+          </button>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="conversation-messages" onClick={() => setActiveMessageId(null)}>
         {isLoading ? (
@@ -907,7 +1094,12 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         ) : messages.length === 0 ? (
           <div className="conversation-empty">
             <p>No messages yet</p>
-            <span>Send a message to start the conversation</span>
+            <span>
+              {isGroupChat && recipients.length > 1
+                ? `Send a message to ${recipients.length} people`
+                : 'Send a message to start the conversation'
+              }
+            </span>
           </div>
         ) : messages.map((msg) => {
           const reactions = messageReactions[msg.id] || []
@@ -920,10 +1112,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             >
               {!msg.isOwn && (
                 <div className="chat-message-avatar">
-                  <img src={user.avatar} alt={user.username} />
+                  <img src={msg.senderAvatar || user.avatar} alt={msg.senderName || user.username} />
                 </div>
               )}
               <div className="chat-bubble-wrapper">
+                {/* Sender name for groupchats and party chats */}
+                {(isGroupChat || isPartyChat) && !msg.isOwn && msg.senderName && (
+                  <span className="chat-sender-name">{msg.senderName}</span>
+                )}
+
                 {/* Reply preview if this message is a reply */}
                 {msg.replyTo && (
                   <div className="chat-reply-preview">
@@ -982,13 +1179,22 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                       )}
                       <div className="party-invite-text">
                         {msg.isOwn ? (
-                          <>You invited them to join</>
+                          isGroupChat ? <>This group is now a party!</> : <>You invited them to join</>
                         ) : (
-                          <><strong>{user.username}</strong> invited you to join</>
+                          isGroupChat ? (
+                            <><strong>{msg.senderName || 'Someone'}</strong> converted this group to a party</>
+                          ) : (
+                            <><strong>{user.username}</strong> invited you to join</>
+                          )
                         )}
                       </div>
                       <div className="party-invite-name">{msg.metadata.partyName}</div>
                       <div className="party-invite-handle">@{msg.metadata.partyHandle}</div>
+                      {isGroupChat && !msg.isOwn && (
+                        <div className="party-invite-warning">
+                          Accept the invite to continue seeing messages
+                        </div>
+                      )}
                       <button
                         className={`party-invite-btn ${msg.isOwn ? 'sent' : ''}`}
                         onClick={(e) => {
@@ -999,7 +1205,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                         }}
                         style={msg.isOwn ? { background: '#666', cursor: 'default' } : {}}
                       >
-                        {msg.isOwn ? 'Sent' : (msg.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party')}
+                        {msg.isOwn ? (isGroupChat ? 'Created' : 'Sent') : (msg.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party')}
                       </button>
                     </div>
                   </div>
@@ -1206,21 +1412,58 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               // Navigate back after leaving the party
               onBack()
             }}
+            onCreateGroupChat={(selectedMembers) => {
+              // Close party settings and trigger groupchat creation
+              setShowPartySettings(false)
+              if (onCreateGroupChat) {
+                onCreateGroupChat(selectedMembers)
+              }
+            }}
           />
         ) : (
           <ChatSettings
             chat={{
-              name: user.username,
-              username: user.username,
-              avatar: user.avatar,
-              party: user.party,
+              name: isGroupChat ? `${(conversation.allMembers || recipients).length} people` : user.username,
+              username: isGroupChat ? recipients.map(r => r.username).join(', ') : user.username,
+              avatar: isGroupChat ? recipients[0]?.avatarUrl || recipients[0]?.avatar : user.avatar,
+              party: isGroupChat ? null : user.party,
             }}
-            isGroupChat={false}
+            isGroupChat={isGroupChat}
+            groupChatId={isGroupChat ? conversation.groupChatId : null}
+            groupChatMembers={isGroupChat ? (conversation.allMembers || recipients) : null}
+            groupChatCreatorId={isGroupChat ? conversation.createdById : null}
             onClose={() => setShowPartySettings(false)}
             conversation={conversation}
             onSettingsChange={(changes) => {
               // Update the conversation state if needed
               console.log('Chat settings changed:', changes)
+              if (changes.membersUpdated && isGroupChat && setSharedConversations) {
+                // Refresh groupchat data to get updated members
+                groupchatsApi.get(conversation.groupChatId).then(res => {
+                  if (res.data) {
+                    // Update the conversation in the shared list
+                    setSharedConversations(prev => prev.map(c =>
+                      c.id === conversation.id
+                        ? { ...c, allMembers: res.data.members, recipients: res.data.members.filter(m => m.id !== currentUser?.id) }
+                        : c
+                    ))
+                  }
+                }).catch(err => console.error('Failed to refresh members:', err))
+              }
+            }}
+            currentUserId={currentUser?.id}
+            onPartyCreated={async (partyData) => {
+              console.log('Party created from groupchat:', partyData)
+              if (onPartyCreatedFromGroupchat && isGroupChat) {
+                // Get member IDs from the groupchat
+                const memberIds = (conversation.allMembers || recipients || []).map(m => m.id)
+                const result = await onPartyCreatedFromGroupchat(partyData, conversation.groupChatId, memberIds)
+                if (result?.success) {
+                  console.log('Party created successfully:', result.party)
+                  // Close the settings
+                  setShowPartySettings(false)
+                }
+              }
             }}
           />
         ),

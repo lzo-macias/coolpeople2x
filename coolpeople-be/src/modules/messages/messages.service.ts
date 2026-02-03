@@ -161,10 +161,12 @@ export const getConversations = async (
     });
 
     // Create a party chat conversation entry
+    // Use membership.joinedAt if no messages, so newly joined party chats appear at top
     const partyChatConversation: ConversationResponse = {
       id: `party-${party.id}`,
       partyId: party.id,
       isPartyChat: true,
+      joinedAt: membership.joinedAt,
       otherUser: {
         id: party.id,
         username: party.name,
@@ -188,7 +190,7 @@ export const getConversations = async (
             content: `Welcome to ${party.name}!`,
             metadata: null,
             readAt: new Date(),
-            createdAt: party.createdAt,
+            createdAt: membership.joinedAt, // Use joinedAt instead of party.createdAt
           },
       unreadCount: 0, // Party chat doesn't track individual read status
       isPinned: partySettings?.isPinned ?? false,

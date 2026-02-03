@@ -3,7 +3,7 @@ import { messagesApi, partiesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/PartySettings.css'
 
-function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave }) {
+function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave, onCreateGroupChat }) {
   const { user: currentUser } = useAuth()
   const [activeSection, setActiveSection] = useState(null)
   const [members, setMembers] = useState([])
@@ -79,7 +79,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
     avatar: party?.avatar || 'https://i.pravatar.cc/150?img=47',
     color: party?.color || '#EC4899',
     description: party?.description || 'A party for the people, by the people.',
-    isPrivate: true, // false = public (anyone can join), true = private (must request)
+    isPrivate: party?.isPrivate ?? false, // Read from backend: false = public, true = private
     notifications: !conversation?.isMuted, // Initialize from conversation settings
   })
 
@@ -149,6 +149,8 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
   const [bannedSearchQuery, setBannedSearchQuery] = useState('')
   const [bannedUsers, setBannedUsers] = useState([])
   const [isLoadingBanned, setIsLoadingBanned] = useState(false)
+  const [groupChatSearchQuery, setGroupChatSearchQuery] = useState('')
+  const [selectedGroupChatMembers, setSelectedGroupChatMembers] = useState([])
 
   const togglePermission = (key) => {
     setAdminPermissions(prev => ({ ...prev, [key]: !prev[key] }))
@@ -1204,6 +1206,111 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
     </div>
   )
 
+  // Render New Groupchat Section
+  const toggleGroupChatMember = (memberId) => {
+    if (selectedGroupChatMembers.includes(memberId)) {
+      setSelectedGroupChatMembers(prev => prev.filter(id => id !== memberId))
+    } else {
+      setSelectedGroupChatMembers(prev => [...prev, memberId])
+    }
+  }
+
+  const filteredGroupChatMembers = members.filter(member =>
+    member.id !== currentUser?.id && // Exclude current user - they'll be added automatically
+    member.username.toLowerCase().includes(groupChatSearchQuery.toLowerCase())
+  )
+
+  const handleCreateGroupChat = () => {
+    // Get full member data for selected members
+    const selectedMembersData = members.filter(m => selectedGroupChatMembers.includes(m.id))
+    console.log('Creating groupchat with members:', selectedMembersData)
+
+    // Call the callback with selected members
+    if (onCreateGroupChat && selectedMembersData.length > 0) {
+      onCreateGroupChat(selectedMembersData)
+    }
+
+    // Close settings
+    setActiveSection(null)
+    setGroupChatSearchQuery('')
+    setSelectedGroupChatMembers([])
+    onClose()
+  }
+
+  const renderNewGroupChatSection = () => (
+    <div className="party-settings-page">
+      <div className="party-settings-header">
+        <button className="party-settings-back" onClick={() => { setActiveSection(null); setGroupChatSearchQuery(''); setSelectedGroupChatMembers([]); }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <h1 className="party-settings-title">New Groupchat</h1>
+        <div style={{ width: 36 }} />
+      </div>
+
+      <div className="party-send-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search members..."
+          className="party-send-search-input"
+          value={groupChatSearchQuery}
+          onChange={(e) => setGroupChatSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {isLoadingMembers ? (
+        <div className="party-banned-empty">
+          <p>Loading members...</p>
+        </div>
+      ) : (
+        <div className="party-send-list">
+          {filteredGroupChatMembers.map(member => {
+            const isSelected = selectedGroupChatMembers.includes(member.id)
+
+            return (
+              <div key={member.id} className="party-send-item">
+                <img src={member.avatar} alt={member.username} className="party-send-avatar" />
+                <div className="party-member-info" style={{ flex: 1 }}>
+                  <span className="party-send-username">{member.username}</span>
+                  <span className="party-member-role" style={{ fontSize: 11, opacity: 0.6 }}>{member.role}</span>
+                </div>
+                <button
+                  className={`party-send-status-btn ${isSelected ? 'sent' : ''}`}
+                  onClick={() => toggleGroupChatMember(member.id)}
+                >
+                  {isSelected ? 'Added' : 'Add'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {filteredGroupChatMembers.length === 0 && !isLoadingMembers && (
+        <div className="party-banned-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+          </svg>
+          <p>No members found</p>
+        </div>
+      )}
+
+      <button
+        className={`party-done-btn ${selectedGroupChatMembers.length > 0 ? 'active' : ''}`}
+        onClick={handleCreateGroupChat}
+        disabled={selectedGroupChatMembers.length === 0}
+      >
+        Create Groupchat {selectedGroupChatMembers.length > 0 && `(${selectedGroupChatMembers.length})`}
+      </button>
+    </div>
+  )
+
   // Render placeholder sections
   const renderPlaceholder = (title) => (
     <div className="party-settings-page">
@@ -1229,7 +1336,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
       {activeSection === 'members' && renderMembersSection()}
       {activeSection === 'requests' && renderRequestsSection()}
       {activeSection === 'edit-profile' && renderPlaceholder('Edit Party')}
-      {activeSection === 'new-groupchat' && renderPlaceholder('New Groupchat')}
+      {activeSection === 'new-groupchat' && renderNewGroupChatSection()}
       {activeSection === 'administrative' && renderAdministrativeSection()}
       {activeSection === 'chat-settings' && renderChatSettingsSection()}
       {activeSection === 'banned' && renderBannedSection()}

@@ -573,6 +573,39 @@ export const setupPartyRoomAutoJoin = () => {
 }
 
 // =============================================================================
+// User Groupchat Events
+// =============================================================================
+
+/**
+ * Listen for user groupchat messages
+ * @param {Function} callback - Called when a groupchat message arrives
+ * @returns {Function} Cleanup function
+ */
+export const onGroupChatMessage = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      groupChatId: data.groupChatId,
+      message: {
+        id: data.id,
+        content: data.content,
+        createdAt: new Date(data.createdAt),
+        user: data.user,
+      },
+    })
+  }
+
+  socket.on('groupchat:message', handler)
+  eventListeners.set('groupchat:message', handler)
+
+  return () => {
+    socket?.off('groupchat:message', handler)
+    eventListeners.delete('groupchat:message')
+  }
+}
+
+// =============================================================================
 // DM Reaction Events
 // =============================================================================
 
@@ -660,6 +693,7 @@ export default {
   onPartyMessage,
   onPartyMemberJoined,
   onPartyMemberLeft,
+  onGroupChatMessage,
   onDmReactionAdded,
   onDmReactionRemoved,
 }

@@ -280,10 +280,24 @@ export const createParty = async (
       },
     });
 
-    // Create group chat for the party
-    await tx.groupChat.create({
-      data: { partyId: newParty.id },
-    });
+    // Handle group chat: either convert existing user groupchat or create new party chat
+    if (data.groupChatId) {
+      // Convert existing user groupchat to be this party's chat
+      // This links the UserGroupChat to the party and updates its name
+      await tx.userGroupChat.update({
+        where: { id: data.groupChatId },
+        data: {
+          partyId: newParty.id,
+          name: data.name, // Update name to party name
+        },
+      });
+      // Don't create a separate GroupChat - the UserGroupChat now serves as the party chat
+    } else {
+      // Create new party group chat (traditional flow)
+      await tx.groupChat.create({
+        data: { partyId: newParty.id },
+      });
+    }
 
     // Update creator's primary party affiliation (displayed sitewide on their profile)
     // This changes their affiliation from Independent/previous party to this new party
@@ -704,20 +718,46 @@ export const leaveParty = async (
     return;
   }
 
-  // Prevent the last admin/leader from leaving (if there are other members)
-  const hasAdminOrLeader = membership.permissions.includes('leader') || membership.permissions.includes('admin');
-  if (hasAdminOrLeader) {
-    const adminCount = await prisma.partyMembership.count({
+  // If the leaving user is the leader, transfer leadership
+  const isLeader = membership.permissions.includes('leader');
+  if (isLeader) {
+    // Find the first admin (by join date) who isn't the leaving user
+    const firstAdmin = await prisma.partyMembership.findFirst({
       where: {
         partyId,
-        OR: [
-          { permissions: { has: 'admin' } },
-          { permissions: { has: 'leader' } },
-        ],
+        userId: { not: userId },
+        permissions: { has: 'admin' },
       },
+      orderBy: { joinedAt: 'asc' },
     });
-    if (adminCount <= 1) {
-      throw new ForbiddenError('Cannot leave party as the last admin. Transfer admin first or delete the party.');
+
+    if (firstAdmin) {
+      // Transfer leadership to the first admin
+      await prisma.partyMembership.update({
+        where: { id: firstAdmin.id },
+        data: {
+          permissions: [...new Set([...firstAdmin.permissions.filter(p => p !== 'admin'), 'leader'])],
+        },
+      });
+    } else {
+      // No admins, find the first member (by join date)
+      const firstMember = await prisma.partyMembership.findFirst({
+        where: {
+          partyId,
+          userId: { not: userId },
+        },
+        orderBy: { joinedAt: 'asc' },
+      });
+
+      if (firstMember) {
+        // Transfer leadership to the first member
+        await prisma.partyMembership.update({
+          where: { id: firstMember.id },
+          data: {
+            permissions: [...new Set([...firstMember.permissions, 'leader'])],
+          },
+        });
+      }
     }
   }
 

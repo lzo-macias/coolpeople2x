@@ -1,12 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/PartyCreationFlow.css'
-import { usersApi, favoritesApi, partiesApi } from '../services/api'
+import { usersApi, favoritesApi, partiesApi, searchApi } from '../services/api'
 
-function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVideoBase64, isMirrored, currentUserId, conversations = {} }) {
-  // Basic Info
+function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVideoBase64, isMirrored, currentUserId, conversations = {}, prefilledData = null }) {
+  // Check if this is a conversion from groupchat
+  const isFromGroupChat = prefilledData?.isFromGroupChat || false
+  const groupChatName = prefilledData?.groupChatName || null
+
+  // Basic Info - pre-fill from groupchat if available
   const [partyHandle, setPartyHandle] = useState('')
-  const [partyName, setPartyName] = useState('')
+  const [partyName, setPartyName] = useState(prefilledData?.defaultName || '')
   const [partyBio, setPartyBio] = useState('')
 
   // Name availability warnings
@@ -70,17 +74,20 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
   const [partyType, setPartyType] = useState('open') // 'open', 'closed'
   const [partyPrivacy, setPartyPrivacy] = useState('public') // 'public', 'private'
 
-  // Admin & Member Setup
+  // Admin & Member Setup - don't pre-fill individual members when converting from groupchat
   const [adminInvites, setAdminInvites] = useState([])
-  const [memberInvites, setMemberInvites] = useState([])
+  const [memberInvites, setMemberInvites] = useState(isFromGroupChat ? [] : (prefilledData?.memberInvites || []))
 
   // User picker modal state
   const [showUserPicker, setShowUserPicker] = useState(false)
   const [userPickerMode, setUserPickerMode] = useState('admin') // 'admin' or 'member'
   const [userPickerSearch, setUserPickerSearch] = useState('')
   const [suggestedUsers, setSuggestedUsers] = useState([])
+  const [searchResults, setSearchResults] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
   const userPickerSearchRef = useRef(null)
+  const searchTimeoutRef = useRef(null)
 
   // Fetch and rank suggested users when picker opens
   useEffect(() => {
@@ -90,42 +97,30 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     const fetchSuggestedUsers = async () => {
       setIsLoadingUsers(true)
       try {
-        // Fetch followers, following, and favorites in parallel
-        // API returns { success: true, data: [...] }
-        const [followersRes, followingRes, favoritesRes] = await Promise.all([
+        // Fetch ALL users AND relationship data in parallel
+        const [allUsersRes, followersRes, followingRes, favoritesRes] = await Promise.all([
+          searchApi.search('', { type: 'users', limit: 100 }).catch((err) => { console.log('All users error:', err); return { users: [] } }),
           usersApi.getFollowers(currentUserId).catch((err) => { console.log('Followers error:', err); return { data: [] } }),
           usersApi.getFollowing(currentUserId).catch((err) => { console.log('Following error:', err); return { data: [] } }),
           favoritesApi.getFavorites().catch((err) => { console.log('Favorites error:', err); return { data: [] } })
         ])
 
-        console.log('API responses:', { followersRes, followingRes, favoritesRes })
+        console.log('API responses:', { allUsersRes, followersRes, followingRes, favoritesRes })
 
-        // Extract data arrays from API responses
-        // getFollowers returns { success, data: { followers: [...], nextCursor } }
-        // getFollowing returns { success, data: { following: [...], nextCursor } }
-        // getFavorites returns { success, data: [...] } (array directly via sendPaginated)
+        // Extract all users from search
+        const allUsers = allUsersRes.data?.users || allUsersRes.users || []
+
+        // Extract relationship data
         const followers = followersRes.data?.followers || followersRes.followers || []
         const following = followingRes.data?.following || followingRes.following || []
         const favorites = Array.isArray(favoritesRes.data) ? favoritesRes.data : (favoritesRes.favorites || [])
 
-        console.log('Parsed data:', { followers, following, favorites })
-
-        // Build a map of users with their priority scores
-        // Algorithm: Higher score = higher priority to invite
-        const userScores = new Map()
+        console.log('Parsed data:', { allUsersCount: allUsers.length, followers: followers.length, following: following.length, favorites: favorites.length })
 
         // Create sets for quick lookup
-        // API returns flat objects for followers/following: { id, username, displayName, ... }
-        // Favorites has nested structure: { id, favoritedUser: { id, username, ... } }
         const followerIds = new Set(followers.map(f => f.id))
         const followingIds = new Set(following.map(f => f.id))
         const favoriteIds = new Set(favorites.map(f => f.favoritedUser?.id || f.id))
-
-        console.log('ID sets:', {
-          followerIds: [...followerIds],
-          followingIds: [...followingIds],
-          favoriteIds: [...favoriteIds]
-        })
 
         // Get conversation partner IDs (users you've messaged)
         const conversationUserIds = new Set(
@@ -134,79 +129,57 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             .map(c => c.participantId || c.userId)
         )
 
-        // Process all users and assign scores
-        const processUser = (user, source) => {
-          // Favorites have nested favoritedUser, followers/following are flat
-          const userId = user.favoritedUser?.id || user.id
-          if (!userId || userId === currentUserId) return
+        // Score all users based on relationship
+        const scoredUsers = allUsers
+          .filter(u => u.id !== currentUserId)
+          .map(user => {
+            let score = 0
+            const reasons = []
 
-          const userData = user.favoritedUser || user
-
-          if (!userScores.has(userId)) {
-            userScores.set(userId, {
-              user: {
-                id: userId,
-                username: userData.username,
-                name: userData.displayName || userData.name,
-                avatar: userData.avatarUrl || userData.avatar,
-                userType: userData.userType
-              },
-              score: 0,
-              reasons: []
-            })
-          }
-
-          const entry = userScores.get(userId)
-
-          // Score based on relationship type (higher = more likely to invite)
-          // Mutual = follow each other = highest priority
-          if (followerIds.has(userId) && followingIds.has(userId)) {
-            if (!entry.reasons.includes('mutual')) {
-              entry.score += 100
-              entry.reasons.push('mutual')
+            // Mutual = follow each other = highest priority
+            if (followerIds.has(user.id) && followingIds.has(user.id)) {
+              score += 100
+              reasons.push('mutual')
             }
-          }
 
-          // Favorites = explicitly marked as important
-          if (favoriteIds.has(userId) && !entry.reasons.includes('favorite')) {
-            entry.score += 80
-            entry.reasons.push('favorite')
-          }
+            // Favorites = explicitly marked as important
+            if (favoriteIds.has(user.id)) {
+              score += 80
+              reasons.push('favorite')
+            }
 
-          // Recent conversations = active engagement
-          if (conversationUserIds.has(userId) && !entry.reasons.includes('messaged')) {
-            entry.score += 60
-            entry.reasons.push('messaged')
-          }
+            // Recent conversations = active engagement
+            if (conversationUserIds.has(user.id)) {
+              score += 60
+              reasons.push('messaged')
+            }
 
-          // Followers = they're interested in you
-          if (followerIds.has(userId) && !entry.reasons.includes('follower')) {
-            entry.score += 40
-            entry.reasons.push('follower')
-          }
+            // Followers = they're interested in you
+            if (followerIds.has(user.id) && !reasons.includes('mutual')) {
+              score += 40
+              reasons.push('follower')
+            }
 
-          // Following = you're interested in them
-          if (followingIds.has(userId) && !entry.reasons.includes('following')) {
-            entry.score += 20
-            entry.reasons.push('following')
-          }
-        }
+            // Following = you're interested in them
+            if (followingIds.has(user.id) && !reasons.includes('mutual')) {
+              score += 20
+              reasons.push('following')
+            }
 
-        followers.forEach(f => processUser(f, 'follower'))
-        following.forEach(f => processUser(f, 'following'))
-        favorites.forEach(f => processUser(f, 'favorite'))
-
-        // Sort by score descending
-        const rankedUsers = Array.from(userScores.values())
+            return {
+              id: user.id,
+              username: user.username,
+              name: user.displayName || user.name,
+              avatar: user.avatarUrl || user.avatar,
+              userType: user.userType,
+              score,
+              reasons
+            }
+          })
           .sort((a, b) => b.score - a.score)
-          .map(entry => ({
-            ...entry.user,
-            score: entry.score,
-            reasons: entry.reasons
-          }))
 
-        console.log('Ranked users:', rankedUsers)
-        setSuggestedUsers(rankedUsers)
+        console.log('Scored users:', scoredUsers.length)
+        setSuggestedUsers(scoredUsers)
       } catch (error) {
         console.error('Error fetching suggested users:', error)
         setSuggestedUsers([])
@@ -216,7 +189,8 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     }
 
     fetchSuggestedUsers()
-  }, [showUserPicker, currentUserId, conversations])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUserPicker, currentUserId])
 
   // Focus search input when picker opens
   useEffect(() => {
@@ -225,19 +199,63 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
     }
   }, [showUserPicker])
 
-  // Filter users based on search
-  const filteredPickerUsers = suggestedUsers.filter(user => {
+  // Search all users when search query changes
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // If no search query, clear search results
+    if (!userPickerSearch || userPickerSearch.length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    // Debounce search
+    setIsSearching(true)
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await searchApi.search(userPickerSearch, { type: 'users' })
+        const users = response.data?.users || response.users || []
+        // Transform to match our user format
+        const transformedUsers = users
+          .filter(u => u.id !== currentUserId)
+          .map(u => ({
+            id: u.id,
+            username: u.username,
+            name: u.displayName || u.name,
+            avatar: u.avatarUrl || u.avatar,
+            userType: u.userType,
+            score: 0,
+            reasons: []
+          }))
+        setSearchResults(transformedUsers)
+      } catch (error) {
+        console.error('Search error:', error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [userPickerSearch, currentUserId])
+
+  // Get users to display - search results if searching, otherwise suggested users
+  const displayUsers = userPickerSearch && userPickerSearch.length >= 2 ? searchResults : suggestedUsers
+
+  // Filter users based on already selected
+  const filteredPickerUsers = displayUsers.filter(user => {
     // Only exclude if already in the current mode's list (can be both admin AND member)
     if (userPickerMode === 'admin' && adminInvites.find(a => a.id === user.id)) return false
     if (userPickerMode === 'member' && memberInvites.find(m => m.id === user.id)) return false
-
-    // Filter by search query
-    if (!userPickerSearch) return true
-    const query = userPickerSearch.toLowerCase()
-    return (
-      user.username?.toLowerCase().includes(query) ||
-      user.name?.toLowerCase().includes(query)
-    )
+    return true
   })
 
   // Open user picker
@@ -616,32 +634,48 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
       </button>
 
       <div className="party-content">
-        {/* Video Preview */}
-        <div className="party-video-preview">
-          {recordedVideoUrl ? (
-            <video
-              ref={videoRef}
-              src={recordedVideoUrl}
-              className={isMirrored ? 'mirrored' : ''}
-              autoPlay
-              loop
-              playsInline
-            />
-          ) : (
-            <div className="party-video-placeholder">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <polygon points="23 7 16 12 23 17 23 7"/>
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-              </svg>
-            </div>
-          )}
-          <button className="party-edit-cover-btn">
-            Edit<br/>Cover
-          </button>
-          <button className="party-edit-video-btn">
-            Edit<br/>Video
-          </button>
-        </div>
+        {/* Video Preview - hidden when converting from groupchat */}
+        {!isFromGroupChat && (
+          <div className="party-video-preview">
+            {recordedVideoUrl ? (
+              <video
+                ref={videoRef}
+                src={recordedVideoUrl}
+                className={isMirrored ? 'mirrored' : ''}
+                autoPlay
+                loop
+                playsInline
+              />
+            ) : (
+              <div className="party-video-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <polygon points="23 7 16 12 23 17 23 7"/>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+              </div>
+            )}
+            <button className="party-edit-cover-btn">
+              Edit<br/>Cover
+            </button>
+            <button className="party-edit-video-btn">
+              Edit<br/>Video
+            </button>
+          </div>
+        )}
+
+        {/* Header for groupchat conversion */}
+        {isFromGroupChat && (
+          <div className="party-groupchat-header">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <h2>Create Party from Group</h2>
+            <p>Turn your group chat into a party</p>
+          </div>
+        )}
 
         {/* Party Photo */}
         <div className="party-photo-row">
@@ -811,8 +845,19 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             <span className="party-search-placeholder">Search users...</span>
           </button>
 
-          {memberInvites.length > 0 && (
+          {(isFromGroupChat && groupChatName || memberInvites.length > 0) && (
             <div className="party-admin-list">
+              {isFromGroupChat && groupChatName && (
+                <div className="party-admin-chip disabled">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  <span>{groupChatName}</span>
+                </div>
+              )}
               {memberInvites.map(member => (
                 <div key={member.id} className="party-admin-chip">
                   <img src={member.avatar} alt={member.name} />
@@ -872,13 +917,16 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="party-section-divider">
-          <span>Post Settings</span>
-        </div>
+        {/* Post Settings - hidden when converting from groupchat */}
+        {!isFromGroupChat && (
+          <>
+            {/* Divider */}
+            <div className="party-section-divider">
+              <span>Post Settings</span>
+            </div>
 
-        {/* Video Preview for Post */}
-        <div className="party-post-video-preview">
+            {/* Video Preview for Post */}
+            <div className="party-post-video-preview">
           {recordedVideoUrl ? (
             <video
               src={recordedVideoUrl}
@@ -998,28 +1046,41 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             </button>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* Bottom Actions */}
       <div className="party-bottom-actions">
-        <button className="party-drafts-btn" onClick={onClose}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
-          Drafts
-        </button>
+        {!isFromGroupChat && (
+          <button className="party-drafts-btn" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Drafts
+          </button>
+        )}
         <button
-          className="party-submit-btn"
+          className={`party-submit-btn ${isFromGroupChat ? 'full-width' : ''}`}
           onClick={handleCreateParty}
           disabled={!canCreate}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 19V5M5 12l7-7 7 7"/>
+            {isFromGroupChat ? (
+              <>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </>
+            ) : (
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            )}
           </svg>
-          Post
+          {isFromGroupChat ? 'Create Party' : 'Post'}
         </button>
       </div>
 
@@ -1039,9 +1100,19 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             <p className="party-confirm-message">
               You're currently <strong>Independent</strong>. Creating this party will change your affiliation from Independent to <strong style={{ color: partyColor }}>{formatPartyName(partyName) || formatPartyName(partyHandle)} Party</strong>.
             </p>
+            {isFromGroupChat && (
+              <div className="party-confirm-warning">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span>Members will need to <strong>accept the invite and join</strong> to continue seeing messages and chat details.</span>
+              </div>
+            )}
             <div className="party-confirm-actions">
               <button className="party-confirm-cancel" onClick={() => setShowConfirmation(false)}>
-                Stay Independent
+                {isFromGroupChat ? 'Cancel' : 'Stay Independent'}
               </button>
               <button className="party-confirm-create" style={{ background: partyColor }} onClick={confirmCreateParty}>
                 Create Party
@@ -1177,28 +1248,37 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
             </div>
 
             {/* Algorithm explanation */}
-            {!userPickerSearch && (
-              <div className="user-picker-algo-hint">
-                Suggested based on mutual connections, favorites, and recent activity
-              </div>
-            )}
+            <div className="user-picker-algo-hint">
+              {userPickerSearch && userPickerSearch.length >= 2
+                ? `Searching all users for "${userPickerSearch}"`
+                : 'Search for any user or choose from suggestions below'
+              }
+            </div>
 
             {/* User list */}
             <div className="user-picker-list">
-              {isLoadingUsers ? (
+              {isLoadingUsers || isSearching ? (
                 <div className="user-picker-loading">
                   <div className="user-picker-spinner" />
-                  <span>Loading suggestions...</span>
+                  <span>{isSearching ? 'Searching...' : 'Loading suggestions...'}</span>
                 </div>
               ) : filteredPickerUsers.length === 0 ? (
                 <div className="user-picker-empty">
-                  {userPickerSearch ? (
+                  {userPickerSearch && userPickerSearch.length >= 2 ? (
                     <>
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <circle cx="11" cy="11" r="8" />
                         <path d="M21 21l-4.35-4.35" />
                       </svg>
                       <span>No users found for "{userPickerSearch}"</span>
+                    </>
+                  ) : userPickerSearch && userPickerSearch.length < 2 ? (
+                    <>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="M21 21l-4.35-4.35" />
+                      </svg>
+                      <span>Type at least 2 characters to search</span>
                     </>
                   ) : (
                     <>
@@ -1208,7 +1288,7 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
-                      <span>Follow some users to see suggestions</span>
+                      <span>Search for any user to invite</span>
                     </>
                   )}
                 </div>

@@ -208,6 +208,11 @@ model User {
   chatReactions   ChatReaction[]
   conversationSettings      ConversationSettings[] @relation("UserConversationSettings")
 
+  // User Groupchats
+  createdGroupChats     UserGroupChat[] @relation("GroupChatCreator")
+  groupChatMemberships  UserGroupChatMember[]
+  groupChatMessages     UserGroupChatMessage[]
+
   // Icebreakers
   icebreakers     Icebreaker[]
 
@@ -299,6 +304,7 @@ model Party {
 
   // Chat
   groupChat       GroupChat?
+  userGroupChat   UserGroupChat?  @relation("PartyGroupChat") // Converted user groupchat
 
   // Icebreakers
   icebreakers     Icebreaker[]
@@ -1006,6 +1012,63 @@ model ChatReaction {
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
+}
+
+// =============================================================================
+// USER GROUPCHATS (User-created groupchats, separate from party chats)
+// =============================================================================
+
+model UserGroupChat {
+  id          String   @id @default(uuid())
+  name        String?  // Optional name for the groupchat
+  createdById String   // User who created the groupchat
+  partyId     String?  @unique // If set, this groupchat has been converted to a party chat
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User     @relation("GroupChatCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  party       Party?   @relation("PartyGroupChat", fields: [partyId], references: [id], onDelete: SetNull)
+  members     UserGroupChatMember[]
+  messages    UserGroupChatMessage[]
+
+  @@index([createdById])
+  @@index([partyId])
+}
+
+model UserGroupChatMember {
+  id          String   @id @default(uuid())
+  groupChatId String
+  userId      String
+
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime? // When user actually left the chat (won't receive new messages)
+  clearedAt   DateTime? // When user cleared their chat history (still a member, only sees messages after this)
+  isPinned    Boolean  @default(false)
+  isMuted     Boolean  @default(false)
+  isHidden    Boolean  @default(false)
+
+  groupChat   UserGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupChatId, userId])
+  @@index([userId])
+  @@index([groupChatId])
+}
+
+model UserGroupChatMessage {
+  id          String   @id @default(uuid())
+  groupChatId String
+  userId      String
+  content     String
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+
+  groupChat   UserGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([groupChatId, createdAt])
 }
 
 // =============================================================================

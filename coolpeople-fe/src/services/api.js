@@ -536,8 +536,9 @@ export const notificationsApi = {
 export const searchApi = {
   search: (query, options = {}) => {
     const params = new URLSearchParams();
-    params.append('q', query);
+    params.append('q', query || '');
     if (options.type) params.append('type', options.type);
+    if (options.limit) params.append('limit', options.limit.toString());
     if (options.cursor) params.append('cursor', options.cursor);
     return apiFetch(`/api/search?${params.toString()}`);
   },
@@ -603,6 +604,77 @@ export const icebreakersApi = {
 };
 
 // =============================================================================
+// Groupchats API (User-created groupchats)
+// =============================================================================
+
+export const groupchatsApi = {
+  // Create a new groupchat (or get existing one with same members)
+  create: (memberIds, name) => apiFetch('/api/groupchats', {
+    method: 'POST',
+    body: JSON.stringify({ memberIds, name }),
+  }),
+
+  // Get all groupchats for current user
+  getAll: () => apiFetch('/api/groupchats'),
+
+  // Find existing groupchat by members
+  findByMembers: (memberIds) => apiFetch('/api/groupchats/find-by-members', {
+    method: 'POST',
+    body: JSON.stringify({ memberIds }),
+  }),
+
+  // Get a specific groupchat
+  get: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}`),
+
+  // Get messages for a groupchat
+  getMessages: (groupChatId, cursor) => apiFetch(`/api/groupchats/${groupChatId}/messages${cursor ? `?cursor=${cursor}` : ''}`),
+
+  // Send a message to a groupchat
+  sendMessage: (groupChatId, content, metadata) => apiFetch(`/api/groupchats/${groupChatId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content, ...(metadata && { metadata }) }),
+  }),
+
+  // Pin a groupchat
+  pin: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/pin`, { method: 'POST' }),
+
+  // Unpin a groupchat
+  unpin: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/pin`, { method: 'DELETE' }),
+
+  // Mute a groupchat
+  mute: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/mute`, { method: 'POST' }),
+
+  // Unmute a groupchat
+  unmute: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/mute`, { method: 'DELETE' }),
+
+  // Hide a groupchat
+  hide: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/hide`, { method: 'POST' }),
+
+  // Unhide a groupchat
+  unhide: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}/hide`, { method: 'DELETE' }),
+
+  // Leave/delete a groupchat
+  leave: (groupChatId) => apiFetch(`/api/groupchats/${groupChatId}`, { method: 'DELETE' }),
+
+  // Add members to a groupchat
+  addMembers: (groupChatId, memberIds) => apiFetch(`/api/groupchats/${groupChatId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ memberIds }),
+  }),
+
+  // Get suggested users to add to a groupchat (followers, previously messaged)
+  getSuggestedUsers: (groupChatId, search) => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    const query = params.toString();
+    const path = groupChatId
+      ? `/api/groupchats/${groupChatId}/suggested-users`
+      : '/api/groupchats/suggested-users';
+    return apiFetch(`${path}${query ? `?${query}` : ''}`);
+  },
+};
+
+// =============================================================================
 // Export all APIs
 // =============================================================================
 
@@ -621,4 +693,5 @@ export default {
   favorites: favoritesApi,
   reviews: reviewsApi,
   icebreakers: icebreakersApi,
+  groupchats: groupchatsApi,
 };

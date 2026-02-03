@@ -46,6 +46,7 @@ export interface ConversationResponse {
   id?: string; // Optional - used for party chats
   partyId?: string; // Optional - set for party group chats
   isPartyChat?: boolean; // Optional - true for party group chats
+  joinedAt?: Date; // Optional - when user joined the party (for sorting new party chats)
   otherUser: ConversationUser;
   lastMessage: MessageResponse;
   unreadCount: number;

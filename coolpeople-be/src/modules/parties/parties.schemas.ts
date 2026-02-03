@@ -87,6 +87,7 @@ export const createPartySchema = z.object({
     bannerUrl: z.string().optional().nullable(),
     isPrivate: z.boolean().default(false),
     chatMode: z.enum(['OPEN', 'ADMIN_ONLY', 'CYCLE']).default('OPEN'),
+    groupChatId: z.string().uuid('Invalid groupchat ID').optional(), // Convert existing groupchat to party chat
   }),
 });
 
