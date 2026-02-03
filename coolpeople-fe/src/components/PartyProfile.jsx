@@ -143,7 +143,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
 
   // Format members for display
   const formattedMembers = members.map(m => ({
-    id: m.id,
+    id: m.userId,
     username: m.username,
     avatar: m.avatarUrl || 'https://i.pravatar.cc/40',
     party: party.name,
