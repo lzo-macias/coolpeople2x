@@ -19,7 +19,7 @@ const isPositiveChange = (change) => {
   return change.startsWith('+') || (!change.startsWith('-') && parseFloat(change) >= 0)
 }
 
-function EngagementScoreBar({ scores, onItemClick }) {
+function EngagementScoreBar({ scores, onItemClick, raceName }) {
   // Return empty spacer to maintain flex layout even when no scores
   if (!scores || scores.length === 0) return <div className="engagement-bar-spacer" />
 
@@ -32,7 +32,9 @@ function EngagementScoreBar({ scores, onItemClick }) {
   }, [scores])
 
   return (
-    <div className="engagement-bar">
+    <div className="engagement-bar-wrapper">
+      {raceName && <div className="engagement-bar-race-label">{raceName}</div>}
+      <div className="engagement-bar">
       {scores.map((score, idx) => {
         const partyColor = getPartyColor(score.party)
         const positions = randomPositions[idx]
@@ -78,6 +80,7 @@ function EngagementScoreBar({ scores, onItemClick }) {
           </div>
         )
       })}
+    </div>
     </div>
   )
 }

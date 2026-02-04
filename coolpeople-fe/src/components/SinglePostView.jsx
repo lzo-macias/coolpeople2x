@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ReelCard from './ReelCard'
 import '../styling/SinglePostView.css'
+import { selectEngagementForReel } from '../services/engagementRelevance'
 
 function SinglePostView({
   posts,
@@ -14,6 +15,8 @@ function SinglePostView({
   onTrackActivity,
   onCommentAdded,
   engagementScores,
+  engagementRaceName,
+  engagementContext,
   profileName = 'Profile'
 }) {
   const containerRef = useRef(null)
@@ -67,6 +70,19 @@ function SinglePostView({
     lastScrollTop.current = scrollTop
   }
 
+  // Compute per-post engagement using relevance engine
+  const enrichPost = (post) => {
+    const hasScoreboards = engagementContext?.allScoreboards && Object.keys(engagementContext.allScoreboards).length > 0
+    if (hasScoreboards) {
+      const result = selectEngagementForReel(post, engagementContext.allScoreboards, engagementContext.userContext)
+      if (result.scores.length > 0) {
+        return { ...post, engagementScores: result.scores, engagementRaceName: result.raceName }
+      }
+    }
+    // Fallback to static scores
+    return post.engagementScores ? post : { ...post, engagementScores, engagementRaceName }
+  }
+
   return (
     <div className="single-post-view">
       {/* Header - just back button */}
@@ -85,7 +101,7 @@ function SinglePostView({
         onScroll={handleScroll}
       >
         {posts.map((post, index) => {
-          const enrichedPost = post.engagementScores ? post : { ...post, engagementScores }
+          const enrichedPost = enrichPost(post)
           return (
           <div key={post.id || index} className="single-post-item">
             <ReelCard

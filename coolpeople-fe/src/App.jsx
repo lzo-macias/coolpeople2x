@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import './styling/App.css'
 import './styling/Auth.css'
@@ -25,6 +25,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi, racesApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
 import { mockReels, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
+import { selectEngagementForReel, normalizeScoreboardEntry } from './services/engagementRelevance'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
 const PAGES = ['scoreboard', 'home', 'search', 'messages', 'campaign', 'profile']
@@ -73,7 +74,9 @@ function AppContent() {
   const [navHistory, setNavHistory] = useState([])
   const [showSinglePostView, setShowSinglePostView] = useState(false) // Show reel in scrollable view
   const [singlePostViewData, setSinglePostViewData] = useState(null) // { posts, initialIndex }
-  const [topEngagedCandidates, setTopEngagedCandidates] = useState([]) // Top candidates for sparklines
+  const [topEngagedCandidates, setTopEngagedCandidates] = useState([]) // Top candidates for sparklines (fallback)
+  const [engagementRaceName, setEngagementRaceName] = useState('CoolPeople') // Race name for engagement bars (fallback)
+  const [allRaceScoreboards, setAllRaceScoreboards] = useState({}) // All race scoreboards for per-reel relevance
 
   // Refs must also be at the top
   const reelsFeedRef = useRef(null)
@@ -139,86 +142,111 @@ function AppContent() {
     fetchStories()
   }, [isAuthenticated])
 
-  // Fetch top engaged candidates for sparklines at top of reels
+  // Fetch all race scoreboards for per-reel engagement relevance
   useEffect(() => {
-    const fetchTopEngagedCandidates = async () => {
+    const fetchAllScoreboards = async () => {
       if (!isAuthenticated) return
       try {
-        // Try to get races and their scoreboards
         const racesResponse = await racesApi.listRaces()
         const races = racesResponse.data || []
 
-        // Get the first race with competitors (or CoolPeople race)
-        const targetRace = races.find(r => r.title === 'CoolPeople') || races[0]
+        if (races.length === 0) throw new Error('No races available')
 
-        if (targetRace) {
-          const scoreboardResponse = await racesApi.getScoreboard(targetRace.id, { limit: 10 })
-          const scoreboard = scoreboardResponse.data || []
-
-          // Transform scoreboard entries into engagement scores format
-          const engagementScores = scoreboard.slice(0, 3).map((entry, idx) => {
-            const user = entry.user || entry
-            // Calculate today's change from sparkline data (difference between last two snapshots)
-            const sparklinePoints = entry.sparkline?.map(s => s.points) || []
-            let todayChange = entry.todayChange || entry.change || null
-            if (todayChange == null && sparklinePoints.length >= 2) {
-              todayChange = Math.round((sparklinePoints[sparklinePoints.length - 1] - sparklinePoints[sparklinePoints.length - 2]) * 100) / 100
-            }
-            const trend = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : 'stable'
-
-            return {
-              id: `eng-${user.id || idx}`,
-              odId: user.id,
-              username: user.handle || user.username || user.displayName || `Candidate ${idx + 1}`,
-              avatar: user.avatarUrl || user.avatar || `https://i.pravatar.cc/40?img=${idx + 10}`,
-              party: user.party?.name || null,
-              sparklineData: entry.sparkline?.map(s => s.points) || generateSparklineData(trend),
-              recentChange: todayChange ? (todayChange > 0 ? `+${todayChange}` : `${todayChange}`) : null,
-              trend,
-              totalPoints: entry.totalPoints || 0,
-            }
+        // Fetch scoreboards for all races in parallel (cap at 20)
+        const scoreboards = {}
+        const results = await Promise.allSettled(
+          races.slice(0, 20).map(async (race) => {
+            const res = await racesApi.getScoreboard(race.id, { limit: 10 })
+            return { race, data: res.data || [] }
           })
+        )
 
-          if (engagementScores.length > 0) {
-            setTopEngagedCandidates(engagementScores)
+        results.forEach(result => {
+          if (result.status === 'fulfilled') {
+            const { race, data } = result.value
+            scoreboards[race.title] = {
+              raceId: race.id,
+              raceName: race.title,
+              entries: data.map((entry, idx) => normalizeScoreboardEntry(entry, idx, generateSparklineData)),
+            }
+          }
+        })
+
+        // Count total candidates across all scoreboards
+        const totalCandidates = Object.values(scoreboards).reduce((sum, sb) => sum + (sb.entries?.length || 0), 0)
+        if (totalCandidates < 4) {
+          // Not enough candidates from API for variety — fall through to fallback
+          throw new Error('Too few scoreboard candidates for variety')
+        }
+
+        setAllRaceScoreboards(scoreboards)
+
+        // Set CoolPeople (or first race) as default fallback
+        const defaultRace = races.find(r => r.title === 'CoolPeople') || races[0]
+        if (defaultRace) {
+          setEngagementRaceName(defaultRace.title || 'CoolPeople')
+          const defaultEntries = scoreboards[defaultRace.title]?.entries || []
+          if (defaultEntries.length > 0) {
+            setTopEngagedCandidates(defaultEntries.slice(0, 3))
           }
         }
       } catch (error) {
         console.log('Using default engagement scores:', error.message)
-        // Fallback to mock data if API fails
-        setTopEngagedCandidates([
-          {
-            id: 'eng-default-1',
-            username: 'Top.Candidate',
-            avatar: 'https://i.pravatar.cc/40?img=12',
-            party: 'Democrat',
-            sparklineData: generateSparklineData('up'),
-            recentChange: '+12',
-            trend: 'up',
+        // Build a fallback pool across multiple mock races so the
+        // relevance engine can still rotate candidates per reel
+        const fallbackPool = {
+          'CoolPeople': {
+            raceId: 'race-coolpeople',
+            raceName: 'CoolPeople',
+            entries: [
+              { id: 'eng-cp-1', userId: 'cp-1', username: 'Top.Candidate', avatar: 'https://i.pravatar.cc/40?img=12', party: 'Democrat', sparklineData: generateSparklineData('up'), recentChange: '+12', changeValue: 12, trend: 'up', totalPoints: 4200 },
+              { id: 'eng-cp-2', userId: 'cp-2', username: 'Rising.Star', avatar: 'https://i.pravatar.cc/40?img=5', party: 'Republican', sparklineData: generateSparklineData('up'), recentChange: '+8', changeValue: 8, trend: 'up', totalPoints: 3800 },
+              { id: 'eng-cp-3', userId: 'cp-3', username: 'Local.Leader', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Independent', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3100 },
+              { id: 'eng-cp-4', userId: 'cp-4', username: 'Voice.Of.Change', avatar: 'https://i.pravatar.cc/40?img=8', party: 'Progressive', sparklineData: generateSparklineData('up'), recentChange: '+5', changeValue: 5, trend: 'up', totalPoints: 2900 },
+              { id: 'eng-cp-5', userId: 'cp-5', username: 'Community.First', avatar: 'https://i.pravatar.cc/40?img=15', party: 'Green', sparklineData: generateSparklineData('down'), recentChange: '-3', changeValue: -3, trend: 'down', totalPoints: 2600 },
+            ],
           },
-          {
-            id: 'eng-default-2',
-            username: 'Rising.Star',
-            avatar: 'https://i.pravatar.cc/40?img=5',
-            party: 'Republican',
-            sparklineData: generateSparklineData('up'),
-            recentChange: '+8',
-            trend: 'up',
+          'Best Party': {
+            raceId: 'race-bestparty',
+            raceName: 'Best Party',
+            entries: [
+              { id: 'eng-bp-1', userId: 'bp-1', username: 'Party.Champion', avatar: 'https://i.pravatar.cc/40?img=20', party: 'Democrat', sparklineData: generateSparklineData('up'), recentChange: '+15', changeValue: 15, trend: 'up', totalPoints: 5100 },
+              { id: 'eng-bp-2', userId: 'bp-2', username: 'Rally.Leader', avatar: 'https://i.pravatar.cc/40?img=22', party: 'Republican', sparklineData: generateSparklineData('down'), recentChange: '-4', changeValue: -4, trend: 'down', totalPoints: 4500 },
+              { id: 'eng-bp-3', userId: 'bp-3', username: 'Grassroots.Hero', avatar: 'https://i.pravatar.cc/40?img=25', party: 'Green', sparklineData: generateSparklineData('up'), recentChange: '+10', changeValue: 10, trend: 'up', totalPoints: 3700 },
+              { id: 'eng-bp-4', userId: 'bp-4', username: 'Bold.Vision', avatar: 'https://i.pravatar.cc/40?img=30', party: 'Libertarian', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3200 },
+              { id: 'eng-bp-5', userId: 'bp-5', username: 'Action.Now', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Progressive', sparklineData: generateSparklineData('up'), recentChange: '+7', changeValue: 7, trend: 'up', totalPoints: 2800 },
+            ],
           },
-          {
-            id: 'eng-default-3',
-            username: 'Local.Leader',
-            avatar: 'https://i.pravatar.cc/40?img=3',
-            party: 'Independent',
-            sparklineData: generateSparklineData('stable'),
-            recentChange: null,
-            trend: 'stable',
+          'Mayor Race': {
+            raceId: 'race-mayor',
+            raceName: 'Mayor Race',
+            entries: [
+              { id: 'eng-mr-1', userId: 'mr-1', username: 'Mayor.Hopeful', avatar: 'https://i.pravatar.cc/40?img=40', party: 'Democrat', sparklineData: generateSparklineData('up'), recentChange: '+20', changeValue: 20, trend: 'up', totalPoints: 6200 },
+              { id: 'eng-mr-2', userId: 'mr-2', username: 'City.Builder', avatar: 'https://i.pravatar.cc/40?img=42', party: 'Republican', sparklineData: generateSparklineData('up'), recentChange: '+6', changeValue: 6, trend: 'up', totalPoints: 5800 },
+              { id: 'eng-mr-3', userId: 'mr-3', username: 'Downtown.Voice', avatar: 'https://i.pravatar.cc/40?img=45', party: 'Independent', sparklineData: generateSparklineData('down'), recentChange: '-2', changeValue: -2, trend: 'down', totalPoints: 4100 },
+              { id: 'eng-mr-4', userId: 'mr-4', username: 'For.The.People', avatar: 'https://i.pravatar.cc/40?img=48', party: 'Green', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3500 },
+            ],
           },
-        ])
+        }
+        setAllRaceScoreboards(fallbackPool)
+        setTopEngagedCandidates(fallbackPool['CoolPeople'].entries.slice(0, 3))
       }
     }
-    fetchTopEngagedCandidates()
+    fetchAllScoreboards()
   }, [isAuthenticated])
+
+  // Memoized engagement context for per-reel relevance scoring
+  const engagementContext = useMemo(() => ({
+    allScoreboards: allRaceScoreboards,
+    userContext: {
+      followedRaces: userRacesFollowing,
+      competingRaces: userRacesCompeting,
+      party: userParty?.name || 'Independent',
+      activity: userActivity,
+      userId: authUser?.id,
+      username: authUser?.username,
+    },
+  }), [allRaceScoreboards, userRacesFollowing, userRacesCompeting, userParty, userActivity, authUser])
 
   // Reusable function to load user profile data
   const loadUserProfile = async () => {
@@ -1514,10 +1542,20 @@ function AppContent() {
         <div className="page">
           <div className="reels-feed" ref={reelsFeedRef}>
             {reels.map((reel) => {
-              // Enrich reel with engagement scores if not already present
+              // Per-reel engagement: pick contextually relevant candidates
+              let reelScores = reel.engagementScores || topEngagedCandidates
+              let reelRaceName = reel.engagementRaceName || engagementRaceName
+              if (Object.keys(allRaceScoreboards).length > 0) {
+                const result = selectEngagementForReel(reel, allRaceScoreboards, engagementContext.userContext)
+                if (result.scores.length > 0) {
+                  reelScores = result.scores
+                  reelRaceName = result.raceName
+                }
+              }
               const enrichedReel = {
                 ...reel,
-                engagementScores: reel.engagementScores || topEngagedCandidates,
+                engagementScores: reelScores,
+                engagementRaceName: reelRaceName,
               }
               return (
                 <ReelCard
@@ -1628,6 +1666,8 @@ function AppContent() {
             onBioChange={handleBioChange}
             isActive={currentPage === 5}
             engagementScores={topEngagedCandidates}
+            engagementRaceName={engagementRaceName}
+            engagementContext={engagementContext}
           />
         </div>
       </div>
@@ -1896,6 +1936,8 @@ function AppContent() {
             onOpenComments={handleOpenComments}
             onTrackActivity={trackActivity}
             engagementScores={topEngagedCandidates}
+            engagementRaceName={engagementRaceName}
+            engagementContext={engagementContext}
             profileName="Feed"
           />
         </div>
@@ -1917,6 +1959,8 @@ function AppContent() {
             onOpenComments={handleOpenComments}
             userActivity={userActivity}
             engagementScores={topEngagedCandidates}
+            engagementRaceName={engagementRaceName}
+            engagementContext={engagementContext}
             isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id || activeCandidate?.userId === currentUser.id}
             cachedProfile={getCachedUserProfile(activeCandidate?.id || activeCandidate?.userId || activeCandidate?.username)}
             onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
@@ -1991,6 +2035,8 @@ function AppContent() {
               isOwnParty={userParty && (activeParty?.name === userParty.name || activeParty?.handle === userParty.handle)}
               onPartyJoined={refreshConversations}
               engagementScores={topEngagedCandidates}
+              engagementRaceName={engagementRaceName}
+              engagementContext={engagementContext}
             />
           </div>
         </div>
@@ -2011,6 +2057,8 @@ function AppContent() {
               onPartyClick={handleOpenPartyProfile}
               onOptIn={handleOptIn}
               engagementScores={topEngagedCandidates}
+              engagementRaceName={engagementRaceName}
+              engagementContext={engagementContext}
               cachedProfile={getCachedUserProfile(activeParticipant?.id || activeParticipant?.userId || activeParticipant?.username)}
               onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
               onFollowChange={(isNowFollowing, newFollowerCount) => {

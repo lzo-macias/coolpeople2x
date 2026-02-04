@@ -433,7 +433,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
       <div className="reel-overlay">
         {/* Top engagement sparkline charts */}
-        <EngagementScoreBar scores={data.engagementScores} onItemClick={(score) => { pauseVideo(); onEngagementClick?.(score) }} />
+        <EngagementScoreBar scores={data.engagementScores} raceName={data.targetRace || data.engagementRaceName || 'CoolPeople'} onItemClick={(score) => { pauseVideo(); onEngagementClick?.(score) }} />
 
         {/* Right side actions */}
         <div className="reel-actions-container">

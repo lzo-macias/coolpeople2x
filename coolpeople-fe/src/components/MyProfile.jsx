@@ -196,7 +196,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive, engagementScores }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive, engagementScores, engagementRaceName, engagementContext }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',
@@ -498,6 +498,8 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
         onAvatarChange={onAvatarChange}
         onBioChange={onBioChange}
         engagementScores={engagementScores}
+        engagementRaceName={engagementRaceName}
+        engagementContext={engagementContext}
       />
     )
   }
@@ -854,6 +856,8 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
           onOpenComments={(post) => onOpenComments?.(post, onUserPostCommentAdded)}
           onLikeChange={onUserPostLikeChange}
           engagementScores={engagementScores}
+          engagementRaceName={engagementRaceName}
+          engagementContext={engagementContext}
           profileName={profileData.username}
         />,
         document.getElementById('modal-root') || document.body
