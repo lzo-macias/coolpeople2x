@@ -358,7 +358,7 @@ export const getCompetitors = async (
 
 export const getScoreboard = async (
   raceId: string,
-  period: string = 'all',
+  period: string = '7d',
   cursor?: string,
   limit: number = 20,
   viewerId?: string

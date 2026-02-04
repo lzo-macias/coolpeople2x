@@ -59,7 +59,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
           // Fetch scoreboard for each race
           const scoreboardPromises = racesResponse.data.slice(0, 5).map(async (race) => {
             try {
-              const scoreboardResponse = await racesApi.getScoreboard(race.id, { limit: 20 })
+              const scoreboardResponse = await racesApi.getScoreboard(race.id, { limit: 20, period: '7d' })
               return { raceId: race.id, data: scoreboardResponse.data || [] }
             } catch (err) {
               return { raceId: race.id, data: [] }

@@ -89,7 +89,7 @@ export function normalizeScoreboardEntry(entry, idx, fallbackSparkline) {
       : (entity.handle || entity.username || entity.displayName || `Candidate ${idx + 1}`),
     avatar: entity.avatarUrl || entity.avatar || `https://i.pravatar.cc/40?img=${(idx % 70) + 1}`,
     party: isPartyEntry ? entity.name : (entity.party?.name || null),
-    sparklineData: sparklinePoints.length > 0 ? sparklinePoints : (fallbackSparkline ? fallbackSparkline(trend) : []),
+    sparklineData: sparklinePoints.length > 0 ? sparklinePoints : [],
     recentChange: todayChange ? (todayChange > 0 ? `+${todayChange}` : `${todayChange}`) : null,
     changeValue: todayChange || 0,
     trend,

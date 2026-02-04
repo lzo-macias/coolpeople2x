@@ -521,38 +521,29 @@ export const seedInitialSparkline = async (ledgerId: string): Promise<void> => {
     });
   }
 
-  // Generate 90 days of snapshots so each period selector (1D, 1W, 1M, 3M, ALL)
-  // shows a visually distinct sparkline with different data ranges.
-  // Uses a sigmoid-like growth curve with daily noise for a natural look.
+  // Seed 90 days of flat snapshots at the current total so every period
+  // selector (1D, 1W, 1M, 3M, ALL) has data. The line stays flat until
+  // real actions move the points up or down.
   const totalDays = 90;
-  const startFraction = 0.08; // start at ~8% of current total
+  const tier = getTierFromPoints(totalPoints);
 
   for (let i = 0; i < totalDays; i++) {
     const date = new Date();
     date.setDate(date.getDate() - (totalDays - 1 - i));
     date.setHours(0, 0, 0, 0);
 
-    // Sigmoid-ish curve: slow start, acceleration in middle, plateau near end
-    const t = i / (totalDays - 1); // 0 → 1
-    const sigmoid = 1 / (1 + Math.exp(-10 * (t - 0.4)));
-    const growthFactor = startFraction + (1 - startFraction) * sigmoid;
-
-    // Add daily jitter (+/- ~5%) for natural variation
-    const jitter = 0.95 + Math.random() * 0.10;
-    const dayPoints = Math.round(Math.max(0, totalPoints * growthFactor * jitter) * 100) / 100;
-
     await prisma.pointSnapshot.upsert({
       where: { ledgerId_date: { ledgerId, date } },
       create: {
         ledgerId,
-        points: dayPoints,
-        tier: getTierFromPoints(dayPoints),
+        points: totalPoints,
+        tier,
         rank: 0,
         date,
       },
       update: {
-        points: dayPoints,
-        tier: getTierFromPoints(dayPoints),
+        points: totalPoints,
+        tier,
       },
     });
   }

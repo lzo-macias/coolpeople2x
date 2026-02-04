@@ -24,7 +24,7 @@ import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi, racesApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
-import { mockReels, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
+import { mockReels, mockConversations, mockMessages } from './data/mockData'
 import { selectEngagementForReel, normalizeScoreboardEntry } from './services/engagementRelevance'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
@@ -156,7 +156,7 @@ function AppContent() {
         const scoreboards = {}
         const results = await Promise.allSettled(
           races.slice(0, 20).map(async (race) => {
-            const res = await racesApi.getScoreboard(race.id, { limit: 10 })
+            const res = await racesApi.getScoreboard(race.id, { limit: 10, period: '7d' })
             return { race, data: res.data || [] }
           })
         )
@@ -167,7 +167,7 @@ function AppContent() {
             scoreboards[race.title] = {
               raceId: race.id,
               raceName: race.title,
-              entries: data.map((entry, idx) => normalizeScoreboardEntry(entry, idx, generateSparklineData)),
+              entries: data.map((entry, idx) => normalizeScoreboardEntry(entry, idx, null)),
             }
           }
         })
@@ -199,32 +199,32 @@ function AppContent() {
             raceId: 'race-coolpeople',
             raceName: 'CoolPeople',
             entries: [
-              { id: 'eng-cp-1', userId: 'cp-1', username: 'Top.Candidate', avatar: 'https://i.pravatar.cc/40?img=12', party: 'Democrat', sparklineData: generateSparklineData('up'), recentChange: '+12', changeValue: 12, trend: 'up', totalPoints: 4200 },
-              { id: 'eng-cp-2', userId: 'cp-2', username: 'Rising.Star', avatar: 'https://i.pravatar.cc/40?img=5', party: 'Republican', sparklineData: generateSparklineData('up'), recentChange: '+8', changeValue: 8, trend: 'up', totalPoints: 3800 },
-              { id: 'eng-cp-3', userId: 'cp-3', username: 'Local.Leader', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Independent', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3100 },
-              { id: 'eng-cp-4', userId: 'cp-4', username: 'Voice.Of.Change', avatar: 'https://i.pravatar.cc/40?img=8', party: 'Progressive', sparklineData: generateSparklineData('up'), recentChange: '+5', changeValue: 5, trend: 'up', totalPoints: 2900 },
-              { id: 'eng-cp-5', userId: 'cp-5', username: 'Community.First', avatar: 'https://i.pravatar.cc/40?img=15', party: 'Green', sparklineData: generateSparklineData('down'), recentChange: '-3', changeValue: -3, trend: 'down', totalPoints: 2600 },
+              { id: 'eng-cp-1', userId: 'cp-1', username: 'Top.Candidate', avatar: 'https://i.pravatar.cc/40?img=12', party: 'Democrat', sparklineData: [], recentChange: '+12', changeValue: 12, trend: 'up', totalPoints: 4200 },
+              { id: 'eng-cp-2', userId: 'cp-2', username: 'Rising.Star', avatar: 'https://i.pravatar.cc/40?img=5', party: 'Republican', sparklineData: [], recentChange: '+8', changeValue: 8, trend: 'up', totalPoints: 3800 },
+              { id: 'eng-cp-3', userId: 'cp-3', username: 'Local.Leader', avatar: 'https://i.pravatar.cc/40?img=3', party: 'Independent', sparklineData: [], recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3100 },
+              { id: 'eng-cp-4', userId: 'cp-4', username: 'Voice.Of.Change', avatar: 'https://i.pravatar.cc/40?img=8', party: 'Progressive', sparklineData: [], recentChange: '+5', changeValue: 5, trend: 'up', totalPoints: 2900 },
+              { id: 'eng-cp-5', userId: 'cp-5', username: 'Community.First', avatar: 'https://i.pravatar.cc/40?img=15', party: 'Green', sparklineData: [], recentChange: '-3', changeValue: -3, trend: 'down', totalPoints: 2600 },
             ],
           },
           'Best Party': {
             raceId: 'race-bestparty',
             raceName: 'Best Party',
             entries: [
-              { id: 'eng-bp-1', partyId: 'bp-1', isParty: true, username: 'Unity Party', avatar: 'https://i.pravatar.cc/40?img=20', party: 'Unity Party', sparklineData: generateSparklineData('up'), recentChange: '+15', changeValue: 15, trend: 'up', totalPoints: 5100 },
-              { id: 'eng-bp-2', partyId: 'bp-2', isParty: true, username: 'Freedom Party', avatar: 'https://i.pravatar.cc/40?img=22', party: 'Freedom Party', sparklineData: generateSparklineData('down'), recentChange: '-4', changeValue: -4, trend: 'down', totalPoints: 4500 },
-              { id: 'eng-bp-3', partyId: 'bp-3', isParty: true, username: 'Green Alliance', avatar: 'https://i.pravatar.cc/40?img=25', party: 'Green Alliance', sparklineData: generateSparklineData('up'), recentChange: '+10', changeValue: 10, trend: 'up', totalPoints: 3700 },
-              { id: 'eng-bp-4', partyId: 'bp-4', isParty: true, username: 'Liberty League', avatar: 'https://i.pravatar.cc/40?img=30', party: 'Liberty League', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3200 },
-              { id: 'eng-bp-5', partyId: 'bp-5', isParty: true, username: 'Progress Now', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Progress Now', sparklineData: generateSparklineData('up'), recentChange: '+7', changeValue: 7, trend: 'up', totalPoints: 2800 },
+              { id: 'eng-bp-1', partyId: 'bp-1', isParty: true, username: 'Unity Party', avatar: 'https://i.pravatar.cc/40?img=20', party: 'Unity Party', sparklineData: [], recentChange: '+15', changeValue: 15, trend: 'up', totalPoints: 5100 },
+              { id: 'eng-bp-2', partyId: 'bp-2', isParty: true, username: 'Freedom Party', avatar: 'https://i.pravatar.cc/40?img=22', party: 'Freedom Party', sparklineData: [], recentChange: '-4', changeValue: -4, trend: 'down', totalPoints: 4500 },
+              { id: 'eng-bp-3', partyId: 'bp-3', isParty: true, username: 'Green Alliance', avatar: 'https://i.pravatar.cc/40?img=25', party: 'Green Alliance', sparklineData: [], recentChange: '+10', changeValue: 10, trend: 'up', totalPoints: 3700 },
+              { id: 'eng-bp-4', partyId: 'bp-4', isParty: true, username: 'Liberty League', avatar: 'https://i.pravatar.cc/40?img=30', party: 'Liberty League', sparklineData: [], recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3200 },
+              { id: 'eng-bp-5', partyId: 'bp-5', isParty: true, username: 'Progress Now', avatar: 'https://i.pravatar.cc/40?img=33', party: 'Progress Now', sparklineData: [], recentChange: '+7', changeValue: 7, trend: 'up', totalPoints: 2800 },
             ],
           },
           'Mayor Race': {
             raceId: 'race-mayor',
             raceName: 'Mayor Race',
             entries: [
-              { id: 'eng-mr-1', userId: 'mr-1', username: 'Mayor.Hopeful', avatar: 'https://i.pravatar.cc/40?img=40', party: 'Democrat', sparklineData: generateSparklineData('up'), recentChange: '+20', changeValue: 20, trend: 'up', totalPoints: 6200 },
-              { id: 'eng-mr-2', userId: 'mr-2', username: 'City.Builder', avatar: 'https://i.pravatar.cc/40?img=42', party: 'Republican', sparklineData: generateSparklineData('up'), recentChange: '+6', changeValue: 6, trend: 'up', totalPoints: 5800 },
-              { id: 'eng-mr-3', userId: 'mr-3', username: 'Downtown.Voice', avatar: 'https://i.pravatar.cc/40?img=45', party: 'Independent', sparklineData: generateSparklineData('down'), recentChange: '-2', changeValue: -2, trend: 'down', totalPoints: 4100 },
-              { id: 'eng-mr-4', userId: 'mr-4', username: 'For.The.People', avatar: 'https://i.pravatar.cc/40?img=48', party: 'Green', sparklineData: generateSparklineData('stable'), recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3500 },
+              { id: 'eng-mr-1', userId: 'mr-1', username: 'Mayor.Hopeful', avatar: 'https://i.pravatar.cc/40?img=40', party: 'Democrat', sparklineData: [], recentChange: '+20', changeValue: 20, trend: 'up', totalPoints: 6200 },
+              { id: 'eng-mr-2', userId: 'mr-2', username: 'City.Builder', avatar: 'https://i.pravatar.cc/40?img=42', party: 'Republican', sparklineData: [], recentChange: '+6', changeValue: 6, trend: 'up', totalPoints: 5800 },
+              { id: 'eng-mr-3', userId: 'mr-3', username: 'Downtown.Voice', avatar: 'https://i.pravatar.cc/40?img=45', party: 'Independent', sparklineData: [], recentChange: '-2', changeValue: -2, trend: 'down', totalPoints: 4100 },
+              { id: 'eng-mr-4', userId: 'mr-4', username: 'For.The.People', avatar: 'https://i.pravatar.cc/40?img=48', party: 'Green', sparklineData: [], recentChange: null, changeValue: 0, trend: 'stable', totalPoints: 3500 },
             ],
           },
         }
@@ -730,7 +730,7 @@ function AppContent() {
           username: currentUser.username,
           avatar: currentUser.avatar,
           party: currentUser.party,
-          sparklineData: generateSparklineData('up'),
+          sparklineData: [],
           recentChange: null,
           trend: 'up',
         },
@@ -739,7 +739,7 @@ function AppContent() {
           username: 'Lzo.macias.formayor',
           avatar: 'https://i.pravatar.cc/40?img=1',
           party: 'Democrat',
-          sparklineData: generateSparklineData('up'),
+          sparklineData: [],
           recentChange: '+1',
           trend: 'up',
         },
@@ -748,7 +748,7 @@ function AppContent() {
           username: 'Sarah.J.Council',
           avatar: 'https://i.pravatar.cc/40?img=5',
           party: 'Republican',
-          sparklineData: generateSparklineData('stable'),
+          sparklineData: [],
           recentChange: null,
           trend: 'stable',
         },

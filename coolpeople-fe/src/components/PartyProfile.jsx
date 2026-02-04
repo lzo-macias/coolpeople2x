@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import '../styling/PartyProfile.css'
-import { getPartyColor, generateSparklineData } from '../data/mockData'
+import { getPartyColor } from '../data/mockData'
 import Sparkline from './Sparkline'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'

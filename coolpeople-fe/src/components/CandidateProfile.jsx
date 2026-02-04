@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/CandidateProfile.css'
 import Sparkline from './Sparkline'
-import { getPartyColor, generateSparklineData } from '../data/mockData'
+import { getPartyColor } from '../data/mockData'
 import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 import { usersApi, reelsApi, reviewsApi, favoritesApi, pointsApi } from '../services/api'
@@ -962,7 +962,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           username: candidate.username,
           avatar: candidate.avatar,
           party: candidate.party,
-          sparklineData: generateSparklineData(trends[i % 3]),
+          sparklineData: [],
           recentChange: i % 2 === 0 ? '+1' : null,
           trend: trends[i % 3],
         },
@@ -971,7 +971,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           username: 'Lzo.macias',
           avatar: 'https://i.pravatar.cc/40?img=1',
           party: 'Democrat',
-          sparklineData: generateSparklineData(trends[(i + 1) % 3]),
+          sparklineData: [],
           recentChange: i % 3 === 0 ? '+2' : null,
           trend: trends[(i + 1) % 3],
         },
@@ -980,7 +980,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           username: 'Sarah.J',
           avatar: 'https://i.pravatar.cc/40?img=5',
           party: 'Republican',
-          sparklineData: generateSparklineData(trends[(i + 2) % 3]),
+          sparklineData: [],
           recentChange: null,
           trend: trends[(i + 2) % 3],
         },

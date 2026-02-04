@@ -8,28 +8,16 @@ import { getPartyColor } from '../data/mockData'
 import { racesApi, reelsApi } from '../services/api'
 
 // Helper to generate sparkline data
-const generateSparklineData = (trend = 'up', points = 20) => {
-  const data = []
-  let value = 50 + Math.random() * 20
-  for (let i = 0; i < points; i++) {
-    const change = (Math.random() - 0.5) * 15
-    const trendBias = trend === 'up' ? 0.5 : trend === 'down' ? -0.5 : 0
-    value = Math.max(10, Math.min(90, value + change + trendBias))
-    data.push(value)
-  }
-  return data
-}
-
 // Mock race candidates for the chart
 const raceChartData = [
-  { id: 1, name: 'William H.', avatar: 'https://i.pravatar.cc/40?img=12', data: [1.2, 1.5, 1.8, 2.1, 2.4, 2.6, 2.8, 2.9, 3.0], nominations: '25,000', stars: 4.8, sparkline: generateSparklineData('up') },
-  { id: 2, name: 'Sarah J.', avatar: 'https://i.pravatar.cc/40?img=5', data: [1.1, 1.3, 1.6, 1.9, 2.2, 2.4, 2.5, 2.6, 2.7], nominations: '18,500', stars: 4.5, sparkline: generateSparklineData('up') },
-  { id: 3, name: 'Alex M.', avatar: 'https://i.pravatar.cc/40?img=3', data: [1.0, 1.2, 1.4, 1.7, 1.9, 2.1, 2.3, 2.4, 2.5], nominations: '15,200', stars: 4.3, sparkline: generateSparklineData('stable') },
-  { id: 4, name: 'Mike T.', avatar: 'https://i.pravatar.cc/40?img=8', data: [0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.0, 2.1, 2.2], nominations: '12,800', stars: 4.1, sparkline: generateSparklineData('down') },
-  { id: 5, name: 'Jordan P.', avatar: 'https://i.pravatar.cc/40?img=14', data: [0.8, 1.0, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9], nominations: '9,400', stars: 3.9, sparkline: generateSparklineData('up') },
-  { id: 6, name: 'Casey R.', avatar: 'https://i.pravatar.cc/40?img=16', data: [0.7, 0.9, 1.0, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7], nominations: '7,100', stars: 3.7, sparkline: generateSparklineData('stable') },
-  { id: 7, name: 'Taylor M.', avatar: 'https://i.pravatar.cc/40?img=18', data: [0.6, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], nominations: '5,600', stars: 3.5, sparkline: generateSparklineData('down') },
-  { id: 8, name: 'Morgan L.', avatar: 'https://i.pravatar.cc/40?img=20', data: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3], nominations: '3,200', stars: 3.2, sparkline: generateSparklineData('up') },
+  { id: 1, name: 'William H.', avatar: 'https://i.pravatar.cc/40?img=12', data: [1.2, 1.5, 1.8, 2.1, 2.4, 2.6, 2.8, 2.9, 3.0], nominations: '25,000', stars: 4.8, sparkline: [] },
+  { id: 2, name: 'Sarah J.', avatar: 'https://i.pravatar.cc/40?img=5', data: [1.1, 1.3, 1.6, 1.9, 2.2, 2.4, 2.5, 2.6, 2.7], nominations: '18,500', stars: 4.5, sparkline: [] },
+  { id: 3, name: 'Alex M.', avatar: 'https://i.pravatar.cc/40?img=3', data: [1.0, 1.2, 1.4, 1.7, 1.9, 2.1, 2.3, 2.4, 2.5], nominations: '15,200', stars: 4.3, sparkline: [] },
+  { id: 4, name: 'Mike T.', avatar: 'https://i.pravatar.cc/40?img=8', data: [0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.0, 2.1, 2.2], nominations: '12,800', stars: 4.1, sparkline: [] },
+  { id: 5, name: 'Jordan P.', avatar: 'https://i.pravatar.cc/40?img=14', data: [0.8, 1.0, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9], nominations: '9,400', stars: 3.9, sparkline: [] },
+  { id: 6, name: 'Casey R.', avatar: 'https://i.pravatar.cc/40?img=16', data: [0.7, 0.9, 1.0, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7], nominations: '7,100', stars: 3.7, sparkline: [] },
+  { id: 7, name: 'Taylor M.', avatar: 'https://i.pravatar.cc/40?img=18', data: [0.6, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], nominations: '5,600', stars: 3.5, sparkline: [] },
+  { id: 8, name: 'Morgan L.', avatar: 'https://i.pravatar.cc/40?img=20', data: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3], nominations: '3,200', stars: 3.2, sparkline: [] },
 ]
 
 // Mini sparkline for contestant rows
@@ -259,7 +247,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         const racesResponse = await racesApi.listRaces()
         const race = racesResponse.data?.find(r => r.title === reel.targetRace)
         if (race) {
-          const scoreboardResponse = await racesApi.getScoreboard(race.id)
+          const scoreboardResponse = await racesApi.getScoreboard(race.id, { period: '7d' })
           if (scoreboardResponse.data) {
             setRaceScoreboard(scoreboardResponse.data.map((entry, idx) => ({
               id: entry.user?.id || entry.id,
@@ -268,7 +256,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               data: entry.sparkline?.map(s => s.points) || [],
               nominations: formatNominations(entry.totalPoints || 0),
               stars: 4.5, // Default rating
-              sparkline: entry.sparkline?.map(s => s.points) || generateSparklineData('up'),
+              sparkline: entry.sparkline?.map(s => s.points) || [],
             })))
           }
         }
@@ -357,21 +345,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         id: 'eng-1',
         username: 'Lzo.macias.formayor',
         avatar: 'https://i.pravatar.cc/40?img=1',
-        sparklineData: generateSparklineData('up'),
+        sparklineData: [],
         recentChange: null,
       },
       {
         id: 'eng-2',
         username: 'Lzo.macias.formayor',
         avatar: 'https://i.pravatar.cc/40?img=12',
-        sparklineData: generateSparklineData('down'),
+        sparklineData: [],
         recentChange: '+1',
       },
       {
         id: 'eng-3',
         username: 'Lzo.macias.formayor',
         avatar: 'https://i.pravatar.cc/40?img=5',
-        sparklineData: generateSparklineData('stable'),
+        sparklineData: [],
         recentChange: null,
       },
     ],
