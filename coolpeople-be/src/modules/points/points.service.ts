@@ -6,7 +6,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { getIO } from '../../lib/socket.js';
 import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
-import { POINT_WEIGHTS, POINT_DECAY_WINDOW_DAYS, getTierFromPoints } from '../../config/constants.js';
+import { POINT_WEIGHTS, POINT_DECAY_WINDOW_DAYS, BASE_STARTER_POINTS, getTierFromPoints } from '../../config/constants.js';
 import type { RecordPointEventParams, PointSummary, PointHistoryItem, SparklineDataPoint } from './points.types.js';
 
 // -----------------------------------------------------------------------------
@@ -469,4 +469,62 @@ export const getPendingPointsSummary = async (userId: string): Promise<{ totalPe
   const totalPending = byRace.reduce((sum, r) => sum + r.points, 0);
 
   return { totalPending, byRace };
+};
+
+// -----------------------------------------------------------------------------
+// Seed Initial Sparkline
+// Called when a user/party first enters the points system to generate
+// backdated PointSnapshot records so they have a visible sparkline from day one.
+// Also adds BASE_STARTER_POINTS if the ledger has fewer points than the base.
+// -----------------------------------------------------------------------------
+
+export const seedInitialSparkline = async (ledgerId: string): Promise<void> => {
+  const ledger = await prisma.pointLedger.findUnique({
+    where: { id: ledgerId },
+  });
+
+  if (!ledger) return;
+
+  // Ensure minimum starter points
+  let totalPoints = ledger.totalPoints;
+  if (totalPoints < BASE_STARTER_POINTS) {
+    totalPoints = BASE_STARTER_POINTS;
+    await prisma.pointLedger.update({
+      where: { id: ledgerId },
+      data: {
+        totalPoints,
+        tier: getTierFromPoints(totalPoints),
+      },
+    });
+  }
+
+  // Growth curve: 7 days of gradual buildup to current total
+  // Gives a natural "ramp up" look to the sparkline
+  const growthFactors = [0.15, 0.28, 0.42, 0.55, 0.72, 0.88, 1.0];
+
+  for (let i = 0; i < growthFactors.length; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - (growthFactors.length - 1 - i));
+    date.setHours(0, 0, 0, 0);
+
+    // Apply growth factor with slight random variation for natural look
+    const base = totalPoints * growthFactors[i];
+    const jitter = base * (0.92 + Math.random() * 0.16); // +/- ~8% variation
+    const dayPoints = Math.round(Math.max(0, jitter) * 100) / 100;
+
+    await prisma.pointSnapshot.upsert({
+      where: { ledgerId_date: { ledgerId, date } },
+      create: {
+        ledgerId,
+        points: dayPoints,
+        tier: getTierFromPoints(dayPoints),
+        rank: 0,
+        date,
+      },
+      update: {
+        points: dayPoints,
+        tier: getTierFromPoints(dayPoints),
+      },
+    });
+  }
 };

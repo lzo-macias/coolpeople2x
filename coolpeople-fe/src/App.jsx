@@ -158,8 +158,12 @@ function AppContent() {
           // Transform scoreboard entries into engagement scores format
           const engagementScores = scoreboard.slice(0, 3).map((entry, idx) => {
             const user = entry.user || entry
-            // Calculate change based on recent activity
-            const todayChange = entry.todayChange || entry.change || (Math.random() > 0.5 ? Math.floor(Math.random() * 50) + 1 : null)
+            // Calculate today's change from sparkline data (difference between last two snapshots)
+            const sparklinePoints = entry.sparkline?.map(s => s.points) || []
+            let todayChange = entry.todayChange || entry.change || null
+            if (todayChange == null && sparklinePoints.length >= 2) {
+              todayChange = Math.round((sparklinePoints[sparklinePoints.length - 1] - sparklinePoints[sparklinePoints.length - 2]) * 100) / 100
+            }
             const trend = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : 'stable'
 
             return {
@@ -1448,7 +1452,7 @@ function AppContent() {
 
   return (
     <div className="app">
-      {/* DEBUG INDICATOR - Remove after debugging */}
+      {/* DEBUG INDICATOR - Hidden for now
       <div style={{
         position: 'fixed',
         top: 0,
@@ -1467,6 +1471,7 @@ function AppContent() {
           : `Page: ${currentPage} (${PAGES[currentPage]}) | Profile: ${showProfile ? 'YES' : 'NO'} | Participant: ${showParticipantProfile ? 'YES' : 'NO'}`
         }
       </div>
+      */}
 
       <div
         className="pages-container"

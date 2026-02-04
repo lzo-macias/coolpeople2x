@@ -359,6 +359,16 @@ export const createParty = async (
         data: { partyId: party.id, raceId: bestPartyRace.id, totalPoints: startingBonus, tier: 'BRONZE' },
       }),
     ]).catch(() => {}); // Don't fail party creation on race enrollment errors
+
+    // Seed initial sparkline for the party so it has visible chart data from day one
+    const partyLedger = await prisma.pointLedger.findUnique({
+      where: { partyId_raceId: { partyId: party.id, raceId: bestPartyRace.id } },
+    });
+
+    if (partyLedger) {
+      const { seedInitialSparkline } = await import('../points/points.service.js');
+      await seedInitialSparkline(partyLedger.id);
+    }
   }
 
   // Fetch with includes for response

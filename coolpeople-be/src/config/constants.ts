@@ -68,6 +68,8 @@ export const DM_POINTS_DAILY_CAP = 5;  // Max points from DMs per sender per day
 
 export const POINT_DECAY_WINDOW_DAYS = 90;  // Actions older than this phase out
 
+export const BASE_STARTER_POINTS = 5;  // Minimum points every new candidate starts with
+
 // -----------------------------------------------------------------------------
 // Video Constraints
 // -----------------------------------------------------------------------------

@@ -5,6 +5,8 @@ import { mockComments } from '../data/mockData'
 import { commentsApi } from '../services/api'
 
 function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity }) {
+  // For reposted reels, use the original reel ID for all API calls
+  const apiReelId = reel?.originalReelId || reel?.id
   const [dividerAtBottom, setDividerAtBottom] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [dragY, setDragY] = useState(0)
@@ -24,10 +26,10 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
   // Fetch comments from API
   useEffect(() => {
     const fetchComments = async () => {
-      if (!reel?.id) return
+      if (!apiReelId) return
       setIsLoading(true)
       try {
-        const response = await commentsApi.getComments(reel.id)
+        const response = await commentsApi.getComments(apiReelId)
         // Backend returns { success: true, data: [...comments] }
         const commentsData = response.data || response.comments || []
         if (commentsData && commentsData.length > 0) {
@@ -62,7 +64,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
       }
     }
     fetchComments()
-  }, [reel?.id])
+  }, [apiReelId])
 
   // Use API comments if available, otherwise use mock
   const baseComments = apiComments || mockBaseComments
@@ -85,11 +87,11 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
         const parentCommentId = replyingTo.commentId
         setReplyingTo(null)
 
-        if (reel?.id) {
+        if (apiReelId) {
           // Sync with API first, then update UI
           try {
-            console.log('Adding reply to reel:', reel.id, 'parent:', parentCommentId)
-            const response = await commentsApi.addComment(reel.id, {
+            console.log('Adding reply to reel:', apiReelId, 'parent:', parentCommentId)
+            const response = await commentsApi.addComment(apiReelId, {
               content: text,
               parentId: parentCommentId,
             })
@@ -160,11 +162,11 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
         }
       } else {
         // Adding a new top-level comment
-        if (reel?.id) {
+        if (apiReelId) {
           // Sync with API first, then update UI
           try {
-            console.log('Adding comment to reel:', reel.id)
-            const response = await commentsApi.addComment(reel.id, { content: text })
+            console.log('Adding comment to reel:', apiReelId)
+            const response = await commentsApi.addComment(apiReelId, { content: text })
             console.log('Comment saved successfully:', response)
 
             // Get the created comment from response
@@ -331,7 +333,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
                 onPartyClick={onPartyClick}
                 onReply={handleReply}
                 userReplies={commentReplies[comment.id] || []}
-                reelId={reel?.id}
+                reelId={apiReelId}
               />
               {index === comments.cpComments.length - 1 && (
                 <span className="leave-verified-comment" onClick={() => setShowPaywall(true)}>leave a verified comment</span>
@@ -363,7 +365,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
                 onPartyClick={onPartyClick}
                 onReply={handleReply}
                 userReplies={commentReplies[comment.id] || []}
-                reelId={reel?.id}
+                reelId={apiReelId}
               />
             ))}
           </div>

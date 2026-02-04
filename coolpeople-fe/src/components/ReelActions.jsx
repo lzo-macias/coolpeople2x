@@ -23,6 +23,9 @@ const formatActiveTime = (dateString) => {
 function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange, onHide, isPageActive, onOpenQuote, onRepostChange }) {
   const { user: authUser } = useAuth()
   const partyColor = getPartyColor(user?.party)
+
+  // For reposted reels, use the original reel ID for all API calls
+  const apiReelId = reel?.originalReelId || reel?.id
   const [isLiked, setIsLiked] = useState(reel?.isLiked || false)
   const [likeCount, setLikeCount] = useState(stats?.likes || '0')
   const [isReposted, setIsReposted] = useState(reel?.isReposted || false)
@@ -270,18 +273,18 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
     // Sync with API
     try {
-      if (reel?.id) {
-        console.log('Like API call - reelId:', reel.id, 'wasLiked:', wasLiked)
+      if (apiReelId) {
+        console.log('Like API call - reelId:', apiReelId, 'wasLiked:', wasLiked)
         if (wasLiked) {
-          await reelsApi.unlikeReel(reel.id)
-          onLikeChange?.(reel.id, false)
+          await reelsApi.unlikeReel(apiReelId)
+          onLikeChange?.(apiReelId, false)
         } else {
-          await reelsApi.likeReel(reel.id)
-          onLikeChange?.(reel.id, true)
+          await reelsApi.likeReel(apiReelId)
+          onLikeChange?.(apiReelId, true)
         }
         console.log('Like API call successful')
       } else {
-        console.warn('Like action - no reel ID, cannot sync to backend. This invite may have been created before the reel was saved.')
+        console.warn('Like action - no reel ID, cannot sync to backend.')
       }
     } catch (error) {
       // Revert on error
@@ -294,18 +297,16 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   }
 
   const handleRepost = async () => {
-    console.log('[REPOST] handleRepost called, reel:', reel?.id, 'onRepostChange exists:', !!onRepostChange)
+    console.log('[REPOST] handleRepost called, reel:', apiReelId, 'onRepostChange exists:', !!onRepostChange)
 
     // Optimistic update
     const wasReposted = isReposted
     const currentCount = parseInt(repostCount.replace(/,/g, '')) || 0
 
     if (wasReposted) {
-      // Unreposting - decrement count
       const newCount = Math.max(0, currentCount - 1)
       setRepostCount(newCount.toLocaleString())
     } else {
-      // Reposting - increment count
       const newCount = currentCount + 1
       setRepostCount(newCount.toLocaleString())
       if (onTrackActivity && reel) {
@@ -317,23 +318,17 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
     // Sync with API
     try {
-      if (reel?.id) {
-        console.log('[REPOST] API call - reelId:', reel.id, 'wasReposted:', wasReposted)
+      if (apiReelId) {
+        console.log('[REPOST] API call - reelId:', apiReelId, 'wasReposted:', wasReposted)
         if (wasReposted) {
-          await reelsApi.unrepostReel(reel.id)
-          console.log('[REPOST] Calling onRepostChange with false')
-          onRepostChange?.(reel.id, false)
+          await reelsApi.unrepostReel(apiReelId)
+          onRepostChange?.(apiReelId, false)
         } else {
-          await reelsApi.repostReel(reel.id)
-          console.log('[REPOST] Calling onRepostChange with true, reelId:', reel.id)
-          onRepostChange?.(reel.id, true)
+          await reelsApi.repostReel(apiReelId)
+          onRepostChange?.(apiReelId, true)
         }
-        console.log('[REPOST] API call successful, onRepostChange called')
-      } else {
-        console.warn('[REPOST] No reel ID, cannot sync to backend')
       }
     } catch (error) {
-      // Revert on error
       console.error('[REPOST] Error:', error.message, error)
       setIsReposted(wasReposted)
       const revertCount = parseInt(repostCount.replace(/,/g, '')) || 0
@@ -349,9 +344,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
   const handleShare = async () => {
     try {
-      if (reel?.id) {
-        console.log('Share API call - reelId:', reel.id)
-        await reelsApi.shareReel(reel.id)
+      if (apiReelId) {
+        console.log('Share API call - reelId:', apiReelId)
+        await reelsApi.shareReel(apiReelId)
         if (onTrackActivity && reel) {
           onTrackActivity('share', reel)
         }
@@ -439,13 +434,13 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
           <div className="dots-menu-popup" style={dotsMenuPosition}>
             <button className="dots-menu-item" onClick={async () => {
               setShowDotsMenu(false)
-              if (!reel?.id) return
+              if (!apiReelId) return
               try {
                 if (isSaved) {
-                  await reelsApi.unsaveReel(reel.id)
+                  await reelsApi.unsaveReel(apiReelId)
                   setIsSaved(false)
                 } else {
-                  await reelsApi.saveReel(reel.id)
+                  await reelsApi.saveReel(apiReelId)
                   setIsSaved(true)
                 }
               } catch (error) {
@@ -483,7 +478,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 try {
                   await reelsApi.hideUser(user.id)
                   if (onTrackActivity) onTrackActivity('hide_user', reel)
-                  if (onHide) onHide(reel?.id, 'user', user.id)
+                  if (onHide) onHide(apiReelId, 'user', user.id)
                 } catch (error) {
                   console.error('Hide user error:', error)
                 }
@@ -499,11 +494,11 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
               </button>
               <button className="hide-option" onClick={async () => {
                 setShowHideModal(false)
-                if (!reel?.id) return
+                if (!apiReelId) return
                 try {
-                  await reelsApi.hideReel(reel.id, 'not_interested')
+                  await reelsApi.hideReel(apiReelId, 'not_interested')
                   if (onTrackActivity) onTrackActivity('hide', reel)
-                  if (onHide) onHide(reel?.id, 'post')
+                  if (onHide) onHide(apiReelId, 'post')
                 } catch (error) {
                   console.error('Hide reel error:', error)
                 }
@@ -563,13 +558,13 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 className={`modal-submit ${selectedReportReason ? 'active' : ''}`}
                 disabled={!selectedReportReason}
                 onClick={async () => {
-                  if (!reel?.id || !selectedReportReason) return
+                  if (!apiReelId || !selectedReportReason) return
                   try {
-                    await reportsApi.reportReel(reel.id, selectedReportReason)
+                    await reportsApi.reportReel(apiReelId, selectedReportReason)
                     setShowReportModal(false)
                     setSelectedReportReason(null)
                     // Remove reel from feed after reporting
-                    if (onHide) onHide(reel.id, 'post')
+                    if (onHide) onHide(apiReelId, 'post')
                   } catch (error) {
                     console.error('Report error:', error)
                   }

@@ -1,7 +1,10 @@
 import '../styling/Sparkline.css'
 
-function Sparkline({ data, color = '#00ff00', width = 80, height = 30, dashed = false, strokeWidth = 1.5, showBaseline = false }) {
-  if (!data || data.length < 2) return null
+function Sparkline({ data: rawData, color = '#00ff00', width = 80, height = 30, dashed = false, strokeWidth = 1.5, showBaseline = false }) {
+  if (!rawData || rawData.length === 0) return null
+
+  // If only one data point, duplicate it so we can render a flat line
+  const data = rawData.length === 1 ? [rawData[0], rawData[0]] : rawData
 
   const min = Math.min(...data)
   const max = Math.max(...data)

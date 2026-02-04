@@ -874,10 +874,21 @@ export const becomeCandidate = async (userId: string): Promise<PrivateProfile> =
   ]);
 
   // Transfer any pending points accumulated while user was a PARTICIPANT
-  const { transferPendingPoints } = await import('../points/points.service.js');
+  const { transferPendingPoints, seedInitialSparkline } = await import('../points/points.service.js');
   const { transferred, totalPoints } = await transferPendingPoints(userId);
   if (transferred > 0) {
     console.log(`Transferred ${transferred} pending point events (${totalPoints} total points) for user ${userId}`);
+  }
+
+  // Seed initial sparkline with starter points based on engagement
+  // Users with more nominations/engagement get higher starting points;
+  // brand new users still get a base amount so their sparkline isn't empty
+  const ledger = await prisma.pointLedger.findUnique({
+    where: { userId_raceId: { userId, raceId: coolPeopleRace.id } },
+  });
+
+  if (ledger) {
+    await seedInitialSparkline(ledger.id);
   }
 
   return getPrivateProfile(userId);
