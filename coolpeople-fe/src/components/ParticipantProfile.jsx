@@ -54,6 +54,7 @@ function ParticipantProfile({
   onAvatarChange,
   onBioChange,
   onUserTypeChange,
+  engagementScores,
 }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
@@ -693,6 +694,7 @@ function ParticipantProfile({
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}
           onPartyClick={onPartyClick}
+          engagementScores={engagementScores}
           profileName={participant.username}
         />,
         document.getElementById('modal-root') || document.body

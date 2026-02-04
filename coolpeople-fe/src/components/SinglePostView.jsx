@@ -13,6 +13,7 @@ function SinglePostView({
   onLikeChange,
   onTrackActivity,
   onCommentAdded,
+  engagementScores,
   profileName = 'Profile'
 }) {
   const containerRef = useRef(null)
@@ -83,10 +84,12 @@ function SinglePostView({
         ref={containerRef}
         onScroll={handleScroll}
       >
-        {posts.map((post, index) => (
+        {posts.map((post, index) => {
+          const enrichedPost = post.engagementScores ? post : { ...post, engagementScores }
+          return (
           <div key={post.id || index} className="single-post-item">
             <ReelCard
-              reel={post}
+              reel={enrichedPost}
               isPageActive={Math.abs(index - currentIndex) <= 1}
               onUsernameClick={onUsernameClick}
               onPartyClick={onPartyClick}
@@ -95,7 +98,8 @@ function SinglePostView({
               onTrackActivity={onTrackActivity}
             />
           </div>
-        ))}
+          )
+        })}
 
         {/* End spacer for overscroll detection */}
         <div className="single-post-end-spacer">

@@ -362,7 +362,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onOptIn, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onOptIn, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange, engagementScores }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
@@ -1285,6 +1285,20 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                   )
                 })()}
               </div>
+            </div>
+            {/* Sparkline */}
+            <div className="profile-sparkline-row">
+              <Sparkline
+                data={candidate.sparklineData}
+                color={candidate.change && candidate.change.startsWith('-') ? '#ef4444' : '#10b981'}
+                width={80}
+                height={24}
+                showBaseline={true}
+                strokeWidth={2}
+              />
+              <span className={`sparkline-change ${candidate.change && candidate.change.startsWith('-') ? 'negative' : 'positive'}`}>
+                {candidate.change || '+0.00'}
+              </span>
             </div>
             {isOwnProfile ? (
               candidate.bio ? (
@@ -2557,6 +2571,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onUsernameClick={onUserClick}
           onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
           onLikeChange={handlePostLikeChange}
+          engagementScores={engagementScores}
           profileName={candidate.username}
         />,
         document.getElementById('modal-root') || document.body

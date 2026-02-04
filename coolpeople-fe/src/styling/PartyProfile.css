@@ -102,6 +102,28 @@
   height: 20px;
 }
 
+.party-profile .profile-sparkline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 2vw;
+  margin-top: 8px;
+}
+
+.party-profile .sparkline-change {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+.party-profile .sparkline-change.positive {
+  color: #10b981;
+}
+
+.party-profile .sparkline-change.negative {
+  color: #ef4444;
+}
+
 .party-profile .profile-bio {
   font-size: 12px;
   color: #AAAAAA;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import '../styling/PartyProfile.css'
-import { getPartyColor } from '../data/mockData'
+import { getPartyColor, generateSparklineData } from '../data/mockData'
+import Sparkline from './Sparkline'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
 import { partiesApi, reelsApi } from '../services/api'
@@ -48,7 +49,7 @@ const formatRelativeTime = (dateStr) => {
 }
 
 // eslint-disable-next-line no-unused-vars
-function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false, onPartyJoined }) {
+function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false, onPartyJoined, engagementScores }) {
   const { refreshUser } = useAuth()
 
   // State for fetched data
@@ -571,6 +572,26 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                 <span className="stat-label">{getCurrentTier(partyCpPoints).name}</span>
               </div>
             </div>
+            {/* Sparkline */}
+            {(() => {
+              const change = partyData?.stats?.change || '+0.00'
+              const isNegative = change.startsWith('-')
+              return (
+                <div className="profile-sparkline-row">
+                  <Sparkline
+                    data={partyData?.sparklineData || generateSparklineData(isNegative ? 'down' : 'up')}
+                    color={isNegative ? '#ef4444' : '#10b981'}
+                    width={80}
+                    height={24}
+                    showBaseline={true}
+                    strokeWidth={2}
+                  />
+                  <span className={`sparkline-change ${isNegative ? 'negative' : 'positive'}`}>
+                    {change}
+                  </span>
+                </div>
+              )
+            })()}
             <p className="profile-bio">{party.bio || ''}</p>
           </div>
         </div>
@@ -1392,6 +1413,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           onUsernameClick={onMemberClick}
           onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
           onLikeChange={handlePostLikeChange}
+          engagementScores={engagementScores}
           profileName={party.name}
         />
       )}

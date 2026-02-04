@@ -340,6 +340,21 @@ button.profile-bio.empty {
   align-items: center;
   gap: 8px;
   margin-left: 2vw;
+  margin-top: 8px;
+}
+
+.sparkline-change {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+.sparkline-change.positive {
+  color: #10b981;
+}
+
+.sparkline-change.negative {
+  color: #ef4444;
 }
 
 .profile-username {

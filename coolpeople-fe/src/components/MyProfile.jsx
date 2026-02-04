@@ -196,7 +196,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive, engagementScores }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',
@@ -497,6 +497,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
         onOptOut={onOptOut}
         onAvatarChange={onAvatarChange}
         onBioChange={onBioChange}
+        engagementScores={engagementScores}
       />
     )
   }
@@ -852,6 +853,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
           onPartyClick={onPartyClick}
           onOpenComments={(post) => onOpenComments?.(post, onUserPostCommentAdded)}
           onLikeChange={onUserPostLikeChange}
+          engagementScores={engagementScores}
           profileName={profileData.username}
         />,
         document.getElementById('modal-root') || document.body

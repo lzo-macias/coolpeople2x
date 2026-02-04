@@ -1627,6 +1627,7 @@ function AppContent() {
             onAvatarChange={handleAvatarChange}
             onBioChange={handleBioChange}
             isActive={currentPage === 5}
+            engagementScores={topEngagedCandidates}
           />
         </div>
       </div>
@@ -1894,6 +1895,7 @@ function AppContent() {
             onPartyClick={handleReelPartyClick}
             onOpenComments={handleOpenComments}
             onTrackActivity={trackActivity}
+            engagementScores={topEngagedCandidates}
             profileName="Feed"
           />
         </div>
@@ -1914,6 +1916,7 @@ function AppContent() {
             onUserClick={handleOpenProfile}
             onOpenComments={handleOpenComments}
             userActivity={userActivity}
+            engagementScores={topEngagedCandidates}
             isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id || activeCandidate?.userId === currentUser.id}
             cachedProfile={getCachedUserProfile(activeCandidate?.id || activeCandidate?.userId || activeCandidate?.username)}
             onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
@@ -1987,6 +1990,7 @@ function AppContent() {
               onOpenComments={handleOpenComments}
               isOwnParty={userParty && (activeParty?.name === userParty.name || activeParty?.handle === userParty.handle)}
               onPartyJoined={refreshConversations}
+              engagementScores={topEngagedCandidates}
             />
           </div>
         </div>
@@ -2006,6 +2010,7 @@ function AppContent() {
               isOwnProfile={isOwnParticipantProfile}
               onPartyClick={handleOpenPartyProfile}
               onOptIn={handleOptIn}
+              engagementScores={topEngagedCandidates}
               cachedProfile={getCachedUserProfile(activeParticipant?.id || activeParticipant?.userId || activeParticipant?.username)}
               onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
               onFollowChange={(isNowFollowing, newFollowerCount) => {
