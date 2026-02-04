@@ -225,8 +225,11 @@ function ParticipantProfile({
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [showRacesModal, setShowRacesModal] = useState(false)
   const [showNominationsModal, setShowNominationsModal] = useState(false)
+  const [showFollowingModal, setShowFollowingModal] = useState(false)
   const [followersState, setFollowersState] = useState([])
+  const [followingState, setFollowingState] = useState([])
   const [isLoadingFollowers, setIsLoadingFollowers] = useState(false)
+  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false)
 
   const mockNominators = [
     { id: 'nom-1', username: 'community.hero', avatar: 'https://i.pravatar.cc/40?img=22', party: 'Democrat', count: 5 },
@@ -257,6 +260,31 @@ function ParticipantProfile({
       setFollowersState([])
     } finally {
       setIsLoadingFollowers(false)
+    }
+  }
+
+  // Fetch following from API
+  const fetchFollowing = async () => {
+    const userId = participant.id || participant.userId
+    if (!userId || isLoadingFollowing) return
+
+    setIsLoadingFollowing(true)
+    try {
+      const response = await usersApi.getFollowing(userId)
+      const data = response.data || response
+      const following = data.following || []
+      setFollowingState(following.map(f => ({
+        id: f.id,
+        username: f.username,
+        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        party: f.party?.name || f.partyName || null,
+        isFollowing: f.isFollowing || false,
+      })))
+    } catch (error) {
+      console.error('Failed to fetch following:', error)
+      setFollowingState([])
+    } finally {
+      setIsLoadingFollowing(false)
     }
   }
 
@@ -404,9 +432,9 @@ function ParticipantProfile({
 
           <div className="participant-right">
             <div className="participant-stats-grid">
-              <div className="stat-item clickable" onClick={() => setShowNominationsModal(true)}>
-                <span className="stat-number">{participant.nominations}</span>
-                <span className="stat-label">Nominations</span>
+              <div className="stat-item clickable" onClick={() => { setShowFollowingModal(true); fetchFollowing(); }}>
+                <span className="stat-number">{participant.following}</span>
+                <span className="stat-label">Following</span>
               </div>
               <div className="stat-item clickable" onClick={() => { setShowFollowersModal(true); fetchFollowers(); }}>
                 <span className="stat-number">{localFollowerCount ?? participant.followers ?? '0'}</span>
@@ -539,14 +567,10 @@ function ParticipantProfile({
 
         {activeTab === 'tags' && (
           <div className="posts-grid">
-            {fetchedReposts.length === 0 ? (
-              <div className="posts-empty">
-                <p>No reposts yet</p>
-              </div>
-            ) : (
+            {fetchedReposts.length > 0 ? (
               fetchedReposts.map((repost, index) => (
                 <div key={repost.id || index} className="post-item repost-item" onClick={() => handlePostClick(index, 'reposts')}>
-                  <div className="repost-badge">
+                  <div className="repost-indicator">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M17 1l4 4-4 4" />
                       <path d="M3 11V9a4 4 0 0 1 4-4h14" />
@@ -557,15 +581,27 @@ function ParticipantProfile({
                   {repost.videoUrl ? (
                     <video
                       src={repost.videoUrl}
+                      className={repost.isMirrored ? 'mirrored' : ''}
                       muted
                       playsInline
-                      className={repost.isMirrored ? 'mirrored' : ''}
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={repost.thumbnailUrl || repost.thumbnail || repost} alt={`Repost ${index + 1}`} />
+                    <img src={repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
+                  )}
+                  {repost.author && (
+                    <div className="repost-author">
+                      <span>@{repost.author.username}</span>
+                    </div>
                   )}
                 </div>
               ))
+            ) : (
+              <div className="empty-reposts">
+                <p>No reposts yet</p>
+              </div>
             )}
           </div>
         )}
@@ -591,7 +627,7 @@ function ParticipantProfile({
                     <img
                       src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
                       alt={actor.username}
-                      className="activity-actor-avatar"
+                      className="activity-action-badge-avatar"
                     />
                     <span className="activity-action-user">{actor.username}</span>
                     <span className="activity-action-text">{activity.action}</span>
@@ -686,6 +722,51 @@ function ParticipantProfile({
             onClose={() => setShowEditBio(false)}
             onOptOut={null}
           />
+        </div>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* Following Modal */}
+      {showFollowingModal && createPortal(
+        <div className="stat-modal-overlay" onClick={() => setShowFollowingModal(false)}>
+          <div className="stat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="stat-modal-header">
+              <h3>Following</h3>
+              <button className="stat-modal-close" onClick={() => setShowFollowingModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="stat-modal-content">
+              {isLoadingFollowing ? (
+                <div className="stat-modal-loading">Loading...</div>
+              ) : followingState.length === 0 ? (
+                <div className="stat-modal-empty">Not following anyone yet</div>
+              ) : (
+                followingState.map((user) => (
+                  <div
+                    key={user.id}
+                    className="stat-modal-row clickable"
+                    onClick={() => { setShowFollowingModal(false); }}
+                  >
+                    <div className="stat-row-user">
+                      <div className="stat-row-avatar-ring" style={{ borderColor: getPartyColor(user.party) }}>
+                        <img src={user.avatar} alt={user.username} className="stat-row-avatar" />
+                      </div>
+                      <div className="stat-row-info">
+                        <span className="stat-row-username">{user.username}</span>
+                        <span className="stat-row-meta">{user.party || 'Independent'}</span>
+                      </div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>,
         document.getElementById('modal-root') || document.body
       )}

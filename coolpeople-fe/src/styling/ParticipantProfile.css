@@ -225,7 +225,7 @@
   justify-content: space-between;
   padding: 0 10px;
   margin-top: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   border-bottom: 1px solid #444444;
   position: relative;
 }
@@ -281,24 +281,25 @@
 .participant-profile .posts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
+  gap: 0;
 }
 
 .participant-profile .post-item {
-  aspect-ratio: 1;
+  aspect-ratio: 156 / 235;
   overflow: hidden;
+  cursor: pointer;
 }
 
-.participant-profile .post-item img {
+.participant-profile .post-item img,
+.participant-profile .post-item video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.2s ease;
 }
 
-.participant-profile .post-item:hover img {
-  transform: scale(1.05);
+.participant-profile .post-item video.mirrored {
+  transform: scaleX(-1);
 }
 
 /* Placeholders */
@@ -717,36 +718,73 @@
   font-size: 16px;
 }
 
-/* Repost Badge */
+/* Repost Indicator */
 .participant-profile .repost-item {
   position: relative;
 }
 
-.participant-profile .repost-badge {
+.participant-profile .repost-indicator {
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
-  padding: 4px;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: 2;
 }
 
-.participant-profile .repost-badge svg {
-  stroke: #FFFFFF;
+.participant-profile .repost-indicator svg {
+  stroke: #4CAF50;
 }
 
-/* Activity Feed for Details Tab */
-.participant-profile .activity-feed {
+.participant-profile .repost-author {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 2;
+}
+
+.participant-profile .repost-author span {
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.participant-profile .empty-reposts {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666666;
 }
 
+.participant-profile .empty-reposts p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.participant-profile .empty-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #666666;
+}
+
+.participant-profile .empty-activity p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Activity Feed for Details Tab - uses global styles from CandidateProfile.css */
 .participant-profile .activity-empty {
   display: flex;
   flex-direction: column;
@@ -766,13 +804,6 @@
 .participant-profile .activity-empty span {
   color: #777777;
   font-size: 14px;
-}
-
-.participant-profile .activity-item {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px;
-  color: #FFFFFF;
 }
 
 /* Avatar Placeholder */
