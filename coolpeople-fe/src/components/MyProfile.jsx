@@ -835,7 +835,8 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
               }
             }}
             onClose={() => setShowEditBio(false)}
-            onOptOut={null}
+            onOptOut={onOptOut}
+            onOptIn={onOptIn}
           />
         </div>,
         document.getElementById('modal-root') || document.body

@@ -721,6 +721,7 @@ function ParticipantProfile({
             }}
             onClose={() => setShowEditBio(false)}
             onOptOut={null}
+            onOptIn={onOptIn}
           />
         </div>,
         document.getElementById('modal-root') || document.body

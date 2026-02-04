@@ -362,7 +362,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onOptIn, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
@@ -2397,6 +2397,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             }}
             initialSection={editInitialSection}
             onOptOut={onOptOut}
+            onOptIn={onOptIn}
           />
         </div>,
         document.body

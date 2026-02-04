@@ -7,7 +7,7 @@ import EditBio from './EditBio'
 import { useAuth } from '../contexts/AuthContext'
 import { partiesApi } from '../services/api'
 
-function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut }) {
+function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut, onOptIn }) {
   const { logout, user: currentUser, updateUser, refreshUser } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchQuery, setSearchQuery] = useState('')
@@ -818,11 +818,11 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
                   className="warning-btn confirm"
                   onClick={() => {
                     if (pendingStatus === 'Participant') {
-                      // Call onOptOut to revert to participant in the app state
                       onOptOut?.()
                       onClose?.()
                     } else {
-                      setEditedCandidate(prev => ({ ...prev, status: pendingStatus }))
+                      onOptIn?.()
+                      onClose?.()
                     }
                     setShowStatusWarning(false)
                     setPendingStatus(null)

@@ -1961,6 +1961,8 @@ function AppContent() {
               console.log('Opening conversation overlay with:', user.username)
             }}
             onUserTypeChange={handleUserTypeChange}
+            onOptOut={handleOptOut}
+            onOptIn={handleOptIn}
           />
         </div>
       )}
