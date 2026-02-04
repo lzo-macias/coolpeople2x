@@ -542,17 +542,7 @@ export const getUserActivity = async (
       action: 'liked',
       timestamp: like.createdAt,
       actor,
-      video: {
-        thumbnail: formatted.thumbnailUrl,
-        videoUrl: formatted.videoUrl,
-        isMirrored: formatted.isMirrored,
-        user: formatted.user,
-        race: formatted.targetRace,
-        likes: formatted.stats.likes,
-        comments: formatted.stats.comments,
-        shares: formatted.stats.shares,
-        caption: formatted.caption || '',
-      },
+      reel: formatted,
     });
   }
 
@@ -565,17 +555,7 @@ export const getUserActivity = async (
       action: 'commented',
       timestamp: comment.createdAt,
       actor,
-      video: {
-        thumbnail: formatted.thumbnailUrl,
-        videoUrl: formatted.videoUrl,
-        isMirrored: formatted.isMirrored,
-        user: formatted.user,
-        race: formatted.targetRace,
-        likes: formatted.stats.likes,
-        comments: formatted.stats.comments,
-        shares: formatted.stats.shares,
-        caption: formatted.caption || '',
-      },
+      reel: formatted,
     });
   }
 

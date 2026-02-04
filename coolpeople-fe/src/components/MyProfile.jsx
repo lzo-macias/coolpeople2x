@@ -50,7 +50,19 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor, onClick })
   const videoRef = useRef(null)
   const containerRef = useRef(null)
   const config = activityConfig[activity.type] || activityConfig.like
-  const video = activity.video
+  // Support both backend (reel) and local (video) activity shapes
+  const reel = activity.reel
+  const video = activity.video || (reel ? {
+    thumbnail: reel.thumbnailUrl || reel.thumbnail,
+    videoUrl: reel.videoUrl,
+    isMirrored: reel.isMirrored,
+    user: reel.user,
+    race: reel.targetRace,
+    likes: reel.stats?.likes || String(reel.likeCount || 0),
+    comments: reel.stats?.comments || String(reel.commentCount || 0),
+    shares: reel.stats?.shares || String(reel.shareCount || 0),
+    caption: reel.caption || reel.description || '',
+  } : null)
   const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
 
   // Check if we have a video URL to play - prefer video over thumbnail
@@ -494,17 +506,20 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
 
   // Convert activity items to reel-shaped objects for SinglePostView
   const activityReels = userActivity
-    .filter((a) => a.video)
+    .filter((a) => a.reel || a.video)
     .map((a) => {
       const config = activityConfig[a.type] || activityConfig.like
+      // Prefer full reel object from backend, fall back to video sub-object for local activity
+      const reelData = a.reel || a.video
       return {
-        ...a.video,
-        id: a.id,
-        user: a.video.user || {},
-        stats: {
-          likes: a.video.likes || '0',
-          comments: a.video.comments || '0',
-          shares: a.video.shares || '0',
+        ...reelData,
+        // Keep real reel ID for comments/engagement, use activity ID only as React key fallback
+        id: reelData.id || a.id,
+        user: reelData.user || {},
+        stats: reelData.stats || {
+          likes: a.video?.likes || '0',
+          comments: a.video?.comments || '0',
+          shares: a.video?.shares || '0',
           saves: '0',
           reposts: '0',
           votes: '0',

@@ -317,15 +317,15 @@ const activityConfig = {
   like: { color: '#FF4D6A', icon: '♥' },
   nominate: { color: '#00F2EA', icon: '★' },
   repost: { color: '#4CAF50', icon: '↻' },
-  comment: { color: '#FFB800', icon: '💬' },
+  comment: { color: '#FFB800', icon: '▸' },
   endorsement: { color: '#9B59B6', icon: '✓' },
   ballot: { color: '#FF9500', icon: '☐' },
   favorite: { color: '#FFD700', icon: '★' },
-  follow: { color: '#3B82F6', icon: '👤' },
-  review: { color: '#F59E0B', icon: '⭐' },
+  follow: { color: '#3B82F6', icon: '＋' },
+  review: { color: '#F59E0B', icon: '★' },
   invite: { color: '#10B981', icon: '✉' },
-  message: { color: '#8B5CF6', icon: '💬' },
-  race: { color: '#EC4899', icon: '🏁' },
+  message: { color: '#8B5CF6', icon: '▸' },
+  race: { color: '#EC4899', icon: '⚑' },
   mention: { color: '#06B6D4', icon: '@' },
   share: { color: '#14B8A6', icon: '↗' },
 }
@@ -367,6 +367,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
   const [fetchedReposts, setFetchedReposts] = useState([])
+  const [fetchedActivity, setFetchedActivity] = useState([])
   const [fetchedReviews, setFetchedReviews] = useState([])
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
@@ -386,6 +387,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     }
     setFetchedPosts([])
     setFetchedReposts([])
+    setFetchedActivity([])
     setFetchedReviews([])
 
     const fetchProfileData = async () => {
@@ -436,6 +438,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         } catch (e) {
           // Reposts may fail for some users
           setFetchedReposts([])
+        }
+
+        // Fetch user's activity
+        try {
+          const activityRes = await reelsApi.getUserActivity(userId)
+          const activityData = activityRes.data || activityRes || []
+          setFetchedActivity(Array.isArray(activityData) ? activityData : [])
+        } catch (e) {
+          setFetchedActivity([])
         }
 
         // Fetch user's reviews (if candidate)
@@ -574,6 +585,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [reviewResponses, setReviewResponses] = useState({})
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [singlePostSource, setSinglePostSource] = useState('posts')
   const [selectedPeriod, setSelectedPeriod] = useState('1M')
   const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
   const [cpCardExpanded, setCpCardExpanded] = useState(false)
@@ -899,9 +911,41 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   // Reposts fetched from API
   const allReposts = fetchedReposts || []
 
+  // Use fetched activity for the viewed user, fall back to passed prop for own profile
+  const displayActivity = fetchedActivity.length > 0 ? fetchedActivity : userActivity
+
+  // Convert activity items to reel-shaped objects for SinglePostView
+  const activityReels = displayActivity
+    .filter((a) => a.reel || a.video)
+    .map((a) => {
+      const config = activityConfig[a.type] || activityConfig.like
+      const reelData = a.reel || a.video
+      return {
+        ...reelData,
+        id: reelData.id || a.id,
+        user: reelData.user || {},
+        stats: reelData.stats || {
+          likes: a.video?.likes || '0',
+          comments: a.video?.comments || '0',
+          shares: a.video?.shares || '0',
+          saves: '0',
+          reposts: '0',
+          votes: '0',
+          shazam: '0',
+        },
+        activityLabel: {
+          icon: config.icon,
+          text: a.action,
+          color: config.color,
+          actor: a.actor,
+        },
+      }
+    })
+
   // Handle post click to open SinglePostView
-  const handlePostClick = (index) => {
+  const handlePostClick = (index, source = 'posts') => {
     setSelectedPostIndex(index)
+    setSinglePostSource(source)
     setShowSinglePost(true)
   }
 
@@ -1437,11 +1481,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <div
                   key={repost.id || index}
                   className="post-item repost-item"
-                  onClick={() => {
-                    // Open the reposted reel in SinglePostView
-                    setSelectedPostIndex(index)
-                    setShowSinglePost(true)
-                  }}
+                  onClick={() => handlePostClick(index, 'reposts')}
                 >
                   <div className="repost-indicator">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2219,17 +2259,26 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {/* Details Tab */}
         {activeTab === 'details' && (
           <div className="activity-feed">
-            {/* Show real user activity only - no mock data */}
-            {userActivity.length > 0 ? userActivity.map((activity) => {
-              const config = activityConfig[activity.type]
-              const video = activity.video
+            {displayActivity.length > 0 ? displayActivity.map((activity, index) => {
+              const config = activityConfig[activity.type] || activityConfig.like
+              const reel = activity.reel
+              const video = activity.video || (reel ? {
+                thumbnail: reel.thumbnailUrl || reel.thumbnail,
+                videoUrl: reel.videoUrl,
+                isMirrored: reel.isMirrored,
+                user: reel.user,
+                race: reel.targetRace,
+                likes: reel.stats?.likes || String(reel.likeCount || 0),
+                comments: reel.stats?.comments || String(reel.commentCount || 0),
+                shares: reel.stats?.shares || String(reel.shareCount || 0),
+                caption: reel.caption || reel.description || '',
+              } : null)
               const actor = activity.actor || { username: 'Someone', avatar: null }
               const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
               const hasVideoUrl = !!video?.videoUrl
               const hasVideo = !!video
               return (
                 <div key={activity.id} className="activity-item">
-                  {/* Action indicator at top - full width */}
                   <div className="activity-action-badge">
                     <img
                       src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
@@ -2238,13 +2287,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     />
                     <span className="activity-action-user">{actor.username}</span>
                     <span className="activity-action-text">{activity.action}</span>
-                    <span className="activity-timestamp">{activity.timestamp}</span>
+                    <span className="activity-timestamp">{typeof activity.timestamp === 'string' && activity.timestamp.includes('T') ? (() => { const s = Math.floor((Date.now() - new Date(activity.timestamp).getTime()) / 1000); if (s < 60) return 'Just now'; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const d = Math.floor(h / 24); if (d < 7) return `${d}d ago`; return new Date(activity.timestamp).toLocaleDateString(); })() : activity.timestamp}</span>
                   </div>
 
-                  {/* Video card - only show if we have video data */}
                   {hasVideo && (
                     <div className="activity-video-card">
-                      {/* Video container */}
                       <div className="activity-video-container">
                         {hasVideoUrl ? (
                           <video
@@ -2268,8 +2315,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                           <div className="activity-video-thumbnail activity-video-placeholder" />
                         )}
 
-                        {/* Overlay content */}
-                        <div className="activity-video-overlay">
+                        <div className="activity-video-overlay" onClick={() => handlePostClick(index, 'activity')} style={{ cursor: 'pointer' }}>
                           <div className="activity-info">
                             {video?.race && (
                               <div className="activity-race-pill">
@@ -2279,7 +2325,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                             )}
                             <div className="activity-user-row">
                               <img
-                                src={video?.user?.avatar}
+                                src={video?.user?.avatar || video?.user?.avatarUrl}
                                 alt={video?.user?.username}
                                 className="activity-user-avatar"
                                 style={{ borderColor: videoPartyColor }}
@@ -2502,7 +2548,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       {/* Single Post View - rendered via portal to escape transformed parent */}
       {showSinglePost && createPortal(
         <SinglePostView
-          posts={allPosts}
+          posts={singlePostSource === 'reposts' ? allReposts : singlePostSource === 'activity' ? activityReels : allPosts}
           initialIndex={selectedPostIndex}
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}

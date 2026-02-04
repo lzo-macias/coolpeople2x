@@ -5,6 +5,42 @@ import '../styling/CandidateProfile.css' // For stat modal styles
 import { getPartyColor } from '../data/mockData'
 import { usersApi, reelsApi } from '../services/api'
 import EditProfile from './EditProfile'
+import SinglePostView from './SinglePostView'
+
+const activityConfig = {
+  like: { color: '#FF4D6A', icon: '♥' },
+  nominate: { color: '#00F2EA', icon: '★' },
+  repost: { color: '#4CAF50', icon: '↻' },
+  comment: { color: '#FFB800', icon: '▸' },
+  endorsement: { color: '#9B59B6', icon: '✓' },
+  ballot: { color: '#FF9500', icon: '☐' },
+  favorite: { color: '#FFD700', icon: '★' },
+  follow: { color: '#3B82F6', icon: '＋' },
+  review: { color: '#F59E0B', icon: '★' },
+  invite: { color: '#10B981', icon: '✉' },
+  message: { color: '#8B5CF6', icon: '▸' },
+  race: { color: '#EC4899', icon: '⚑' },
+  mention: { color: '#06B6D4', icon: '@' },
+  share: { color: '#14B8A6', icon: '↗' },
+}
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return ''
+  if (typeof timestamp === 'string' && !timestamp.includes('T') && !timestamp.includes('-')) return timestamp
+  const date = new Date(timestamp)
+  if (isNaN(date.getTime())) return timestamp
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'Just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 4) return `${weeks}w ago`
+  return date.toLocaleDateString()
+}
 
 function ParticipantProfile({
   participant: passedParticipant,
@@ -23,6 +59,10 @@ function ParticipantProfile({
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
   const [fetchedReposts, setFetchedReposts] = useState([])
+  const [fetchedActivity, setFetchedActivity] = useState([])
+  const [showSinglePost, setShowSinglePost] = useState(false)
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [singlePostSource, setSinglePostSource] = useState('posts')
 
   // Fetch profile data, posts, and reposts from API
   useEffect(() => {
@@ -82,6 +122,16 @@ function ParticipantProfile({
         } catch (e) {
           console.log('[ParticipantProfile] Failed to fetch reposts:', e.message)
           setFetchedReposts([])
+        }
+
+        // Fetch user's activity
+        try {
+          const activityRes = await reelsApi.getUserActivity(userId)
+          const activityData = activityRes.data || activityRes || []
+          setFetchedActivity(Array.isArray(activityData) ? activityData : [])
+        } catch (e) {
+          console.log('[ParticipantProfile] Failed to fetch activity:', e.message)
+          setFetchedActivity([])
         }
       } catch (error) {
         console.log('Failed to fetch profile:', error.message)
@@ -252,6 +302,40 @@ function ParticipantProfile({
     { name: 'Tags', id: 'tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
     { name: 'Details', id: 'details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
+
+  const handlePostClick = (index, source = 'posts') => {
+    setSelectedPostIndex(index)
+    setSinglePostSource(source)
+    setShowSinglePost(true)
+  }
+
+  // Convert activity items to reel-shaped objects for SinglePostView
+  const activityReels = fetchedActivity
+    .filter((a) => a.reel || a.video)
+    .map((a) => {
+      const config = activityConfig[a.type] || activityConfig.like
+      const reelData = a.reel || a.video
+      return {
+        ...reelData,
+        id: reelData.id || a.id,
+        user: reelData.user || {},
+        stats: reelData.stats || {
+          likes: a.video?.likes || '0',
+          comments: a.video?.comments || '0',
+          shares: a.video?.shares || '0',
+          saves: '0',
+          reposts: '0',
+          votes: '0',
+          shazam: '0',
+        },
+        activityLabel: {
+          icon: config.icon,
+          text: a.action,
+          color: config.color,
+          actor: a.actor,
+        },
+      }
+    })
 
   return (
     <div className="participant-profile">
@@ -433,7 +517,7 @@ function ParticipantProfile({
               </div>
             ) : (
               fetchedPosts.map((post, index) => (
-                <div key={post.id || index} className="post-item">
+                <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'posts')}>
                   {post.videoUrl ? (
                     <video
                       src={post.videoUrl}
@@ -461,7 +545,7 @@ function ParticipantProfile({
               </div>
             ) : (
               fetchedReposts.map((repost, index) => (
-                <div key={repost.id || index} className="post-item repost-item">
+                <div key={repost.id || index} className="post-item repost-item" onClick={() => handlePostClick(index, 'reposts')}>
                   <div className="repost-badge">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M17 1l4 4-4 4" />
@@ -488,13 +572,95 @@ function ParticipantProfile({
 
         {activeTab === 'details' && (
           <div className="activity-feed">
-            <div className="activity-empty">
-              <p>No activity yet</p>
-              <span>Likes, comments, and nominations will appear here</span>
-            </div>
+            {fetchedActivity.length > 0 ? fetchedActivity.map((activity, index) => {
+              const config = activityConfig[activity.type] || activityConfig.like
+              const reel = activity.reel
+              const video = activity.video || (reel ? {
+                thumbnail: reel.thumbnailUrl || reel.thumbnail,
+                videoUrl: reel.videoUrl,
+                isMirrored: reel.isMirrored,
+                user: reel.user,
+                race: reel.targetRace,
+                caption: reel.caption || reel.description || '',
+              } : null)
+              const actor = activity.actor || { username: 'Someone', avatar: null }
+              const videoPartyColor = getPartyColor(video?.user?.party || 'Independent')
+              return (
+                <div key={activity.id} className="activity-item">
+                  <div className="activity-action-badge">
+                    <img
+                      src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+                      alt={actor.username}
+                      className="activity-actor-avatar"
+                    />
+                    <span className="activity-action-user">{actor.username}</span>
+                    <span className="activity-action-text">{activity.action}</span>
+                    <span className="activity-timestamp">{formatTimeAgo(activity.timestamp)}</span>
+                  </div>
+                  {video && (
+                    <div className="activity-video-card">
+                      <div className="activity-video-container">
+                        {video.videoUrl ? (
+                          <video
+                            src={video.videoUrl}
+                            className={`activity-video-thumbnail ${video.isMirrored ? 'mirrored' : ''}`}
+                            loop muted playsInline autoPlay
+                          />
+                        ) : video.thumbnail ? (
+                          <img src={video.thumbnail} alt="" className="activity-video-thumbnail" />
+                        ) : (
+                          <div className="activity-video-thumbnail activity-video-placeholder" />
+                        )}
+                        <div className="activity-video-overlay" onClick={() => handlePostClick(index, 'activity')} style={{ cursor: 'pointer' }}>
+                          <div className="activity-info">
+                            {video.race && (
+                              <div className="activity-race-pill">
+                                <span className="activity-race-dot"></span>
+                                {video.race}
+                              </div>
+                            )}
+                            <div className="activity-user-row">
+                              <img
+                                src={video.user?.avatar || video.user?.avatarUrl}
+                                alt={video.user?.username}
+                                className="activity-user-avatar"
+                                style={{ borderColor: videoPartyColor }}
+                              />
+                              <div className="activity-user-details">
+                                <span className="activity-party-tag">{video.user?.party || 'Independent'}</span>
+                                <span className="activity-username">@{video.user?.username}</span>
+                              </div>
+                            </div>
+                            <p className="activity-caption">{video.caption}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            }) : (
+              <div className="activity-empty">
+                <p>No activity yet</p>
+                <span>Likes, comments, and nominations will appear here</span>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Single Post View - rendered via portal */}
+      {showSinglePost && createPortal(
+        <SinglePostView
+          posts={singlePostSource === 'reposts' ? fetchedReposts : singlePostSource === 'activity' ? activityReels : fetchedPosts}
+          initialIndex={selectedPostIndex}
+          onClose={() => setShowSinglePost(false)}
+          onEndReached={() => setShowSinglePost(false)}
+          onPartyClick={onPartyClick}
+          profileName={participant.username}
+        />,
+        document.getElementById('modal-root') || document.body
+      )}
 
       {/* Edit Profile Overlay - rendered via portal */}
       {showEditBio && createPortal(

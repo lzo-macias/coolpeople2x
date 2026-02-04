@@ -499,6 +499,7 @@ function AppContent() {
         displayName: authUser?.displayName || authUser?.username || 'User',
         avatar: authUser?.avatarUrl || authUser?.avatar || null,
       },
+      reel: video, // Full reel object for SinglePostView (comments, engagement)
       video: {
         thumbnail: video.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
         videoUrl: video.videoUrl || null,
