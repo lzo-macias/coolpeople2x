@@ -57,6 +57,7 @@ function ParticipantProfile({
   engagementScores,
   engagementRaceName,
   engagementContext,
+  onRepostChange,
 }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
@@ -696,6 +697,7 @@ function ParticipantProfile({
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}
           onPartyClick={onPartyClick}
+          onRepostChange={onRepostChange}
           engagementScores={engagementScores}
           engagementRaceName={engagementRaceName}
           engagementContext={engagementContext}

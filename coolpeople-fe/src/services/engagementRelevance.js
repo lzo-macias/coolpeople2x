@@ -261,6 +261,7 @@ export function selectEngagementForReel(reel, allScoreboards, userContext) {
   const scores = finalSelected.map(c => ({
     id: c.id,
     odId: c.odId || c.userId,
+    userId: c.userId || null,
     username: c.username,
     avatar: c.avatar,
     party: c.party,

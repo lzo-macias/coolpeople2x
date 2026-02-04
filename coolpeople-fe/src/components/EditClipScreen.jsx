@@ -613,7 +613,6 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             className="edit-clip-video quoted-main"
             autoPlay
             loop
-            muted
             playsInline
           />
         ) : quotedReel?.thumbnail ? (
@@ -634,7 +633,6 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
             autoPlay
             loop
-            muted
             playsInline
             crossOrigin="anonymous"
           />

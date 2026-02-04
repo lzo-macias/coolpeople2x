@@ -366,7 +366,7 @@ const regularNominations = [
   },
 ]
 
-function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onOptIn, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange, engagementScores, engagementRaceName, engagementContext }) {
+function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, onUserClick, onOpenComments, userActivity = [], isOwnProfile = false, isStarter = false, onEditIcebreakers, onOptOut, onOptIn, onAvatarChange, onBioChange, onFollowChange, onFavoriteChange, onMessageUser, cachedProfile, onProfileLoaded, onUserTypeChange, engagementScores, engagementRaceName, engagementContext, onRepostChange }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
   const [fetchedPosts, setFetchedPosts] = useState([])
@@ -2591,6 +2591,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           onUsernameClick={onUserClick}
           onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
           onLikeChange={handlePostLikeChange}
+          onRepostChange={onRepostChange}
           engagementScores={engagementScores}
           engagementRaceName={engagementRaceName}
           engagementContext={engagementContext}

@@ -196,7 +196,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive, engagementScores, engagementRaceName, engagementContext }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive, engagementScores, engagementRaceName, engagementContext, onRepostChange }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',
@@ -855,6 +855,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
           onPartyClick={onPartyClick}
           onOpenComments={(post) => onOpenComments?.(post, onUserPostCommentAdded)}
           onLikeChange={onUserPostLikeChange}
+          onRepostChange={onRepostChange}
           engagementScores={engagementScores}
           engagementRaceName={engagementRaceName}
           engagementContext={engagementContext}

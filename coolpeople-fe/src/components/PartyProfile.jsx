@@ -53,7 +53,7 @@ const formatRelativeTime = (dateStr) => {
 }
 
 // eslint-disable-next-line no-unused-vars
-function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false, onPartyJoined, engagementScores, engagementRaceName, engagementContext }) {
+function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwnParty = false, isPremium = false, onPartyJoined, engagementScores, engagementRaceName, engagementContext, onRepostChange }) {
   const { refreshUser } = useAuth()
 
   // State for fetched data
@@ -1429,6 +1429,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
           onUsernameClick={onMemberClick}
           onOpenComments={(post) => onOpenComments?.(post, handlePostCommentAdded)}
           onLikeChange={handlePostLikeChange}
+          onRepostChange={onRepostChange}
           engagementScores={engagementScores}
           engagementRaceName={engagementRaceName}
           engagementContext={engagementContext}

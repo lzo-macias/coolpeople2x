@@ -328,7 +328,16 @@ function AppContent() {
       const response = await reelsApi.getUserReposts(authUser.id)
       const reposts = response.data || response
       if (reposts && Array.isArray(reposts)) {
-        setUserReposts(reposts)
+        // Merge: use API data as authoritative, but keep any optimistic
+        // entries whose originalReelId isn't in the API response yet
+        // (backend may not have processed them)
+        setUserReposts(prev => {
+          const apiOrigIds = new Set(reposts.map(r => r.originalReelId || r.id))
+          const pending = prev.filter(r =>
+            r.originalReelId && !apiOrigIds.has(r.originalReelId)
+          )
+          return [...pending, ...reposts]
+        })
       }
     } catch (error) {
       console.log('Using local reposts:', error.message)
@@ -465,7 +474,6 @@ function AppContent() {
   // Refresh profile data when navigating to MyProfile page
   useEffect(() => {
     if (currentPage === 5 && authUser?.id) {
-      // Refresh posts, reposts, activity, and profile data when visiting profile
       loadUserPosts()
       loadUserReposts()
       loadUserActivity()
@@ -1275,10 +1283,12 @@ function AppContent() {
 
   // Handle clicking on engagement score item in reels
   const handleEngagementClick = (score) => {
+    const candidateId = score.userId || score.odId
+
     // Check if this is the current user
     const isCurrentUser = score.username === currentUser.username ||
-                          score.id === currentUser.id ||
-                          score.id === authUser?.id
+                          candidateId === currentUser.id ||
+                          candidateId === authUser?.id
 
     // If clicking on own profile, navigate to MyProfile page
     if (isCurrentUser) {
@@ -1294,7 +1304,7 @@ function AppContent() {
 
     // Engagement scores are candidates (on the scoreboard)
     setActiveCandidate({
-      id: score.id,
+      id: candidateId,
       username: score.username,
       avatar: score.avatar,
       party: score.party || 'The Pink Lady Party',
@@ -1674,6 +1684,7 @@ function AppContent() {
             engagementScores={topEngagedCandidates}
             engagementRaceName={engagementRaceName}
             engagementContext={engagementContext}
+            onRepostChange={handleRepostChange}
           />
         </div>
       </div>
@@ -1966,6 +1977,7 @@ function AppContent() {
             userActivity={userActivity}
             engagementScores={topEngagedCandidates}
             engagementRaceName={engagementRaceName}
+            onRepostChange={handleRepostChange}
             engagementContext={engagementContext}
             isOwnProfile={activeCandidate?.username === currentUser.username || activeCandidate?.id === currentUser.id || activeCandidate?.userId === currentUser.id}
             cachedProfile={getCachedUserProfile(activeCandidate?.id || activeCandidate?.userId || activeCandidate?.username)}
@@ -2043,6 +2055,7 @@ function AppContent() {
               engagementScores={topEngagedCandidates}
               engagementRaceName={engagementRaceName}
               engagementContext={engagementContext}
+              onRepostChange={handleRepostChange}
             />
           </div>
         </div>
@@ -2065,6 +2078,7 @@ function AppContent() {
               engagementScores={topEngagedCandidates}
               engagementRaceName={engagementRaceName}
               engagementContext={engagementContext}
+              onRepostChange={handleRepostChange}
               cachedProfile={getCachedUserProfile(activeParticipant?.id || activeParticipant?.userId || activeParticipant?.username)}
               onProfileLoaded={(profileData) => updateUserProfileCache(profileData.id || profileData.userId, profileData)}
               onFollowChange={(isNowFollowing, newFollowerCount) => {

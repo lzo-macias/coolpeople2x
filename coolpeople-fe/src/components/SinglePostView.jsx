@@ -12,6 +12,7 @@ function SinglePostView({
   onPartyClick,
   onOpenComments,
   onLikeChange,
+  onRepostChange,
   onTrackActivity,
   onCommentAdded,
   engagementScores,
@@ -111,6 +112,7 @@ function SinglePostView({
               onPartyClick={onPartyClick}
               onOpenComments={() => onOpenComments?.(post)}
               onLikeChange={onLikeChange}
+              onRepostChange={(reelId, isReposted) => onRepostChange?.(reelId, isReposted, post)}
               onTrackActivity={onTrackActivity}
             />
           </div>

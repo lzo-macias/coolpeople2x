@@ -657,7 +657,6 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             className={`create-preview-video ${recordedWithFrontCamera ? 'mirrored' : ''}`}
             autoPlay
             loop
-            muted
             playsInline
             crossOrigin="anonymous"
             onTimeUpdate={syncSelfieVideo}
