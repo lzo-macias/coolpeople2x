@@ -3,70 +3,8 @@ import { createPortal } from 'react-dom'
 import '../styling/ParticipantProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
 import { getPartyColor } from '../data/mockData'
-import { usersApi } from '../services/api'
+import { usersApi, reelsApi } from '../services/api'
 import EditProfile from './EditProfile'
-
-// CoolPeople Tier System
-const CP_TIERS = [
-  { name: 'Bronze', min: 0, max: 999, color: '#CD7F32', icon: '/icons/tiers/dark/bronze.svg' },
-  { name: 'Silver', min: 1000, max: 2499, color: '#C0C0C0', icon: '/icons/tiers/dark/silver.svg' },
-  { name: 'Gold', min: 2500, max: 4999, color: '#FFD700', icon: '/icons/tiers/dark/gold.svg' },
-  { name: 'Diamond', min: 5000, max: 9999, color: '#B9F2FF', icon: '/icons/tiers/dark/diamond.svg' },
-  { name: 'Master', min: 10000, max: 24999, color: '#9B59B6', icon: '/icons/tiers/dark/master.svg' },
-  { name: 'Challenger', min: 25000, max: Infinity, color: '#FF4500', icon: '/icons/tiers/dark/challenger.svg' },
-]
-
-const getCurrentTier = (points) => {
-  return CP_TIERS.find(tier => points >= tier.min && points <= tier.max) || CP_TIERS[0]
-}
-
-const getNextTier = (points) => {
-  const currentIndex = CP_TIERS.findIndex(tier => points >= tier.min && points <= tier.max)
-  return currentIndex < CP_TIERS.length - 1 ? CP_TIERS[currentIndex + 1] : null
-}
-
-// Mock data for the participant profile
-const mockParticipant = {
-  id: 'user-1',
-  username: 'William.Hiya',
-  avatar: 'https://i.pravatar.cc/150?img=12',
-  party: null, // null = Independent, or party name like 'The Pink Lady'
-  nominations: '9,999',
-  followers: '1M',
-  cpPoints: 1850, // CoolPeople points
-  ranking: '.3%',
-  isFollowing: false,
-  isFavorited: false,
-  hasOptedIn: true, // whether they've opted into social credit
-  bio: 'Building connections. Making a difference in our community.',
-  // Races the user participates in (CP is always included for opted-in users)
-  races: ['CP', 'NYC Mayor 2024'],
-  posts: [
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=400&fit=crop',
-  ],
-}
-
-// Race data for CP filtering - user-specific performance
-const raceData = {
-  'CP': {
-    cpPoints: 1850,
-    change: '+42.30',
-    tier: 'Silver'
-  },
-  'NYC Mayor 2024': {
-    cpPoints: 890,
-    change: '+15.20',
-    tier: 'Bronze'
-  },
-}
 
 function ParticipantProfile({
   participant: passedParticipant,
@@ -83,15 +21,22 @@ function ParticipantProfile({
 }) {
   // State for fetched profile data
   const [fetchedProfile, setFetchedProfile] = useState(null)
+  const [fetchedPosts, setFetchedPosts] = useState([])
+  const [fetchedReposts, setFetchedReposts] = useState([])
 
-  // Fetch fresh profile data from API to check if userType has changed
+  // Fetch profile data, posts, and reposts from API
   useEffect(() => {
     const fetchProfileData = async () => {
       const userId = passedParticipant?.userId || passedParticipant?.id
-      if (!userId) return
+      console.log('[ParticipantProfile] Fetching data for userId:', userId, 'passedParticipant:', passedParticipant)
+      if (!userId) {
+        console.log('[ParticipantProfile] No userId, skipping fetch')
+        return
+      }
 
       try {
         const profileRes = await usersApi.getUser(userId)
+        console.log('[ParticipantProfile] Profile response:', profileRes)
         const profileData = profileRes.data?.user || profileRes.user || profileRes.data || profileRes
 
         // If user is now a CANDIDATE (opted in), switch to CandidateProfile
@@ -114,6 +59,30 @@ function ParticipantProfile({
             userId: profileData.userId || userId,
           })
         }
+
+        // Fetch user's posts
+        try {
+          const postsRes = await reelsApi.getUserReels(userId)
+          console.log('[ParticipantProfile] Posts response:', postsRes)
+          const postsData = postsRes.data || postsRes.reels || postsRes || []
+          console.log('[ParticipantProfile] Setting posts:', postsData)
+          setFetchedPosts(Array.isArray(postsData) ? postsData : [])
+        } catch (e) {
+          console.log('[ParticipantProfile] Failed to fetch posts:', e.message)
+          setFetchedPosts([])
+        }
+
+        // Fetch user's reposts
+        try {
+          const repostsRes = await reelsApi.getUserReposts(userId)
+          console.log('[ParticipantProfile] Reposts response:', repostsRes)
+          const repostsData = repostsRes.data || repostsRes.reels || repostsRes || []
+          console.log('[ParticipantProfile] Setting reposts:', repostsData)
+          setFetchedReposts(Array.isArray(repostsData) ? repostsData : [])
+        } catch (e) {
+          console.log('[ParticipantProfile] Failed to fetch reposts:', e.message)
+          setFetchedReposts([])
+        }
       } catch (error) {
         console.log('Failed to fetch profile:', error.message)
       }
@@ -129,24 +98,78 @@ function ParticipantProfile({
     if (typeof p === 'string') return p
     return p.name || null
   }
+
+  // Use sensible defaults (no mock data) - real data will override these
+  const defaultParticipant = {
+    id: null,
+    username: 'User',
+    avatar: null,
+    party: null,
+    nominations: '0',
+    followers: '0',
+    following: '0',
+    cpPoints: 0,
+    ranking: '0%',
+    isFollowing: false,
+    isFavorited: false,
+    hasOptedIn: false,
+    bio: '',
+    races: [],
+  }
+
   const participant = {
-    ...mockParticipant,
+    ...defaultParticipant,
     ...passedParticipant,
     ...cachedProfile,
     ...fetchedProfile,
-    party: normalizeParty(fetchedProfile?.party) || normalizeParty(cachedProfile?.party) || normalizeParty(passedParticipant?.party) || mockParticipant.party,
+    // Normalize avatar (backend uses avatarUrl)
+    avatar: fetchedProfile?.avatarUrl || fetchedProfile?.avatar ||
+            cachedProfile?.avatarUrl || cachedProfile?.avatar ||
+            passedParticipant?.avatarUrl || passedParticipant?.avatar ||
+            defaultParticipant.avatar,
+    // Normalize followers/following to strings
+    followers: fetchedProfile?.followersCount?.toString() || fetchedProfile?.followers?.toString() ||
+               cachedProfile?.followersCount?.toString() || cachedProfile?.followers?.toString() ||
+               passedParticipant?.followers?.toString() || defaultParticipant.followers,
+    following: fetchedProfile?.followingCount?.toString() || fetchedProfile?.following?.toString() ||
+               cachedProfile?.followingCount?.toString() || cachedProfile?.following?.toString() ||
+               passedParticipant?.following?.toString() || defaultParticipant.following,
+    party: normalizeParty(fetchedProfile?.party) || normalizeParty(cachedProfile?.party) || normalizeParty(passedParticipant?.party) || defaultParticipant.party,
+    // Normalize nominations
+    nominations: fetchedProfile?.nominationsCount?.toString() || fetchedProfile?.nominations?.toString() ||
+                 cachedProfile?.nominationsCount?.toString() || cachedProfile?.nominations?.toString() ||
+                 passedParticipant?.nominations?.toString() || defaultParticipant.nominations,
   }
 
+  console.log('[ParticipantProfile] Merged participant:', {
+    id: participant.id,
+    userId: participant.userId,
+    username: participant.username,
+    avatar: participant.avatar,
+    bio: participant.bio,
+    followers: participant.followers,
+    following: participant.following,
+    party: participant.party,
+    nominations: participant.nominations,
+  })
+
   const [activeTab, setActiveTab] = useState('posts')
-  const [selectedRace, setSelectedRace] = useState('CP') // currently selected race filter
-  const [isFollowing, setIsFollowing] = useState(cachedProfile?.isFollowing ?? participant.isFollowing)
-  const [isFavorited, setIsFavorited] = useState(participant.isFavorited)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isFavorited, setIsFavorited] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
-  const [selectedPeriod, setSelectedPeriod] = useState('1M')
-  const [cpCardExpanded, setCpCardExpanded] = useState(false)
-  const [localFollowerCount, setLocalFollowerCount] = useState(
-    cachedProfile?.followersCount ?? cachedProfile?.followers ?? participant.followers
-  )
+  const [localFollowerCount, setLocalFollowerCount] = useState('0')
+
+  // Sync state when fetched profile data arrives
+  useEffect(() => {
+    const followingStatus = fetchedProfile?.isFollowing ?? cachedProfile?.isFollowing ?? passedParticipant?.isFollowing ?? false
+    const followerCount = fetchedProfile?.followersCount?.toString() || fetchedProfile?.followers?.toString() ||
+                          cachedProfile?.followersCount?.toString() || cachedProfile?.followers?.toString() ||
+                          passedParticipant?.followers?.toString() || '0'
+    console.log('[ParticipantProfile] Syncing state - isFollowing:', followingStatus, 'followerCount:', followerCount)
+    setIsFollowing(followingStatus)
+    setLocalFollowerCount(followerCount)
+    setIsFavorited(fetchedProfile?.isFavorited ?? cachedProfile?.isFavorited ?? passedParticipant?.isFavorited ?? false)
+  }, [fetchedProfile, cachedProfile, passedParticipant])
 
   // Stat modal states
   const [showFollowersModal, setShowFollowersModal] = useState(false)
@@ -193,6 +216,12 @@ function ParticipantProfile({
 
   // Handle follow/unfollow with cache update
   const handleFollowToggle = async () => {
+    const userId = participant.id || participant.userId
+    if (!userId) {
+      console.error('[ParticipantProfile] Cannot follow: no user ID')
+      return
+    }
+
     const wasFollowing = isFollowing
     const currentFollowers = parseInt(localFollowerCount) || 0
     const newFollowerCount = wasFollowing ? currentFollowers - 1 : currentFollowers + 1
@@ -204,28 +233,42 @@ function ParticipantProfile({
     // Notify parent for global cache update
     onFollowChange?.(!wasFollowing, newFollowerCount)
 
-    // TODO: Add actual API call here when backend supports participants
-    // try {
-    //   if (wasFollowing) {
-    //     await usersApi.unfollowUser(participant.id)
-    //   } else {
-    //     await usersApi.followUser(participant.id)
-    //   }
-    // } catch (error) {
-    //   // Revert on error
-    //   setIsFollowing(wasFollowing)
-    //   setLocalFollowerCount(currentFollowers)
-    // }
+    try {
+      if (wasFollowing) {
+        await usersApi.unfollowUser(userId)
+      } else {
+        await usersApi.followUser(userId)
+      }
+    } catch (error) {
+      console.error('[ParticipantProfile] Follow/unfollow failed:', error)
+      // Revert on error
+      setIsFollowing(wasFollowing)
+      setLocalFollowerCount(currentFollowers)
+    }
   }
 
   const tabs = [
-    { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
-    { name: 'Tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
-    { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
+    { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
+    { name: 'Tags', id: 'tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
+    { name: 'Details', id: 'details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
   return (
     <div className="participant-profile">
+      {/* DEBUG BANNER - Remove after debugging */}
+      <div style={{
+        background: 'cyan',
+        color: 'black',
+        padding: '10px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 99999
+      }}>
+        PARTICIPANT PROFILE | ID: {participant.id || participant.userId || 'NO ID'} | User: {participant.username} | Posts: {fetchedPosts.length} | Reposts: {fetchedReposts.length}
+      </div>
+
       {/* Header */}
       <div className="participant-header">
         {/* Favorite star */}
@@ -245,7 +288,13 @@ function ParticipantProfile({
               className="participant-avatar-ring"
               style={{ borderColor: hasParty ? partyColor : '#FF2A55' }}
             >
-              <img src={participant.avatar} alt={participant.username} className="participant-avatar" />
+              {participant.avatar ? (
+                <img src={participant.avatar} alt={participant.username} className="participant-avatar" />
+              ) : (
+                <div className="participant-avatar-placeholder">
+                  {participant.username?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              )}
             </div>
             <div className="participant-info">
               <h2 className="participant-username">{participant.username}</h2>
@@ -363,9 +412,9 @@ function ParticipantProfile({
         <div className="participant-tabs">
           {tabs.map((tab) => (
             <button
-              key={tab.name}
-              className={`participant-tab ${activeTab === tab.name.toLowerCase() ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.name.toLowerCase())}
+              key={tab.id}
+              className={`participant-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
               title={tab.name}
             >
               <img src={tab.icon} alt={tab.name} className="tab-icon" />
@@ -378,338 +427,71 @@ function ParticipantProfile({
       <div className="participant-content">
         {activeTab === 'posts' && (
           <div className="posts-grid">
-            {participant.posts.map((post, index) => (
-              <div key={index} className="post-item">
-                <img src={post} alt={`Post ${index + 1}`} />
+            {fetchedPosts.length === 0 ? (
+              <div className="posts-empty">
+                <p>No posts yet</p>
               </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'tags' && participant.hasOptedIn && (
-          <>
-            {/* CoolPeople Points Card */}
-            {(() => {
-              // Get race-specific data
-              const currentRaceData = raceData[selectedRace] || raceData['CP']
-              const cpPoints = currentRaceData.cpPoints
-              const raceChange = currentRaceData.change
-              const currentTier = getCurrentTier(cpPoints)
-              const nextTier = getNextTier(cpPoints)
-
-              // Calculate progress to next tier
-              const tierRange = (nextTier?.min || currentTier.max + 1) - currentTier.min
-              const progressInTier = cpPoints - currentTier.min
-              const progressPercent = Math.min((progressInTier / tierRange) * 100, 100)
-              const pointsToNext = nextTier ? nextTier.min - cpPoints : 0
-
-              // Get tier percentile (mock for now)
-              const tierPercentile = currentTier.name === 'Gold' ? '3' :
-                                     currentTier.name === 'Diamond' ? '1' :
-                                     currentTier.name === 'Silver' ? '15' :
-                                     currentTier.name === 'Bronze' ? '40' :
-                                     currentTier.name === 'Master' ? '0.5' : '0.1'
-
-              return (
-                <div className={`cp-card ${cpCardExpanded ? 'expanded' : 'minimized'}`} onClick={() => setCpCardExpanded(!cpCardExpanded)}>
-                  {/* Header - only in expanded mode */}
-                  {cpCardExpanded && (
-                    <div className="cp-header">
-                      <div className="cp-level">
-                        <div className="level-badge" style={{
-                          background: `linear-gradient(135deg, ${currentTier.color}33, ${currentTier.color}22)`,
-                          borderColor: `${currentTier.color}4D`
-                        }}>
-                          <img src={currentTier.icon} alt={currentTier.name} className="tier-svg-icon" />
-                        </div>
-                        <div className="level-info">
-                          <h3 style={{ color: currentTier.color }}>{currentTier.name.toUpperCase()}</h3>
-                          <span>Top {tierPercentile}% of users</span>
-                        </div>
-                      </div>
-                      <div className="cp-total">
-                        <div className="points">{cpPoints.toLocaleString()} <span>CP</span></div>
-                        <div className={`change ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange} this week</div>
-                      </div>
-                    </div>
+            ) : (
+              fetchedPosts.map((post, index) => (
+                <div key={post.id || index} className="post-item">
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Post ${index + 1}`} />
                   )}
-
-                  {/* Minimized header row - period selector + cp total inline */}
-                  {!cpCardExpanded && (
-                    <div className="cp-minimized-row">
-                      <div className="period-selector" onClick={(e) => e.stopPropagation()}>
-                        {['1W', '1M', '3M', 'ALL'].map((period) => (
-                          <button
-                            key={period}
-                            className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
-                            onClick={() => setSelectedPeriod(period)}
-                          >
-                            {period}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="cp-total-mini">
-                        <img src={currentTier.icon} alt={currentTier.name} className="tier-icon-mini" />
-                        <span className="points-mini">{cpPoints.toLocaleString()}</span>
-                        <span className="cp-label-mini">CP</span>
-                        <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Time Period Selector - only in expanded mode */}
-                  {cpCardExpanded && (
-                    <div className="period-selector" onClick={(e) => e.stopPropagation()}>
-                      {['1W', '1M', '3M', 'ALL'].map((period) => (
-                        <button
-                          key={period}
-                          className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
-                          onClick={() => setSelectedPeriod(period)}
-                        >
-                          {period}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Chart */}
-                  {(() => {
-                    // Generate different data based on selected period
-                    const periodConfig = {
-                      '1W': { dataPoints: 7, volatility: 0.02, changeMultiplier: 1 },
-                      '1M': { dataPoints: 30, volatility: 0.03, changeMultiplier: 4 },
-                      '3M': { dataPoints: 90, volatility: 0.05, changeMultiplier: 12 },
-                      'ALL': { dataPoints: 180, volatility: 0.08, changeMultiplier: 24 },
-                    }
-                    const config = periodConfig[selectedPeriod]
-
-                    // Calculate period-specific change
-                    const baseChange = parseFloat(raceChange)
-                    const periodChange = baseChange * config.changeMultiplier
-                    const isNegativeChange = periodChange < 0
-
-                    // Get current and next tier for chart bounds
-                    const tierMin = currentTier.min
-                    const tierMax = nextTier ? nextTier.min : currentTier.max
-                    const fullTierRange = tierMax - tierMin
-
-                    // Generate CP history data based on period - jagged like real charts
-                    const generateCPHistory = () => {
-                      const currentCP = cpPoints
-                      const history = []
-                      const startCP = currentCP - periodChange
-
-                      // Use seeded random for consistent results
-                      const seededRandom = (seed) => {
-                        const x = Math.sin(seed * 9999) * 10000
-                        return x - Math.floor(x)
-                      }
-
-                      for (let i = 0; i < config.dataPoints; i++) {
-                        const progress = i / (config.dataPoints - 1)
-                        const baseValue = startCP + (currentCP - startCP) * progress
-
-                        // Jagged noise - random ups and downs
-                        const rand1 = (seededRandom(i * 13.7) - 0.5) * 2
-                        const rand2 = (seededRandom(i * 7.3 + 100) - 0.5) * 2
-                        const spike = seededRandom(i * 3.1) > 0.85 ? (seededRandom(i * 2.1) - 0.5) * 4 : 0
-
-                        const noise = (rand1 * fullTierRange * config.volatility) +
-                                      (rand2 * fullTierRange * config.volatility * 0.5) +
-                                      (spike * fullTierRange * config.volatility)
-
-                        const value = baseValue + noise * (1 - progress * 0.2)
-                        history.push(value)
-                      }
-                      history[history.length - 1] = currentCP
-                      return history
-                    }
-
-                    const cpHistory = generateCPHistory()
-
-                    // Calculate zoomed view bounds based on actual data range
-                    const dataMin = Math.min(...cpHistory)
-                    const dataMax = Math.max(...cpHistory)
-                    const dataPadding = (dataMax - dataMin) * 0.1
-
-                    // Chart bounds: zoom to data range for detail
-                    const chartBottom = Math.min(dataMin - dataPadding, tierMin)
-                    const chartTop = Math.max(dataMax + dataPadding, cpPoints + 200)
-                    const chartRange = chartTop - chartBottom
-
-                    // Convert CP value to Y position (for data and interval lines)
-                    const cpToY = (cp) => {
-                      return 90 - ((cp - chartBottom) / chartRange) * 75
-                    }
-
-                    // Next tier (goal) is always fixed at top regardless of scale
-                    const goalLineY = 8
-
-                    // Generate interval lines between tiers
-                    const generateIntervalLines = () => {
-                      const lines = []
-                      // Determine good interval based on tier range
-                      let interval
-                      if (fullTierRange <= 1000) interval = 250
-                      else if (fullTierRange <= 2500) interval = 500
-                      else if (fullTierRange <= 5000) interval = 500
-                      else interval = 1000
-
-                      // Start from tier min, go up in intervals
-                      let value = Math.ceil(chartBottom / interval) * interval
-                      while (value <= chartTop) {
-                        // Skip if too close to tier boundaries
-                        if (Math.abs(value - tierMin) > interval * 0.3 &&
-                            Math.abs(value - tierMax) > interval * 0.3) {
-                          lines.push(value)
-                        }
-                        value += interval
-                      }
-                      return lines
-                    }
-
-                    const intervalLines = generateIntervalLines()
-                    const lastY = cpToY(cpPoints)
-
-                    // Format values for labels
-                    const formatValue = (val) => {
-                      if (val >= 1000) {
-                        const k = val / 1000
-                        return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`
-                      }
-                      return val.toString()
-                    }
-
-                    return (
-                      <div className="chart-area">
-                        <svg className="chart-svg" viewBox="0 0 340 100" preserveAspectRatio="none">
-                          <defs>
-                            <linearGradient id="chartGradientGreenPart" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="rgba(16, 185, 129, 0.3)"/>
-                              <stop offset="100%" stopColor="rgba(16, 185, 129, 0)"/>
-                            </linearGradient>
-                            <linearGradient id="chartGradientRedPart" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.3)"/>
-                              <stop offset="100%" stopColor="rgba(239, 68, 68, 0)"/>
-                            </linearGradient>
-                          </defs>
-
-                          {/* Interval gridlines */}
-                          {intervalLines.map((val) => {
-                            const y = cpToY(val)
-                            if (y < 5 || y > 95) return null
-                            return (
-                              <g key={val}>
-                                <line x1="0" y1={y} x2="310" y2={y} className="interval-line"/>
-                                <text x="335" y={y + 3} className="interval-label" fill="rgba(255,255,255,0.3)" textAnchor="end">
-                                  {formatValue(val)}
-                                </text>
-                              </g>
-                            )
-                          })}
-
-                          {/* Tier threshold lines: current tier (bottom) and next tier (goal at top) */}
-                          {cpToY(tierMin) <= 95 && cpToY(tierMin) >= 5 && (
-                            <>
-                              <line x1="0" y1={cpToY(tierMin)} x2="310" y2={cpToY(tierMin)} className="tier-threshold-line current" stroke={currentTier.color}/>
-                              <text x="335" y={cpToY(tierMin) + 3} className="tier-label" fill={currentTier.color} textAnchor="end">
-                                {formatValue(tierMin)}
-                              </text>
-                            </>
-                          )}
-                          {/* Goal line - always fixed at top */}
-                          {nextTier && (
-                            <>
-                              <line x1="0" y1={goalLineY} x2="310" y2={goalLineY} className="tier-threshold-line next goal" stroke={nextTier.color}/>
-                              <text x="335" y={goalLineY + 3} className="tier-label" fill={nextTier.color} textAnchor="end">
-                                {formatValue(tierMax)}
-                              </text>
-                            </>
-                          )}
-
-                          {/* Area fill - convert CP history to path */}
-                          {(() => {
-                            const points = cpHistory.map((cp, i) => {
-                              const x = (i / (cpHistory.length - 1)) * 340
-                              const y = cpToY(cp)
-                              return `${x},${y}`
-                            })
-                            const linePath = `M${points.join(' L')}`
-                            const areaPath = `${linePath} L340,100 L0,100 Z`
-                            const pointColor = isNegativeChange ? '#ef4444' : '#10b981'
-                            return (
-                              <>
-                                <path className={`chart-area-fill ${isNegativeChange ? 'negative' : 'positive'}`} d={areaPath} fill={isNegativeChange ? 'url(#chartGradientRedPart)' : 'url(#chartGradientGreenPart)'}/>
-                                <path className={`chart-line ${isNegativeChange ? 'negative' : 'positive'}`} d={linePath}/>
-                                {/* Current point indicator */}
-                                <circle cx="340" cy={lastY} r="5" fill={pointColor}/>
-                                <circle cx="340" cy={lastY} r="8" fill="none" stroke={pointColor} strokeWidth="2" opacity="0.3"/>
-                              </>
-                            )
-                          })()}
-                        </svg>
-                      </div>
-                    )
-                  })()}
-
-                  {/* Progress to Next Level - only in expanded mode */}
-                  {cpCardExpanded && nextTier && (
-                    <div className="progress-section">
-                      <div className="progress-header">
-                        <div className="current" style={{ color: currentTier.color }}>
-                          <img src={currentTier.icon} alt={currentTier.name} className="progress-tier-icon" />
-                          {currentTier.name}
-                        </div>
-                        <div className="next">{pointsToNext.toLocaleString()} CP to <img src={nextTier.icon} alt={nextTier.name} className="progress-tier-icon" /> {nextTier.name}</div>
-                      </div>
-                      <div className="progress-bar-wrap">
-                        <div
-                          className="progress-bar-fill"
-                          style={{
-                            width: `${progressPercent}%`,
-                            background: `linear-gradient(90deg, ${currentTier.color}, ${nextTier.color})`
-                          }}
-                        ></div>
-                      </div>
-                      <div className="progress-text">
-                        <span>{currentTier.min.toLocaleString()} CP</span>
-                        <span>{nextTier.min.toLocaleString()} CP</span>
-                      </div>
-                    </div>
-                  )}
-
                 </div>
-              )
-            })()}
-
-            {/* Race Pills - only show if user is in 2+ races */}
-            {participant.races && participant.races.length > 1 && (
-              <div className="tag-pills-container">
-                <div className="tag-pills">
-                  {participant.races.map((race) => (
-                    <button
-                      key={race}
-                      className={`tag-pill ${selectedRace === race ? 'active' : ''}`}
-                      onClick={() => setSelectedRace(race)}
-                    >
-                      {race}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              ))
             )}
-          </>
-        )}
-
-        {activeTab === 'tags' && !participant.hasOptedIn && (
-          <div className="tags-placeholder">
-            <p>Opt in to social credit to see your CP stats</p>
           </div>
         )}
 
-        {activeTab === 'bio' && (
-          <div className="bio-placeholder">
-            <p>Bio content coming soon...</p>
+        {activeTab === 'tags' && (
+          <div className="posts-grid">
+            {fetchedReposts.length === 0 ? (
+              <div className="posts-empty">
+                <p>No reposts yet</p>
+              </div>
+            ) : (
+              fetchedReposts.map((repost, index) => (
+                <div key={repost.id || index} className="post-item repost-item">
+                  <div className="repost-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 1l4 4-4 4" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <path d="M7 23l-4-4 4-4" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  </div>
+                  {repost.videoUrl ? (
+                    <video
+                      src={repost.videoUrl}
+                      muted
+                      playsInline
+                      className={repost.isMirrored ? 'mirrored' : ''}
+                    />
+                  ) : (
+                    <img src={repost.thumbnailUrl || repost.thumbnail || repost} alt={`Repost ${index + 1}`} />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'details' && (
+          <div className="activity-feed">
+            <div className="activity-empty">
+              <p>No activity yet</p>
+              <span>Likes, comments, and nominations will appear here</span>
+            </div>
           </div>
         )}
       </div>

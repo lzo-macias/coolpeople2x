@@ -502,6 +502,47 @@ button.my-profile-bio.empty {
   transform: scaleX(-1);
 }
 
+/* Repost items in reposts tab */
+.my-profile .repost-item {
+  position: relative;
+  aspect-ratio: 156 / 235;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.my-profile .repost-item img,
+.my-profile .repost-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.my-profile .repost-item video.mirrored {
+  transform: scaleX(-1);
+}
+
+.my-profile .repost-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.my-profile .repost-badge svg {
+  width: 14px;
+  height: 14px;
+  color: #4ade80;
+  transform: rotate(90deg);
+}
+
 /* Placeholders */
 .my-profile .tags-placeholder,
 .my-profile .bio-placeholder {

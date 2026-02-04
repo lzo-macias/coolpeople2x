@@ -61,6 +61,7 @@ export interface ReelResponse {
     comments: string;
     shares: string;
     saves: string;
+    reposts: string;
     votes: string;
     shazam: string;
   };
@@ -69,6 +70,16 @@ export interface ReelResponse {
   isLiked?: boolean;
   isSaved?: boolean;
   isReposted?: boolean;
+
+  // Repost context (when viewing a repost in feed)
+  repostedBy?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+  repostedAt?: Date;
+  originalReelId?: string;
 
   // Tags
   hashtags: string[];

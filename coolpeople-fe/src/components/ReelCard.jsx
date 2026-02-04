@@ -174,7 +174,7 @@ const formatNominations = (num) => num.toLocaleString()
 // Default race for nominations
 const DEFAULT_RACE = { id: 'coolpeople', name: 'CoolPeople', icon: '/coolpeople-icon.png' }
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onHide, userRacesFollowing = [] }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [] }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -340,6 +340,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [showNominateOptions, setShowNominateOptions] = useState(false)
   const [selectedRaceForNomination, setSelectedRaceForNomination] = useState(null)
   const [showQuoteNominate, setShowQuoteNominate] = useState(false)
+  const [showQuoteRepost, setShowQuoteRepost] = useState(false)
   const defaultReel = {
     id: 1,
     videoUrl: null,
@@ -436,12 +437,55 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
         {/* Right side actions */}
         <div className="reel-actions-container">
-          <ReelActions user={data.user} stats={data.stats} onOpenComments={onOpenComments} onTrackActivity={onTrackActivity} reel={data} onLikeChange={onLikeChange} onHide={onHide} isPageActive={isPageActive} />
+          <ReelActions
+            user={data.user}
+            stats={data.stats}
+            onOpenComments={onOpenComments}
+            onTrackActivity={onTrackActivity}
+            reel={data}
+            onLikeChange={onLikeChange}
+            onRepostChange={(reelId, isReposted) => {
+              console.log('[REPOST-REELCARD] Passing to parent:', { reelId, isReposted, hasOnRepostChange: !!onRepostChange })
+              onRepostChange?.(reelId, isReposted)
+            }}
+            onHide={onHide}
+            isPageActive={isPageActive}
+            onOpenQuote={() => {
+              pauseVideo()
+              setShowQuoteRepost(true)
+            }}
+          />
         </div>
 
         {/* Bottom info */}
         <div className="reel-bottom">
           <div className="reel-info">
+            {/* Reposted by indicator */}
+            {data.repostedBy && (
+              <button
+                className="reposted-by-indicator"
+                onClick={() => { pauseVideo(); onUsernameClick?.(data.repostedBy) }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 1l4 4-4 4" />
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  <path d="M7 23l-4-4 4-4" />
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                </svg>
+                <span>Reposted by @{data.repostedBy.username || data.repostedBy.displayName}</span>
+              </button>
+            )}
+
+            {/* Activity label indicator */}
+            {data.activityLabel && (
+              <div className="activity-label-indicator">
+                <span className="activity-label-icon" style={{ color: data.activityLabel.color }}>{data.activityLabel.icon}</span>
+                <span className="activity-label-text">
+                  {data.activityLabel.actor?.username || 'You'} {data.activityLabel.text}
+                </span>
+              </div>
+            )}
+
             {/* Race Target Pill - opens race modal */}
             {data.targetRace && (
               <button
@@ -809,6 +853,26 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             playNominateSound()
             if (onTrackActivity) {
               onTrackActivity('nominate', data)
+            }
+            resumeVideo()
+          }}
+        />
+      )}
+
+      {/* Quote Repost Screen */}
+      {showQuoteRepost && (
+        <QuoteNominateScreen
+          reel={data}
+          selectedRace={null}
+          isQuoteMode={true}
+          onClose={() => {
+            setShowQuoteRepost(false)
+            resumeVideo()
+          }}
+          onComplete={() => {
+            setShowQuoteRepost(false)
+            if (onTrackActivity) {
+              onTrackActivity('quote', data)
             }
             resumeVideo()
           }}

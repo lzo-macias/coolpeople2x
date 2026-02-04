@@ -20,11 +20,13 @@ const formatActiveTime = (dateString) => {
   return null
 }
 
-function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange, onHide, isPageActive }) {
+function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLikeChange, onHide, isPageActive, onOpenQuote, onRepostChange }) {
   const { user: authUser } = useAuth()
   const partyColor = getPartyColor(user?.party)
   const [isLiked, setIsLiked] = useState(reel?.isLiked || false)
-  const [likeCount, setLikeCount] = useState(stats?.likes || '9,999')
+  const [likeCount, setLikeCount] = useState(stats?.likes || '0')
+  const [isReposted, setIsReposted] = useState(reel?.isReposted || false)
+  const [repostCount, setRepostCount] = useState(stats?.reposts || '0')
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedContacts, setSelectedContacts] = useState([])
@@ -222,7 +224,9 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   useEffect(() => {
     setIsLiked(reel?.isLiked || false)
     setLikeCount(stats?.likes || '0')
-  }, [reel?.id, reel?.isLiked, stats?.likes])
+    setIsReposted(reel?.isReposted || false)
+    setRepostCount(stats?.reposts || '0')
+  }, [reel?.id, reel?.isLiked, stats?.likes, reel?.isReposted, stats?.reposts])
 
   // Calculate dots menu position when it opens
   useEffect(() => {
@@ -290,21 +294,57 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
   }
 
   const handleRepost = async () => {
+    console.log('[REPOST] handleRepost called, reel:', reel?.id, 'onRepostChange exists:', !!onRepostChange)
+
+    // Optimistic update
+    const wasReposted = isReposted
+    const currentCount = parseInt(repostCount.replace(/,/g, '')) || 0
+
+    if (wasReposted) {
+      // Unreposting - decrement count
+      const newCount = Math.max(0, currentCount - 1)
+      setRepostCount(newCount.toLocaleString())
+    } else {
+      // Reposting - increment count
+      const newCount = currentCount + 1
+      setRepostCount(newCount.toLocaleString())
+      if (onTrackActivity && reel) {
+        onTrackActivity('repost', reel)
+      }
+    }
+    setIsReposted(!wasReposted)
+    setShowRepostMenu(false)
+
+    // Sync with API
     try {
       if (reel?.id) {
-        console.log('Repost API call - reelId:', reel.id)
-        await reelsApi.repostReel(reel.id)
-        if (onTrackActivity && reel) {
-          onTrackActivity('repost', reel)
+        console.log('[REPOST] API call - reelId:', reel.id, 'wasReposted:', wasReposted)
+        if (wasReposted) {
+          await reelsApi.unrepostReel(reel.id)
+          console.log('[REPOST] Calling onRepostChange with false')
+          onRepostChange?.(reel.id, false)
+        } else {
+          await reelsApi.repostReel(reel.id)
+          console.log('[REPOST] Calling onRepostChange with true, reelId:', reel.id)
+          onRepostChange?.(reel.id, true)
         }
-        console.log('Repost API call successful')
+        console.log('[REPOST] API call successful, onRepostChange called')
       } else {
-        console.warn('Repost action - no reel ID, cannot sync to backend')
+        console.warn('[REPOST] No reel ID, cannot sync to backend')
       }
     } catch (error) {
-      console.error('Repost error:', error.message, error)
+      // Revert on error
+      console.error('[REPOST] Error:', error.message, error)
+      setIsReposted(wasReposted)
+      const revertCount = parseInt(repostCount.replace(/,/g, '')) || 0
+      const revertedCount = Math.max(0, revertCount + (wasReposted ? 1 : -1))
+      setRepostCount(revertedCount.toLocaleString())
     }
+  }
+
+  const handleQuote = () => {
     setShowRepostMenu(false)
+    onOpenQuote?.(reel)
   }
 
   const handleShare = async () => {
@@ -339,17 +379,6 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
   return (
     <div className="reel-actions">
-      {/* Profile with follow badge */}
-      <button className="action-btn profile-btn" onClick={handleFollow}>
-        <img
-          src={user?.avatar || 'https://i.pravatar.cc/40?img=1'}
-          alt="profile"
-          className="action-avatar"
-          style={{ borderColor: partyColor }}
-        />
-        <span className="follow-badge">+</span>
-      </button>
-
       {/* Repost */}
       <button className="action-btn repost-btn" onClick={() => setShowRepostMenu(true)}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -358,7 +387,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
           <path d="M7 23l-4-4 4-4" />
           <path d="M21 13v2a4 4 0 0 1-4 4H3" />
         </svg>
-        <span className="action-count">{stats?.reposts || '9,999'}</span>
+        <span className="action-count">{repostCount}</span>
       </button>
 
       {/* Heart/Like */}
@@ -569,10 +598,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 </svg>
                 <span>Repost</span>
               </button>
-              <button className="repost-option quote-active" onClick={() => {
-                // Handle quote
-                setShowRepostMenu(false)
-              }}>
+              <button className="repost-option quote-active" onClick={handleQuote}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>

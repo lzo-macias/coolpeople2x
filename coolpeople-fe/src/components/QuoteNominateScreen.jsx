@@ -4,7 +4,7 @@ import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
 import '../styling/QuoteNominateScreen.css'
 
-function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
+function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteMode = false }) {
   const [isRecording, setIsRecording] = useState(false)
   const [hasRecorded, setHasRecorded] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState(null)
@@ -16,7 +16,7 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
   const [showEditClipScreen, setShowEditClipScreen] = useState(false)
   const [showPostScreen, setShowPostScreen] = useState(false)
   const [selectedSound, setSelectedSound] = useState(null)
-  const [currentMode, setCurrentMode] = useState('nominate') // 'nominate', 'race', or 'party'
+  const [currentMode, setCurrentMode] = useState(isQuoteMode ? 'quote' : 'nominate') // 'nominate', 'race', 'party', or 'quote'
   const [raceName, setRaceName] = useState('')
   const [raceDeadline, setRaceDeadline] = useState(null)
   const [textOverlays, setTextOverlays] = useState([])
@@ -172,6 +172,7 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
         quotedReel={reel}
         isNominateMode={currentMode === 'nominate'}
         isRaceMode={currentMode === 'race'}
+        isQuoteMode={currentMode === 'quote'}
         taggedUser={reel.user}
         isMirrored={true}
         currentMode={currentMode}
@@ -253,9 +254,10 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
           setShowEditClipScreen(true)
         }}
         onPost={handlePost}
-        isQuoteNomination={true}
+        isQuoteNomination={!isQuoteMode}
         isNominateMode={currentMode === 'nominate'}
         isRaceMode={currentMode === 'race'}
+        isQuoteMode={currentMode === 'quote'}
         quotedUser={reel.user}
         selectedRace={selectedRace}
         quotedReel={reel}
@@ -338,7 +340,7 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
           onTouchEnd={!hasRecorded ? handleRecordEnd : undefined}
         >
           <div className="quote-record-inner">
-            <span className="nominate-text">Nominate</span>
+            <span className="nominate-text">{isQuoteMode ? 'Quote' : 'Nominate'}</span>
           </div>
         </button>
 
@@ -367,7 +369,7 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete }) {
 
         {!hasRecorded && (
           <span className="quote-record-hint">
-            {isRecording ? 'Recording...' : 'Hold to record'}
+            {isRecording ? 'Recording...' : `Hold to record ${isQuoteMode ? 'your quote' : 'your nomination'}`}
           </span>
         )}
       </div>

@@ -13,21 +13,40 @@ const activityConfig = {
   like: { color: '#FF4D6A', icon: '♥' },
   nominate: { color: '#00F2EA', icon: '★' },
   repost: { color: '#4CAF50', icon: '↻' },
-  comment: { color: '#FFB800', icon: '💬' },
+  comment: { color: '#FFB800', icon: '▸' },
   endorsement: { color: '#9B59B6', icon: '✓' },
   ballot: { color: '#FF9500', icon: '☐' },
   favorite: { color: '#FFD700', icon: '★' },
-  follow: { color: '#3B82F6', icon: '👤' },
-  review: { color: '#F59E0B', icon: '⭐' },
+  follow: { color: '#3B82F6', icon: '＋' },
+  review: { color: '#F59E0B', icon: '★' },
   invite: { color: '#10B981', icon: '✉' },
-  message: { color: '#8B5CF6', icon: '💬' },
-  race: { color: '#EC4899', icon: '🏁' },
+  message: { color: '#8B5CF6', icon: '▸' },
+  race: { color: '#EC4899', icon: '⚑' },
   mention: { color: '#06B6D4', icon: '@' },
   share: { color: '#14B8A6', icon: '↗' },
 }
 
 // Activity Video Item component with IntersectionObserver for auto-play
-function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return ''
+  // If it's already a relative string like "Just now", return as-is
+  if (typeof timestamp === 'string' && !timestamp.includes('T') && !timestamp.includes('-')) return timestamp
+  const date = new Date(timestamp)
+  if (isNaN(date.getTime())) return timestamp
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'Just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 4) return `${weeks}w ago`
+  return date.toLocaleDateString()
+}
+
+function ActivityVideoItem({ activity, activityConfig, getPartyColor, onClick }) {
   const videoRef = useRef(null)
   const containerRef = useRef(null)
   const config = activityConfig[activity.type] || activityConfig.like
@@ -73,7 +92,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
         />
         <span className="activity-action-user">{actor.username}</span>
         <span className="activity-action-text">{activity.action}</span>
-        <span className="activity-timestamp">{activity.timestamp}</span>
+        <span className="activity-timestamp">{formatTimeAgo(activity.timestamp)}</span>
       </div>
 
       {/* Video card - only show if we have video data */}
@@ -104,7 +123,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor }) {
             )}
 
           {/* Overlay content */}
-          <div className="activity-video-overlay">
+          <div className="activity-video-overlay" onClick={onClick} style={{ cursor: 'pointer' }}>
             <div className="activity-info">
               {video?.race && (
                 <div className="activity-race-pill">
@@ -165,7 +184,7 @@ const calculateStarterPoints = (posts) => {
 
 const BIO_MAX_LENGTH = 150 // ~3 lines max
 
-function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive }) {
+function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [], userReposts = [], hasOptedIn = false, onOpenComments, userActivity = [], onEditIcebreakers, currentUser, onAvatarChange, onBioChange, onUserPostLikeChange, onUserPostCommentAdded, isActive }) {
   // Get user data from currentUser prop, fallback to defaults
   const profileData = {
     username: currentUser?.username || 'User',
@@ -185,6 +204,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
   const [bioText, setBioText] = useState(currentUser?.bio || '')
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
+  const [singlePostSource, setSinglePostSource] = useState('posts')
   const [starterPoints] = useState(() => calculateStarterPoints(userPosts))
   const [showShareModal, setShowShareModal] = useState(false)
   const [showCopiedToast, setShowCopiedToast] = useState(false)
@@ -472,9 +492,37 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
   // Only show actual user posts (no mock data for new accounts)
   const allPosts = userPosts
 
+  // Convert activity items to reel-shaped objects for SinglePostView
+  const activityReels = userActivity
+    .filter((a) => a.video)
+    .map((a) => {
+      const config = activityConfig[a.type] || activityConfig.like
+      return {
+        ...a.video,
+        id: a.id,
+        user: a.video.user || {},
+        stats: {
+          likes: a.video.likes || '0',
+          comments: a.video.comments || '0',
+          shares: a.video.shares || '0',
+          saves: '0',
+          reposts: '0',
+          votes: '0',
+          shazam: '0',
+        },
+        activityLabel: {
+          icon: config.icon,
+          text: a.action,
+          color: config.color,
+          actor: a.actor,
+        },
+      }
+    })
+
   // Handle post click to open SinglePostView
-  const handlePostClick = (index) => {
+  const handlePostClick = (index, source = 'posts') => {
     setSelectedPostIndex(index)
+    setSinglePostSource(source)
     setShowSinglePost(true)
   }
 
@@ -690,8 +738,39 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
         )}
 
         {activeTab === 'tags' && (
-          <div className="tags-placeholder">
-            <p>No tags yet</p>
+          <div className="posts-grid">
+            {userReposts.length === 0 ? (
+              <div className="posts-empty">
+                <p>No reposts yet</p>
+              </div>
+            ) : (
+              userReposts.map((repost, index) => (
+                <div
+                  key={repost.id}
+                  className="post-item repost-item"
+                  onClick={() => handlePostClick(index, 'reposts')}
+                >
+                  <div className="repost-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 1l4 4-4 4" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <path d="M7 23l-4-4 4-4" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  </div>
+                  {repost.videoUrl ? (
+                    <video
+                      src={repost.videoUrl}
+                      muted
+                      playsInline
+                      className={repost.isMirrored ? 'mirrored' : ''}
+                    />
+                  ) : (
+                    <img src={repost.thumbnail || repost} alt={`Repost ${index + 1}`} />
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -703,12 +782,13 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                 <span>Your likes, comments, and nominations will appear here</span>
               </div>
             ) : (
-              userActivity.map((activity) => (
+              userActivity.map((activity, index) => (
                 <ActivityVideoItem
                   key={activity.id}
                   activity={activity}
                   activityConfig={activityConfig}
                   getPartyColor={getPartyColor}
+                  onClick={() => handlePostClick(index, 'activity')}
                 />
               ))
             )}
@@ -749,7 +829,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       {/* Single Post View - rendered via portal to escape transformed parent */}
       {showSinglePost && createPortal(
         <SinglePostView
-          posts={allPosts}
+          posts={singlePostSource === 'reposts' ? userReposts : singlePostSource === 'activity' ? activityReels : allPosts}
           initialIndex={selectedPostIndex}
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}

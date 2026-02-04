@@ -22,7 +22,7 @@ import SinglePostView from './components/SinglePostView'
 import Login from './components/Login'
 import Register from './components/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi } from './services/api'
+import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi, racesApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
 import { mockReels, mockConversations, mockMessages, generateSparklineData } from './data/mockData'
 
@@ -57,6 +57,7 @@ function AppContent() {
   const [userPoints, setUserPoints] = useState([]) // User's points per race (candidates only)
   const [reels, setReels] = useState([...mockReels]) // All posts in feed - fallback to mock
   const [userPosts, setUserPosts] = useState([]) // Current user's posts
+  const [userReposts, setUserReposts] = useState([]) // Current user's reposts
   const [partyPosts, setPartyPosts] = useState([]) // Posts to user's party
   const [userStories, setUserStories] = useState([]) // User's stories (nominations)
   const [conversations, setConversations] = useState({ ...mockConversations }) // Chat messages by conversation ID
@@ -72,6 +73,7 @@ function AppContent() {
   const [navHistory, setNavHistory] = useState([])
   const [showSinglePostView, setShowSinglePostView] = useState(false) // Show reel in scrollable view
   const [singlePostViewData, setSinglePostViewData] = useState(null) // { posts, initialIndex }
+  const [topEngagedCandidates, setTopEngagedCandidates] = useState([]) // Top candidates for sparklines
 
   // Refs must also be at the top
   const reelsFeedRef = useRef(null)
@@ -135,6 +137,83 @@ function AppContent() {
       }
     }
     fetchStories()
+  }, [isAuthenticated])
+
+  // Fetch top engaged candidates for sparklines at top of reels
+  useEffect(() => {
+    const fetchTopEngagedCandidates = async () => {
+      if (!isAuthenticated) return
+      try {
+        // Try to get races and their scoreboards
+        const racesResponse = await racesApi.listRaces()
+        const races = racesResponse.data || []
+
+        // Get the first race with competitors (or CoolPeople race)
+        const targetRace = races.find(r => r.title === 'CoolPeople') || races[0]
+
+        if (targetRace) {
+          const scoreboardResponse = await racesApi.getScoreboard(targetRace.id, { limit: 10 })
+          const scoreboard = scoreboardResponse.data || []
+
+          // Transform scoreboard entries into engagement scores format
+          const engagementScores = scoreboard.slice(0, 3).map((entry, idx) => {
+            const user = entry.user || entry
+            // Calculate change based on recent activity
+            const todayChange = entry.todayChange || entry.change || (Math.random() > 0.5 ? Math.floor(Math.random() * 50) + 1 : null)
+            const trend = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : 'stable'
+
+            return {
+              id: `eng-${user.id || idx}`,
+              odId: user.id,
+              username: user.handle || user.username || user.displayName || `Candidate ${idx + 1}`,
+              avatar: user.avatarUrl || user.avatar || `https://i.pravatar.cc/40?img=${idx + 10}`,
+              party: user.party?.name || null,
+              sparklineData: entry.sparkline?.map(s => s.points) || generateSparklineData(trend),
+              recentChange: todayChange ? (todayChange > 0 ? `+${todayChange}` : `${todayChange}`) : null,
+              trend,
+              totalPoints: entry.totalPoints || 0,
+            }
+          })
+
+          if (engagementScores.length > 0) {
+            setTopEngagedCandidates(engagementScores)
+          }
+        }
+      } catch (error) {
+        console.log('Using default engagement scores:', error.message)
+        // Fallback to mock data if API fails
+        setTopEngagedCandidates([
+          {
+            id: 'eng-default-1',
+            username: 'Top.Candidate',
+            avatar: 'https://i.pravatar.cc/40?img=12',
+            party: 'Democrat',
+            sparklineData: generateSparklineData('up'),
+            recentChange: '+12',
+            trend: 'up',
+          },
+          {
+            id: 'eng-default-2',
+            username: 'Rising.Star',
+            avatar: 'https://i.pravatar.cc/40?img=5',
+            party: 'Republican',
+            sparklineData: generateSparklineData('up'),
+            recentChange: '+8',
+            trend: 'up',
+          },
+          {
+            id: 'eng-default-3',
+            username: 'Local.Leader',
+            avatar: 'https://i.pravatar.cc/40?img=3',
+            party: 'Independent',
+            sparklineData: generateSparklineData('stable'),
+            recentChange: null,
+            trend: 'stable',
+          },
+        ])
+      }
+    }
+    fetchTopEngagedCandidates()
   }, [isAuthenticated])
 
   // Reusable function to load user profile data
@@ -206,6 +285,36 @@ function AppContent() {
       }
     } catch (error) {
       console.log('Using local posts:', error.message)
+    }
+  }
+
+  // Reusable function to load user's reposts from backend
+  const loadUserReposts = async () => {
+    if (!authUser?.id) return
+
+    try {
+      const response = await reelsApi.getUserReposts(authUser.id)
+      const reposts = response.data || response
+      if (reposts && Array.isArray(reposts)) {
+        setUserReposts(reposts)
+      }
+    } catch (error) {
+      console.log('Using local reposts:', error.message)
+    }
+  }
+
+  // Reusable function to load user's activity from backend
+  const loadUserActivity = async () => {
+    if (!authUser?.id) return
+
+    try {
+      const response = await reelsApi.getUserActivity(authUser.id)
+      const activities = response.data || response
+      if (activities && Array.isArray(activities)) {
+        setUserActivity(activities)
+      }
+    } catch (error) {
+      console.log('Using local activity:', error.message)
     }
   }
 
@@ -314,16 +423,20 @@ function AppContent() {
     console.log('Updated reels and posts with new party:', newPartyName)
   }, [userParty?.id, userParty?.name, authUser?.id])
 
-  // Load user's posts from backend on initial auth
+  // Load user's posts, reposts, and activity from backend on initial auth
   useEffect(() => {
     loadUserPosts()
+    loadUserReposts()
+    loadUserActivity()
   }, [authUser?.id])
 
   // Refresh profile data when navigating to MyProfile page
   useEffect(() => {
     if (currentPage === 5 && authUser?.id) {
-      // Refresh posts and profile data when visiting profile
+      // Refresh posts, reposts, activity, and profile data when visiting profile
       loadUserPosts()
+      loadUserReposts()
+      loadUserActivity()
       loadUserProfile()
     }
   }, [currentPage])
@@ -380,11 +493,16 @@ function AppContent() {
       id: `act-${Date.now()}`,
       type,
       action: type === 'like' ? 'liked' : type === 'comment' ? 'commented' : type === 'nominate' ? 'nominated' : type === 'repost' ? 'reposted' : type === 'endorse' ? 'endorsed' : type === 'ballot' ? 'added to ballot' : type === 'favorite' ? 'favorited' : type,
-      timestamp: 'Just now',
+      timestamp: new Date().toISOString(),
+      actor: {
+        username: authUser?.username || 'User',
+        displayName: authUser?.displayName || authUser?.username || 'User',
+        avatar: authUser?.avatarUrl || authUser?.avatar || null,
+      },
       video: {
         thumbnail: video.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
-        videoUrl: video.videoUrl || null, // Keep video URL separate for video playback
-        isMirrored: video.isMirrored || false, // Track if video should be mirrored
+        videoUrl: video.videoUrl || null,
+        isMirrored: video.isMirrored || false,
         user: video.user || { username: 'unknown', avatar: 'https://i.pravatar.cc/40?img=1', party: null },
         race: video.targetRace || null,
         likes: video.stats?.likes || '0',
@@ -394,6 +512,37 @@ function AppContent() {
       },
     }
     setUserActivity(prev => [activity, ...prev])
+  }
+
+  // Handle when user reposts a reel - add to profile reposts only (not feed)
+  const handleRepostChange = (reelId, isReposted, reel) => {
+    if (isReposted && reel) {
+      const originalReel = reel.originalReelId ? { ...reel, repostedBy: undefined } : reel
+      const originalId = reel.originalReelId || reelId
+
+      const repostEntry = {
+        ...originalReel,
+        id: `repost-${originalId}-${Date.now()}`,
+        originalReelId: originalId,
+        repostedBy: {
+          id: authUser?.id,
+          username: authUser?.username || authUser?.handle,
+          displayName: authUser?.displayName || authUser?.username,
+          avatarUrl: authUser?.avatarUrl || authUser?.avatar,
+        },
+        repostedAt: new Date().toISOString(),
+      }
+
+      // Only add to user's reposts (profile tags tab), not the main feed
+      setUserReposts(prev => [repostEntry, ...prev])
+    } else if (!isReposted) {
+      // Remove from user's reposts on unrepost
+      const originalId = reel?.originalReelId || reelId
+      setUserReposts(prev => prev.filter(r => {
+        const rOrigId = r.originalReelId || r.id
+        return rOrigId !== originalId
+      }))
+    }
   }
 
   // Current user info from auth context
@@ -947,16 +1096,19 @@ function AppContent() {
       updateUserProfileCache(profileData.id || profileData.userId, profileData)
     } else if (newUserType === 'PARTICIPANT') {
       // Switch from CandidateProfile to ParticipantProfile
+      console.log('[handleUserTypeChange] Switching to PARTICIPANT with data:', profileData)
       setShowProfile(false)
       setActiveCandidate(null)
-      setActiveParticipant({
+      const participantData = {
         ...profileData,
         id: profileData.id || profileData.userId,
         userId: profileData.userId || profileData.id,
         username: profileData.username,
         avatar: profileData.avatarUrl || profileData.avatar,
         party: normalizedParty,
-      })
+      }
+      console.log('[handleUserTypeChange] Setting activeParticipant:', participantData)
+      setActiveParticipant(participantData)
       setShowParticipantProfile(true)
       // Update cache with new data
       updateUserProfileCache(profileData.id || profileData.userId, profileData)
@@ -1055,10 +1207,14 @@ function AppContent() {
 
   // Handle clicking on username in reels
   const handleReelUsernameClick = (user) => {
-    // Check if this is the current user
-    const isCurrentUser = user.username === currentUser.username ||
-                          user.id === currentUser.id ||
-                          user.id === authUser?.id
+    // Check if this is the current user (check all possible ID fields and username)
+    const userId = user.id || user.userId
+    const currentUserId = currentUser.id || authUser?.id
+    const isCurrentUser =
+      (userId && currentUserId && userId === currentUserId) ||
+      (user.username && currentUser.username && user.username.toLowerCase() === currentUser.username.toLowerCase())
+
+    console.log('[handleReelUsernameClick] user:', user, 'currentUser:', currentUser.username, 'authUser:', authUser?.username, 'isCurrentUser:', isCurrentUser)
 
     // If clicking on own username, navigate to MyProfile page
     if (isCurrentUser) {
@@ -1068,9 +1224,10 @@ function AppContent() {
 
     // Otherwise show the other user's profile overlay
     setActiveCandidate({
-      id: user.id,
+      id: userId,
+      userId: userId,
       username: user.username,
-      avatar: user.avatar,
+      avatar: user.avatar || user.avatarUrl,
       party: user.party || 'Independent',
       posts: null,
       isCurrentUser: false,
@@ -1350,20 +1507,31 @@ function AppContent() {
         {/* Home Page - Now Reels */}
         <div className="page">
           <div className="reels-feed" ref={reelsFeedRef}>
-            {reels.map((reel) => (
-              <ReelCard
-                key={reel.id}
-                reel={reel}
-                isPageActive={currentPage === 1 && !showCreateScreen && !showProfile && !showPartyProfile && !showParticipantProfile && !showComments}
-                onOpenComments={() => handleOpenComments(reel)}
-                onUsernameClick={handleReelUsernameClick}
-                onPartyClick={handleReelPartyClick}
-                onEngagementClick={handleEngagementClick}
-                onTrackActivity={trackActivity}
-                onHide={handleHideReel}
-                userRacesFollowing={userRacesFollowing}
-              />
-            ))}
+            {reels.map((reel) => {
+              // Enrich reel with engagement scores if not already present
+              const enrichedReel = {
+                ...reel,
+                engagementScores: reel.engagementScores || topEngagedCandidates,
+              }
+              return (
+                <ReelCard
+                  key={reel.id}
+                  reel={enrichedReel}
+                  isPageActive={currentPage === 1 && !showCreateScreen && !showProfile && !showPartyProfile && !showParticipantProfile && !showComments}
+                  onOpenComments={() => handleOpenComments(reel)}
+                  onUsernameClick={handleReelUsernameClick}
+                  onPartyClick={handleReelPartyClick}
+                  onEngagementClick={handleEngagementClick}
+                  onTrackActivity={trackActivity}
+                  onRepostChange={(reelId, isReposted) => {
+                    console.log('[REPOST-CALLBACK] Callback triggered:', { reelId, isReposted, reelFromMap: reel?.id })
+                    handleRepostChange(reelId, isReposted, reel)
+                  }}
+                  onHide={handleHideReel}
+                  userRacesFollowing={userRacesFollowing}
+                />
+              )
+            })}
           </div>
         </div>
 
@@ -1444,6 +1612,7 @@ function AppContent() {
             onOptOut={handleOptOut}
             userParty={userParty}
             userPosts={userPosts}
+            userReposts={userReposts}
             hasOptedIn={hasOptedIn}
             onOpenComments={handleOpenComments}
             userActivity={userActivity}

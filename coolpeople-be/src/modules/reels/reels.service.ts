@@ -78,6 +78,7 @@ const formatReel = (
       comments: String(reel.commentCount || 0),
       shares: String(reel.shareCount || 0),
       saves: String(reel.saveCount || 0),
+      reposts: String(reel.repostCount || 0),
       votes: '0',
       shazam: '0',
     },
@@ -492,6 +493,98 @@ export const unrepostReel = async (
 };
 
 // -----------------------------------------------------------------------------
+// Get User Activity (likes, comments, reposts)
+// -----------------------------------------------------------------------------
+
+export const getUserActivity = async (
+  userId: string,
+  limit: number = 50
+): Promise<any[]> => {
+  // Fetch likes and comments in parallel (reposts have their own tab)
+  const [likes, comments] = await Promise.all([
+    prisma.like.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        reel: { include: reelIncludes(userId) },
+      },
+    }),
+    prisma.comment.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        reel: { include: reelIncludes(userId) },
+      },
+    }),
+  ]);
+
+  // Get user info for the actor field
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, username: true, displayName: true, avatarUrl: true },
+  });
+
+  const actor = user
+    ? { username: user.username, displayName: user.displayName, avatar: user.avatarUrl }
+    : { username: 'Unknown', displayName: 'Unknown', avatar: null };
+
+  // Build unified activity list
+  const activities: any[] = [];
+
+  for (const like of likes) {
+    if (!like.reel || like.reel.deletedAt) continue;
+    const formatted = formatReel(like.reel, userId);
+    activities.push({
+      id: `act-like-${like.id}`,
+      type: 'like',
+      action: 'liked',
+      timestamp: like.createdAt,
+      actor,
+      video: {
+        thumbnail: formatted.thumbnailUrl,
+        videoUrl: formatted.videoUrl,
+        isMirrored: formatted.isMirrored,
+        user: formatted.user,
+        race: formatted.targetRace,
+        likes: formatted.stats.likes,
+        comments: formatted.stats.comments,
+        shares: formatted.stats.shares,
+        caption: formatted.caption || '',
+      },
+    });
+  }
+
+  for (const comment of comments) {
+    if (!comment.reel || comment.reel.deletedAt) continue;
+    const formatted = formatReel(comment.reel, userId);
+    activities.push({
+      id: `act-comment-${comment.id}`,
+      type: 'comment',
+      action: 'commented',
+      timestamp: comment.createdAt,
+      actor,
+      video: {
+        thumbnail: formatted.thumbnailUrl,
+        videoUrl: formatted.videoUrl,
+        isMirrored: formatted.isMirrored,
+        user: formatted.user,
+        race: formatted.targetRace,
+        likes: formatted.stats.likes,
+        comments: formatted.stats.comments,
+        shares: formatted.stats.shares,
+        caption: formatted.caption || '',
+      },
+    });
+  }
+
+  // Sort by timestamp descending, take the limit
+  activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return activities.slice(0, limit);
+};
+
+// -----------------------------------------------------------------------------
 // Get User Reposts
 // -----------------------------------------------------------------------------
 
@@ -507,6 +600,14 @@ export const getUserReposts = async (
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { createdAt: 'desc' },
     include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+        },
+      },
       reel: {
         include: reelIncludes(viewerId),
       },
@@ -517,10 +618,19 @@ export const getUserReposts = async (
   const results = hasMore ? reposts.slice(0, -1) : reposts;
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
-  // Filter out deleted reels and format
+  // Filter out deleted reels and format with repostedBy info
   const reels = results
     .filter((r) => r.reel && !r.reel.deletedAt)
-    .map((r) => formatReel(r.reel, viewerId));
+    .map((r) => ({
+      ...formatReel(r.reel, viewerId),
+      repostedBy: {
+        id: r.user.id,
+        username: r.user.username,
+        displayName: r.user.displayName,
+        avatarUrl: r.user.avatarUrl,
+      },
+      repostedAt: r.createdAt,
+    }));
 
   return { reels, nextCursor };
 };
@@ -670,7 +780,62 @@ export const getFollowingFeed = async (
     .filter(Boolean)
     .map((r: any) => formatReel(r, userId));
 
-  return { reels: orderedReels, nextCursor };
+  // Fetch reposts from users the current user follows (exclude own reposts)
+  const followedUserIds = await prisma.follow.findMany({
+    where: { followerId: userId },
+    select: { followingId: true },
+  });
+  const repostUserIds = followedUserIds.map((f) => f.followingId);
+
+  const userReposts = await prisma.repost.findMany({
+    where: {
+      userId: { in: repostUserIds },
+      reel: { deletedAt: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+        },
+      },
+      reel: {
+        include: reelIncludes(userId),
+      },
+    },
+  });
+
+  // Create repost entries with repostedBy info
+  const repostEntries = userReposts
+    .filter((rp) => rp.reel && !rp.reel.deletedAt)
+    .map((rp) => {
+      const formattedReel = formatReel(rp.reel, userId);
+      return {
+        ...formattedReel,
+        id: `repost-${rp.reel.id}-${rp.createdAt.getTime()}`,
+        originalReelId: rp.reel.id,
+        repostedBy: {
+          id: rp.user.id,
+          username: rp.user.username,
+          displayName: rp.user.displayName,
+          avatarUrl: rp.user.avatarUrl,
+        },
+        repostedAt: rp.createdAt,
+      };
+    });
+
+  // Merge reposts into feed, sorted by repostedAt/createdAt
+  const mergedFeed = [...repostEntries, ...orderedReels].sort((a, b) => {
+    const dateA = (a as any).repostedAt || a.createdAt;
+    const dateB = (b as any).repostedAt || b.createdAt;
+    return new Date(dateB).getTime() - new Date(dateA).getTime();
+  });
+
+  return { reels: mergedFeed, nextCursor };
 };
 
 // -----------------------------------------------------------------------------

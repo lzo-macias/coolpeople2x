@@ -94,6 +94,17 @@ export const getUserReposts = async (req: Request, res: Response): Promise<void>
 };
 
 // -----------------------------------------------------------------------------
+// GET /api/reels/user/:userId/activity
+// -----------------------------------------------------------------------------
+
+export const getUserActivity = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.params.userId as string;
+  const { limit } = req.query as { limit?: string };
+  const activities = await reelsService.getUserActivity(userId, parseInt(limit || '') || 50);
+  sendSuccess(res, activities);
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/reels/feed
 // -----------------------------------------------------------------------------
 

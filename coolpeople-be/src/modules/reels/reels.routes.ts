@@ -56,6 +56,14 @@ router.get(
   reelsController.getUserReposts
 );
 
+// GET /api/reels/user/:userId/activity - Get user's activity (likes, comments, reposts)
+router.get(
+  '/user/:userId/activity',
+  optionalAuth,
+  validate(userReelsParamSchema),
+  reelsController.getUserActivity
+);
+
 // GET /api/reels/party/:partyId - Get party's reels
 router.get(
   '/party/:partyId',

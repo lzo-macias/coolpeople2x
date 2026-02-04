@@ -294,6 +294,71 @@
   background: #E8A855;
 }
 
+/* Reposted By Indicator */
+.reposted-by-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: fit-content;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.reposted-by-indicator:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.reposted-by-indicator svg {
+  flex-shrink: 0;
+  transform: rotate(90deg);
+}
+
+.reposted-by-indicator span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* Activity label indicator */
+.activity-label-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.activity-label-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  /* color set inline via style prop */
+}
+
+.activity-label-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
 /* Race Modal Slide-up */
 .race-modal-backdrop {
   position: fixed;
