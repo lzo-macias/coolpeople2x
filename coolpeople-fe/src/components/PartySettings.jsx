@@ -3,7 +3,7 @@ import { messagesApi, partiesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/PartySettings.css'
 
-function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave, onCreateGroupChat }) {
+function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave, onCreateGroupChat, onOpenProfile }) {
   const { user: currentUser } = useAuth()
   const [activeSection, setActiveSection] = useState(null)
   const [members, setMembers] = useState([])
@@ -714,9 +714,21 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
 
           return (
             <div key={member.id} className="party-member-item">
-              <img src={member.avatar} alt={member.username} className="party-member-avatar" />
+              <img
+                src={member.avatar}
+                alt={member.username}
+                className="party-member-avatar"
+                onClick={() => onOpenProfile?.({ id: member.id, username: member.username, avatar: member.avatar })}
+                style={{ cursor: 'pointer' }}
+              />
               <div className="party-member-info">
-                <span className="party-member-username">{member.username}</span>
+                <span
+                  className="party-member-username"
+                  onClick={() => onOpenProfile?.({ id: member.id, username: member.username, avatar: member.avatar })}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {member.username}
+                </span>
                 <span className="party-member-role">{memberRole}</span>
               </div>
               <div className="party-member-actions">

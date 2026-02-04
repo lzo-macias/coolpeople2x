@@ -1595,6 +1595,7 @@ function AppContent() {
               setShowComments(true)
             }}
             onOpenProfile={handleOpenProfile}
+            onOpenPartyProfile={handleOpenPartyProfile}
             onTrackActivity={trackActivity}
             onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
           />
@@ -2083,6 +2084,8 @@ function AppContent() {
             currentUserId={currentUser?.id}
             currentUserAvatar={currentUser?.avatar}
             onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
+            onOpenProfile={handleOpenProfile}
+            onOpenPartyProfile={handleOpenPartyProfile}
           />
         </div>
       )}

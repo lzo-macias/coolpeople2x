@@ -5,7 +5,7 @@ import { messagesApi, groupchatsApi } from '../services/api'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/ChatSettings.css'
 
-function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, groupChatCreatorId = null, onClose, conversation, onSettingsChange, groupChatId = null, currentUserId = null, onPartyCreated = null }) {
+function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, groupChatCreatorId = null, onClose, conversation, onSettingsChange, groupChatId = null, currentUserId = null, onPartyCreated = null, onOpenProfile }) {
   const [activeSection, setActiveSection] = useState(null)
 
   // Debug: Check if Create Party should show
@@ -536,9 +536,21 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
       <div className="chat-members-list">
         {filteredMembers.map(member => (
           <div key={member.id} className="chat-member-item">
-            <img src={member.avatar} alt={member.username} className="chat-member-avatar" />
+            <img
+              src={member.avatar}
+              alt={member.username}
+              className="chat-member-avatar"
+              onClick={() => onOpenProfile?.({ id: member.id, username: member.username, avatar: member.avatar })}
+              style={{ cursor: 'pointer' }}
+            />
             <div className="chat-member-info">
-              <span className="chat-member-username">{member.username}</span>
+              <span
+                className="chat-member-username"
+                onClick={() => onOpenProfile?.({ id: member.id, username: member.username, avatar: member.avatar })}
+                style={{ cursor: 'pointer' }}
+              >
+                {member.username}
+              </span>
               {member.isOwner && <span className="chat-member-role">Owner</span>}
             </div>
             {isGroupChat && !member.isOwner && (

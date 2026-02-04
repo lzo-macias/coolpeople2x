@@ -89,7 +89,7 @@ function AudioMessage({ src, duration }) {
   )
 }
 
-function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity, onCreateGroupChat, onPartyCreatedFromGroupchat }) {
+function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity, onCreateGroupChat, onPartyCreatedFromGroupchat, onOpenProfile, onOpenPartyProfile }) {
   console.log('=== Conversation component rendered ===')
   console.log('conversation:', conversation)
   console.log('conversation.user:', conversation?.user)
@@ -102,6 +102,14 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [fetchedMessages, setFetchedMessages] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [showPartySettings, setShowPartySettings] = useState(false)
+
+  // Wrapper for opening profiles from within settings panels
+  // Closes settings + conversation so the profile overlay is visible
+  const handleMemberProfileClick = (userData) => {
+    setShowPartySettings(false)
+    onOpenProfile?.(userData)
+    onBack()
+  }
   const [activeMessageId, setActiveMessageId] = useState(null)
   const [messageReactions, setMessageReactions] = useState({})
   const [replyingTo, setReplyingTo] = useState(null)
@@ -1017,7 +1025,16 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           {isGroupChat || isPartyChat || conversation.party ? (
             // Show stacked avatars for groupchat/party
             <>
-              <div className="conversation-avatar-group">
+              <div
+                className="conversation-avatar-group"
+                onClick={() => {
+                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name
+                  if (pName && onOpenPartyProfile) {
+                    onOpenPartyProfile(pName)
+                  }
+                }}
+                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name) ? 'pointer' : 'default' }}
+              >
                 {recipients.slice(0, 3).map((recipient, idx) => (
                   <div
                     key={recipient.id}
@@ -1033,17 +1050,36 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                   </div>
                 )}
               </div>
-              <span className="conversation-username">
+              <span
+                className="conversation-username"
+                onClick={() => {
+                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name
+                  if (pName && onOpenPartyProfile) {
+                    onOpenPartyProfile(pName)
+                  }
+                }}
+                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name) ? 'pointer' : 'default' }}
+              >
                 {convertedToParty?.partyName || partyName || conversation.party?.name || `${recipients.length} people`}
               </span>
             </>
           ) : (
             // Single user
             <>
-              <div className="conversation-avatar">
+              <div
+                className="conversation-avatar"
+                onClick={() => onOpenProfile?.({ id: user.id, username: user.username, avatar: user.avatar, party: user.party })}
+                style={{ cursor: 'pointer' }}
+              >
                 <img src={user.avatar} alt={user.username} />
               </div>
-              <span className="conversation-username">{user.username}</span>
+              <span
+                className="conversation-username"
+                onClick={() => onOpenProfile?.({ id: user.id, username: user.username, avatar: user.avatar, party: user.party })}
+                style={{ cursor: 'pointer' }}
+              >
+                {user.username}
+              </span>
             </>
           )}
         </div>
@@ -1417,6 +1453,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             isAdmin={true}
             onClose={() => setShowPartySettings(false)}
             conversation={conversation}
+            onOpenProfile={handleMemberProfileClick}
             onSettingsChange={(changes) => {
               // Update the conversation state if needed
               console.log('Party settings changed:', changes)
@@ -1447,6 +1484,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             groupChatCreatorId={isGroupChat ? conversation.createdById : null}
             onClose={() => setShowPartySettings(false)}
             conversation={conversation}
+            onOpenProfile={handleMemberProfileClick}
             onSettingsChange={(changes) => {
               // Update the conversation state if needed
               console.log('Chat settings changed:', changes)

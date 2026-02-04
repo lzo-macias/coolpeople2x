@@ -41,7 +41,7 @@ const mockActivityNotifications = {
   ballots: [],
 }
 
-function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted, onViewReel, onViewComments, onOpenProfile, isActive, onTrackActivity, onPartyCreatedFromGroupchat }) {
+function Messages({ onConversationChange, conversations, setConversations, userStories, isCandidate = false, userParty = null, currentUser = null, startConversationWith = null, onConversationStarted, onViewReel, onViewComments, onOpenProfile, onOpenPartyProfile, isActive, onTrackActivity, onPartyCreatedFromGroupchat }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeConversation, setActiveConversation] = useState(null)
   const [viewingStory, setViewingStory] = useState(null) // { userIndex, storyIndex }
@@ -1506,6 +1506,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         currentUserAvatar={currentUser?.avatar}
         onCreateGroupChat={handleCreateGroupChat}
         onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
+        onOpenProfile={onOpenProfile}
+        onOpenPartyProfile={onOpenPartyProfile}
       />
     )
   }
