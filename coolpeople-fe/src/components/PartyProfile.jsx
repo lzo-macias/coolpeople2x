@@ -824,6 +824,18 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                 const tierMax = nextTier ? nextTier.min : currentTier.max
                 const fullTierRange = tierMax - tierMin
 
+                // Look up API sparkline data from centralized scoreboards
+                const getApiSparklineData = () => {
+                  if (!engagementContext?.allScoreboards) return null
+                  const raceBoard = engagementContext.allScoreboards[selectedRace] ||
+                                    engagementContext.allScoreboards['Best Party']
+                  if (!raceBoard?.entries) return null
+                  const partyEntry = raceBoard.entries.find(e =>
+                    e.partyId === party.id || e.odId === party.id
+                  )
+                  return partyEntry?.sparklineData || null
+                }
+
                 // Generate CP history data based on period - jagged like real charts
                 const generateCPHistory = () => {
                   const currentCP = cpPoints
@@ -856,7 +868,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   return history
                 }
 
-                const cpHistory = generateCPHistory()
+                // Use API sparkline data as centralized source of truth when available
+                const apiSparkline = getApiSparklineData()
+                const cpHistory = (apiSparkline && apiSparkline.length >= 2)
+                  ? apiSparkline
+                  : generateCPHistory()
 
                 // Calculate zoomed view bounds based on actual data range
                 const dataMin = Math.min(...cpHistory)

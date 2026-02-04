@@ -64,7 +64,11 @@ function weightedSample(pool, count, rng) {
  * used by EngagementScoreBar.
  */
 export function normalizeScoreboardEntry(entry, idx, fallbackSparkline) {
-  const user = entry.user || entry
+  // Detect party entries: PARTY_VS_PARTY race entries have entry.party as an object
+  // with name/id, while user entries have entry.user
+  const isPartyEntry = !entry.user && entry.party && typeof entry.party === 'object' && entry.party.name
+  const entity = isPartyEntry ? entry.party : (entry.user || entry)
+
   const sparklinePoints = entry.sparkline?.map(s => s.points) || []
   let todayChange = entry.todayChange || entry.change || null
   if (todayChange == null && sparklinePoints.length >= 2) {
@@ -75,12 +79,16 @@ export function normalizeScoreboardEntry(entry, idx, fallbackSparkline) {
   const trend = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : 'stable'
 
   return {
-    id: `eng-${user.id || idx}`,
-    odId: user.id,
-    userId: user.id,
-    username: user.handle || user.username || user.displayName || `Candidate ${idx + 1}`,
-    avatar: user.avatarUrl || user.avatar || `https://i.pravatar.cc/40?img=${(idx % 70) + 1}`,
-    party: user.party?.name || null,
+    id: `eng-${entity.id || idx}`,
+    odId: entity.id,
+    userId: isPartyEntry ? null : entity.id,
+    partyId: isPartyEntry ? entity.id : null,
+    isParty: isPartyEntry,
+    username: isPartyEntry
+      ? entity.name
+      : (entity.handle || entity.username || entity.displayName || `Candidate ${idx + 1}`),
+    avatar: entity.avatarUrl || entity.avatar || `https://i.pravatar.cc/40?img=${(idx % 70) + 1}`,
+    party: isPartyEntry ? entity.name : (entity.party?.name || null),
     sparklineData: sparklinePoints.length > 0 ? sparklinePoints : (fallbackSparkline ? fallbackSparkline(trend) : []),
     recentChange: todayChange ? (todayChange > 0 ? `+${todayChange}` : `${todayChange}`) : null,
     changeValue: todayChange || 0,
@@ -223,8 +231,34 @@ export function selectEngagementForReel(reel, allScoreboards, userContext) {
   }
   displayRaceName = displayRaceName || 'CoolPeople'
 
+  // Ensure consistency: don't mix party and user entries.
+  // If the display race contains party entries, show only parties (and vice versa).
+  let finalSelected = selected
+  const partyItems = selected.filter(c => c.isParty)
+  const userItems = selected.filter(c => !c.isParty)
+
+  if (partyItems.length > 0 && userItems.length > 0) {
+    // Mixed selection — keep the dominant type and fill from same-type candidates
+    if (partyItems.length >= userItems.length) {
+      const remainingParty = scoredCandidates.filter(c => c.isParty && !partyItems.some(p => p.id === c.id))
+      const extra = weightedSample(remainingParty, 3 - partyItems.length, rng)
+      finalSelected = [...partyItems, ...extra]
+    } else {
+      const remainingUser = scoredCandidates.filter(c => !c.isParty && !userItems.some(u => u.id === c.id))
+      const extra = weightedSample(remainingUser, 3 - userItems.length, rng)
+      finalSelected = [...userItems, ...extra]
+    }
+
+    // Recalculate display race name from final selection
+    if (!reel?.targetRace && finalSelected.length > 0) {
+      const raceFreq = {}
+      finalSelected.forEach(c => { raceFreq[c.raceName] = (raceFreq[c.raceName] || 0) + 1 })
+      displayRaceName = Object.entries(raceFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || displayRaceName
+    }
+  }
+
   // Clean output — strip internal scoring fields
-  const scores = selected.map(c => ({
+  const scores = finalSelected.map(c => ({
     id: c.id,
     odId: c.odId || c.userId,
     username: c.username,
@@ -234,6 +268,8 @@ export function selectEngagementForReel(reel, allScoreboards, userContext) {
     recentChange: c.recentChange,
     trend: c.trend,
     totalPoints: c.totalPoints,
+    isParty: c.isParty || false,
+    partyId: c.partyId || null,
   }))
 
   return { scores, raceName: displayRaceName }
