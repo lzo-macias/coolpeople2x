@@ -130,6 +130,7 @@ export const getPublicProfile = async (
   // Add candidate-only fields
   if (user.userType === 'CANDIDATE') {
     profile.points = user.pointLedgers.map((ledger) => ({
+      ledgerId: ledger.id,
       total: ledger.totalPoints,
       tier: ledger.tier,
       raceId: ledger.raceId,
@@ -263,6 +264,7 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
   // Add candidate-only fields
   if (user.userType === 'CANDIDATE') {
     profile.points = user.pointLedgers.map((ledger) => ({
+      ledgerId: ledger.id,
       total: ledger.totalPoints,
       tier: ledger.tier,
       raceId: ledger.raceId,

@@ -139,6 +139,7 @@ export interface PartyFollowerResponse {
 
 export interface PartyRaceResponse {
   id: string;
+  ledgerId: string | null;
   raceId: string;
   raceName: string;
   raceType: string;

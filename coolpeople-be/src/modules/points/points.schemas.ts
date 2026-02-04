@@ -45,6 +45,6 @@ export const sparklineParamSchema = z.object({
 
 export const sparklineQuerySchema = z.object({
   query: z.object({
-    period: z.enum(['7d', '30d', '90d', 'all']).default('30d'),
+    period: z.enum(['today', '7d', '30d', '90d', 'all']).default('30d'),
   }),
 });

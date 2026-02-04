@@ -4,7 +4,8 @@ import { getPartyColor, generateSparklineData } from '../data/mockData'
 import Sparkline from './Sparkline'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
-import { partiesApi, reelsApi } from '../services/api'
+import { partiesApi, reelsApi, pointsApi } from '../services/api'
+import { joinRace, leaveRace, onPointsUpdate } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
 
 // CoolPeople Tier System
@@ -25,6 +26,9 @@ const getNextTier = (points) => {
   const currentIndex = CP_TIERS.findIndex(tier => points >= tier.min && points <= tier.max)
   return currentIndex < CP_TIERS.length - 1 ? CP_TIERS[currentIndex + 1] : null
 }
+
+// Period mapping: frontend labels → backend query values
+const PERIOD_MAP = { '1D': 'today', '1W': '7d', '1M': '30d', '3M': '90d', 'ALL': 'all' }
 
 // Helper to format numbers for display
 const formatNumber = (num) => {
@@ -123,6 +127,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   // Build race data from fetched races
   const partyRaceData = races.reduce((acc, race) => {
     acc[race.raceName] = {
+      ledgerId: race.ledgerId,
       cpPoints: race.totalPoints,
       change: race.change,
       tier: race.tier.charAt(0) + race.tier.slice(1).toLowerCase()
@@ -194,8 +199,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const [editInitialSection, setEditInitialSection] = useState(null)
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
-  const [selectedPeriod, setSelectedPeriod] = useState('1M')
+  const [selectedPeriod, setSelectedPeriod] = useState('1W')
   const [cpCardExpanded, setCpCardExpanded] = useState(false)
+  const [sparklinePoints, setSparklinePoints] = useState(null)
+  const [periodChangeValue, setPeriodChangeValue] = useState(null)
+  const [liveCpPoints, setLiveCpPoints] = useState(null)
   const [showAllVerifiedReviews, setShowAllVerifiedReviews] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
@@ -230,6 +238,80 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const [responseText, setResponseText] = useState('')
   // eslint-disable-next-line no-unused-vars
   const [reviewResponses, setReviewResponses] = useState({}) // Used by response modal
+
+  // Fetch real sparkline data when period or race changes
+  useEffect(() => {
+    if (!races || races.length === 0) return
+
+    // Find the race matching selectedRace, or first available
+    const raceData = races.find(r => r.raceName === selectedRace) || races[0]
+    if (!raceData?.ledgerId) return
+
+    let cancelled = false
+    const fetchSparkline = async () => {
+      try {
+        const res = await pointsApi.getSparkline(raceData.ledgerId, PERIOD_MAP[selectedPeriod])
+        if (cancelled) return
+        const sparkline = res.data?.sparkline || res.sparkline || []
+        const values = sparkline.map(s => s.points)
+        setSparklinePoints(values.length >= 2 ? values : null)
+        if (values.length >= 2) {
+          setPeriodChangeValue(values[values.length - 1] - values[0])
+        } else {
+          setPeriodChangeValue(null)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSparklinePoints(null)
+          setPeriodChangeValue(null)
+        }
+      }
+    }
+    fetchSparkline()
+    return () => { cancelled = true }
+  }, [races, selectedPeriod, selectedRace])
+
+  // Real-time points updates via WebSocket
+  useEffect(() => {
+    if (!races || races.length === 0) return
+
+    const partyId = passedParty?.id
+    const raceIds = races.map(r => r.raceId).filter(Boolean)
+    if (!partyId || raceIds.length === 0) return
+
+    // Join race rooms
+    raceIds.forEach(id => joinRace(id))
+
+    // Listen for live point updates
+    const cleanup = onPointsUpdate((data) => {
+      if (data.competitorId !== partyId) return
+      setLiveCpPoints(data.newPoints)
+      // Re-fetch sparkline for the current period
+      const raceData = races.find(r => r.raceId === data.raceId)
+      if (raceData?.ledgerId) {
+        pointsApi.getSparkline(raceData.ledgerId, PERIOD_MAP[selectedPeriod])
+          .then(res => {
+            const sparkline = res.data?.sparkline || res.sparkline || []
+            const values = sparkline.map(s => s.points)
+            setSparklinePoints(values.length >= 2 ? values : null)
+            if (values.length >= 2) {
+              setPeriodChangeValue(values[values.length - 1] - values[0])
+            }
+          })
+          .catch(() => {})
+      }
+    })
+
+    return () => {
+      raceIds.forEach(id => leaveRace(id))
+      cleanup()
+    }
+  }, [races, passedParty?.id, selectedPeriod])
+
+  // Reset live points when party changes
+  useEffect(() => {
+    setLiveCpPoints(null)
+  }, [passedParty?.id])
 
   // Use real data for modals, with fallbacks for empty states
   const partyMembers = formattedMembers.length > 0 ? formattedMembers : []
@@ -723,7 +805,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
         {(() => {
           // Get race-specific data - use party data for new parties
           const currentRaceData = partyRaceData[selectedRace] || partyRaceData['Best Party']
-          const cpPoints = currentRaceData.cpPoints
+          const cpPoints = liveCpPoints != null ? liveCpPoints : currentRaceData.cpPoints
           const raceChange = currentRaceData.change
           const currentTier = getCurrentTier(cpPoints)
           const nextTier = getNextTier(cpPoints)
@@ -760,7 +842,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   </div>
                   <div className="cp-total">
                     <div className="points">{cpPoints.toLocaleString()} <span>CP</span></div>
-                    <div className={`change ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange} this week</div>
+                    <div className={`change ${(periodChangeValue != null ? periodChangeValue : parseFloat(raceChange)) < 0 ? 'negative' : 'positive'}`}>{periodChangeValue != null ? `${periodChangeValue >= 0 ? '+' : ''}${periodChangeValue.toFixed(2)}` : raceChange} {selectedPeriod === '1D' ? 'today' : selectedPeriod === '1W' ? 'this week' : selectedPeriod === '1M' ? 'this month' : selectedPeriod === '3M' ? '3 months' : 'all time'}</div>
                   </div>
                 </div>
               )}
@@ -769,7 +851,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               {!cpCardExpanded && (
                 <div className="cp-minimized-row">
                   <div className="period-selector" onClick={(e) => e.stopPropagation()}>
-                    {['1W', '1M', '3M', 'ALL'].map((period) => (
+                    {['1D', '1W', '1M', '3M', 'ALL'].map((period) => (
                       <button
                         key={period}
                         className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
@@ -783,7 +865,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                     <img src={currentTier.icon} alt={currentTier.name} className="tier-icon-mini" />
                     <span className="points-mini">{cpPoints.toLocaleString()}</span>
                     <span className="cp-label-mini">CP</span>
-                    <span className={`change-mini ${raceChange.startsWith('-') ? 'negative' : 'positive'}`}>{raceChange}</span>
+                    <span className={`change-mini ${(periodChangeValue != null ? periodChangeValue : parseFloat(raceChange)) < 0 ? 'negative' : 'positive'}`}>{periodChangeValue != null ? `${periodChangeValue >= 0 ? '+' : ''}${periodChangeValue.toFixed(2)}` : raceChange}</span>
                   </div>
                 </div>
               )}
@@ -791,7 +873,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               {/* Time Period Selector - only in expanded mode */}
               {cpCardExpanded && (
                 <div className="period-selector" onClick={(e) => e.stopPropagation()}>
-                  {['1W', '1M', '3M', 'ALL'].map((period) => (
+                  {['1D', '1W', '1M', '3M', 'ALL'].map((period) => (
                     <button
                       key={period}
                       className={`period-btn ${selectedPeriod === period ? 'active' : ''}`}
@@ -805,18 +887,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
 
               {/* Chart */}
               {(() => {
-                // Generate different data based on selected period
-                const periodConfig = {
-                  '1W': { dataPoints: 7, volatility: 0.02, changeMultiplier: 1 },
-                  '1M': { dataPoints: 30, volatility: 0.03, changeMultiplier: 4 },
-                  '3M': { dataPoints: 90, volatility: 0.05, changeMultiplier: 12 },
-                  'ALL': { dataPoints: 180, volatility: 0.08, changeMultiplier: 24 },
-                }
-                const config = periodConfig[selectedPeriod]
+                // Use real sparkline data from API, fallback to flat line
+                const cpHistory = (sparklinePoints && sparklinePoints.length >= 2)
+                  ? sparklinePoints
+                  : [cpPoints, cpPoints]
 
-                // Calculate period-specific change
-                const baseChange = parseFloat(raceChange)
-                const periodChange = baseChange * config.changeMultiplier
+                const periodChange = periodChangeValue != null ? periodChangeValue : parseFloat(raceChange)
                 const isNegativeChange = periodChange < 0
 
                 // Get current and next tier for chart bounds
@@ -824,64 +900,15 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                 const tierMax = nextTier ? nextTier.min : currentTier.max
                 const fullTierRange = tierMax - tierMin
 
-                // Look up API sparkline data from centralized scoreboards
-                const getApiSparklineData = () => {
-                  if (!engagementContext?.allScoreboards) return null
-                  const raceBoard = engagementContext.allScoreboards[selectedRace] ||
-                                    engagementContext.allScoreboards['Best Party']
-                  if (!raceBoard?.entries) return null
-                  const partyEntry = raceBoard.entries.find(e =>
-                    e.partyId === party.id || e.odId === party.id
-                  )
-                  return partyEntry?.sparklineData || null
-                }
-
-                // Generate CP history data based on period - jagged like real charts
-                const generateCPHistory = () => {
-                  const currentCP = cpPoints
-                  const history = []
-                  const startCP = currentCP - periodChange
-
-                  // Use seeded random for consistent results
-                  const seededRandom = (seed) => {
-                    const x = Math.sin(seed * 9999) * 10000
-                    return x - Math.floor(x)
-                  }
-
-                  for (let i = 0; i < config.dataPoints; i++) {
-                    const progress = i / (config.dataPoints - 1)
-                    const baseValue = startCP + (currentCP - startCP) * progress
-
-                    // Jagged noise - random ups and downs
-                    const rand1 = (seededRandom(i * 13.7) - 0.5) * 2
-                    const rand2 = (seededRandom(i * 7.3 + 100) - 0.5) * 2
-                    const spike = seededRandom(i * 3.1) > 0.85 ? (seededRandom(i * 2.1) - 0.5) * 4 : 0
-
-                    const noise = (rand1 * fullTierRange * config.volatility) +
-                                  (rand2 * fullTierRange * config.volatility * 0.5) +
-                                  (spike * fullTierRange * config.volatility)
-
-                    const value = baseValue + noise * (1 - progress * 0.2)
-                    history.push(value)
-                  }
-                  history[history.length - 1] = currentCP
-                  return history
-                }
-
-                // Use API sparkline data as centralized source of truth when available
-                const apiSparkline = getApiSparklineData()
-                const cpHistory = (apiSparkline && apiSparkline.length >= 2)
-                  ? apiSparkline
-                  : generateCPHistory()
-
                 // Calculate zoomed view bounds based on actual data range
                 const dataMin = Math.min(...cpHistory)
                 const dataMax = Math.max(...cpHistory)
-                const dataPadding = (dataMax - dataMin) * 0.1
+                const dataRange = dataMax - dataMin
+                const dataPadding = Math.max(dataRange * 0.2, 1)
 
-                // Chart bounds: zoom to data range for detail
-                const chartBottom = Math.min(dataMin - dataPadding, tierMin)
-                const chartTop = Math.max(dataMax + dataPadding, cpPoints + 200)
+                // Chart bounds: zoom to data range for detail (like scoreboard sparklines)
+                const chartBottom = dataMin - dataPadding
+                const chartTop = dataMax + dataPadding
                 const chartRange = chartTop - chartBottom
 
                 // Convert CP value to Y position (for data and interval lines)
@@ -889,25 +916,18 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   return 90 - ((cp - chartBottom) / chartRange) * 75
                 }
 
-                // Next tier (goal) is always fixed at top regardless of scale
-                const goalLineY = 8
-
-                // Generate interval lines between tiers
+                // Generate interval lines based on visible data range
                 const generateIntervalLines = () => {
                   const lines = []
-                  // Determine good interval based on tier range
-                  let interval
-                  if (fullTierRange <= 1000) interval = 250
-                  else if (fullTierRange <= 2500) interval = 500
-                  else if (fullTierRange <= 5000) interval = 500
-                  else interval = 1000
+                  if (chartRange <= 0) return lines
+                  // Pick a nice interval based on the visible data range
+                  const niceIntervals = [0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+                  const targetLines = 3
+                  let interval = niceIntervals.find(i => chartRange / i <= targetLines + 1) || chartRange / 2
 
-                  // Start from tier min, go up in intervals
                   let value = Math.ceil(chartBottom / interval) * interval
                   while (value <= chartTop) {
-                    // Skip if too close to tier boundaries
-                    if (Math.abs(value - tierMin) > interval * 0.3 &&
-                        Math.abs(value - tierMax) > interval * 0.3) {
+                    if (value > chartBottom && value < chartTop) {
                       lines.push(value)
                     }
                     value += interval
@@ -964,11 +984,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                           </text>
                         </>
                       )}
-                      {/* Goal line - always fixed at top */}
-                      {nextTier && (
+                      {/* Goal line - only shown if next tier is within visible range */}
+                      {nextTier && cpToY(tierMax) >= 5 && cpToY(tierMax) <= 95 && (
                         <>
-                          <line x1="0" y1={goalLineY} x2="310" y2={goalLineY} className="tier-threshold-line next goal" stroke={nextTier.color}/>
-                          <text x="335" y={goalLineY + 3} className="tier-label" fill={nextTier.color} textAnchor="end">
+                          <line x1="0" y1={cpToY(tierMax)} x2="310" y2={cpToY(tierMax)} className="tier-threshold-line next goal" stroke={nextTier.color}/>
+                          <text x="335" y={cpToY(tierMax) + 3} className="tier-label" fill={nextTier.color} textAnchor="end">
                             {formatValue(tierMax)}
                           </text>
                         </>
@@ -1019,7 +1039,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                     ></div>
                   </div>
                   <div className="progress-text">
-                    <span>{currentTier.min.toLocaleString()} CP</span>
+                    <span>{cpPoints.toLocaleString()} CP</span>
                     <span>{nextTier.min.toLocaleString()} CP</span>
                   </div>
                 </div>

@@ -58,6 +58,7 @@ export interface CompetitorResponse {
 
 export interface ScoreboardEntry extends CompetitorResponse {
   sparkline?: { date: string; points: number }[];
+  change?: number;
   isFavorited?: boolean;
 }
 

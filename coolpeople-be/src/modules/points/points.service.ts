@@ -109,6 +109,28 @@ export const recordPointEvent = async (params: RecordPointEventParams): Promise<
     }),
   ]);
 
+  // Update today's snapshot immediately so sparklines reflect real-time changes
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await prisma.pointSnapshot.upsert({
+      where: { ledgerId_date: { ledgerId: ledger.id, date: today } },
+      create: {
+        ledgerId: ledger.id,
+        points: newTotal,
+        tier: newTier,
+        rank: 0,
+        date: today,
+      },
+      update: {
+        points: newTotal,
+        tier: newTier,
+      },
+    });
+  } catch {
+    // Don't fail point recording on snapshot errors
+  }
+
   // Emit real-time points update via WebSocket
   try {
     const io = getIO();
@@ -338,7 +360,8 @@ const getPeriodDateFilter = (period: string): Date | null => {
   const now = new Date();
   switch (period) {
     case 'today':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Include yesterday as baseline so sparklines have at least 2 points
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     case '7d':
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     case '30d':
@@ -498,19 +521,25 @@ export const seedInitialSparkline = async (ledgerId: string): Promise<void> => {
     });
   }
 
-  // Growth curve: 7 days of gradual buildup to current total
-  // Gives a natural "ramp up" look to the sparkline
-  const growthFactors = [0.15, 0.28, 0.42, 0.55, 0.72, 0.88, 1.0];
+  // Generate 90 days of snapshots so each period selector (1D, 1W, 1M, 3M, ALL)
+  // shows a visually distinct sparkline with different data ranges.
+  // Uses a sigmoid-like growth curve with daily noise for a natural look.
+  const totalDays = 90;
+  const startFraction = 0.08; // start at ~8% of current total
 
-  for (let i = 0; i < growthFactors.length; i++) {
+  for (let i = 0; i < totalDays; i++) {
     const date = new Date();
-    date.setDate(date.getDate() - (growthFactors.length - 1 - i));
+    date.setDate(date.getDate() - (totalDays - 1 - i));
     date.setHours(0, 0, 0, 0);
 
-    // Apply growth factor with slight random variation for natural look
-    const base = totalPoints * growthFactors[i];
-    const jitter = base * (0.92 + Math.random() * 0.16); // +/- ~8% variation
-    const dayPoints = Math.round(Math.max(0, jitter) * 100) / 100;
+    // Sigmoid-ish curve: slow start, acceleration in middle, plateau near end
+    const t = i / (totalDays - 1); // 0 → 1
+    const sigmoid = 1 / (1 + Math.exp(-10 * (t - 0.4)));
+    const growthFactor = startFraction + (1 - startFraction) * sigmoid;
+
+    // Add daily jitter (+/- ~5%) for natural variation
+    const jitter = 0.95 + Math.random() * 0.10;
+    const dayPoints = Math.round(Math.max(0, totalPoints * growthFactor * jitter) * 100) / 100;
 
     await prisma.pointSnapshot.upsert({
       where: { ledgerId_date: { ledgerId, date } },

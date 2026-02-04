@@ -415,6 +415,34 @@ export const onScoreboardUpdate = (callback) => {
 }
 
 // =============================================================================
+// Points Events
+// =============================================================================
+
+/**
+ * Listen for real-time points updates in joined race rooms
+ * @param {Function} callback - Called when points change for a competitor
+ * @returns {Function} Cleanup function
+ */
+export const onPointsUpdate = (callback) => {
+  if (!socket) return () => {}
+
+  const handler = (data) => {
+    callback({
+      raceId: data.raceId,
+      competitorId: data.competitorId,
+      newPoints: data.newPoints,
+      newTier: data.newTier,
+    })
+  }
+
+  socket.on('points:update', handler)
+
+  return () => {
+    socket?.off('points:update', handler)
+  }
+}
+
+// =============================================================================
 // Follow Events
 // =============================================================================
 
@@ -688,6 +716,7 @@ export default {
   onNewActivity,
   onNotification,
   onScoreboardUpdate,
+  onPointsUpdate,
   onFollowUpdate,
   onUserStatus,
   onPartyMessage,

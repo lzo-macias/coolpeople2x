@@ -36,6 +36,7 @@ export interface PublicProfile {
 
   // Candidate-only fields
   points?: {
+    ledgerId: string;
     total: number;
     tier: Tier;
     raceId: string;

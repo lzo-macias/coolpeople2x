@@ -403,11 +403,20 @@ export const getScoreboard = async (
     }
   }
 
-  const entries: ScoreboardEntry[] = competitors.map((c) => ({
-    ...c,
-    sparkline: snapshotMap.get(c.id) ?? [],
-    isFavorited: viewerId && c.user?.id ? favoritedUserIds.has(c.user.id) : false,
-  }));
+  const entries: ScoreboardEntry[] = competitors.map((c) => {
+    const sparkline = snapshotMap.get(c.id) ?? [];
+    // Calculate change: difference between current points and first snapshot in period
+    let change = 0;
+    if (sparkline.length >= 2) {
+      change = Math.round((sparkline[sparkline.length - 1].points - sparkline[0].points) * 100) / 100;
+    }
+    return {
+      ...c,
+      sparkline,
+      change,
+      isFavorited: viewerId && c.user?.id ? favoritedUserIds.has(c.user.id) : false,
+    };
+  });
 
   return { entries, nextCursor };
 };
@@ -551,7 +560,8 @@ const getSparklineDateFilter = (period: string): Date | null => {
   const now = new Date();
   switch (period) {
     case 'today':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Include yesterday as baseline so sparklines have at least 2 points
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     case '7d':
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     case '30d':

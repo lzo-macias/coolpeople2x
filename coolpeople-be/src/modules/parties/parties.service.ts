@@ -1662,6 +1662,7 @@ export const listPartyRaces = async (
 
     raceResults.push({
       id: comp.id,
+      ledgerId: ledger?.id || null,
       raceId: comp.raceId,
       raceName: comp.race.title,
       raceType: comp.race.raceType,

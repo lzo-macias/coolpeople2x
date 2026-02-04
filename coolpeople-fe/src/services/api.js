@@ -305,6 +305,7 @@ export const racesApi = {
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit);
     if (options.cursor) params.append('cursor', options.cursor);
+    if (options.period) params.append('period', options.period);
     const query = params.toString();
     return apiFetch(`/api/races/${raceId}/scoreboard${query ? `?${query}` : ''}`);
   },
@@ -516,7 +517,7 @@ export const messagesApi = {
 // =============================================================================
 
 export const pointsApi = {
-  getSparkline: (ledgerId) => apiFetch(`/api/points/sparkline/${ledgerId}`),
+  getSparkline: (ledgerId, period) => apiFetch(`/api/points/sparkline/${ledgerId}${period ? `?period=${period}` : ''}`),
 
   // Get pending points for PARTICIPANT users (points accumulated until they opt-in)
   getPendingPoints: () => apiFetch('/api/points/pending'),
