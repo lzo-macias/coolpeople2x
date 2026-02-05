@@ -56,6 +56,7 @@ const formatReel = (
       avatarUrl: reel.user.avatarUrl,
     },
     partyId: reel.partyId ?? null,
+    isPartyPost: reel.isPartyPost ?? false, // True = party-only post, False = user post (may also be in party feed)
     party: reel.party
       ? { id: reel.party.id, name: reel.party.name, handle: reel.party.handle, avatarUrl: reel.party.avatarUrl }
       : null,

@@ -29,6 +29,7 @@ export interface ReelResponse {
   };
 
   partyId: string | null;
+  isPartyPost: boolean; // True = party-only post, False = user post (may also be in party feed)
   party?: {
     id: string;
     name: string;

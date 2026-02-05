@@ -374,7 +374,10 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   }
 
   const data = reel || defaultReel
-  const isPartyPost = data.isPartyPost || !!data.partyId || !!data.party
+  // Party-only post: isPartyPost flag is explicitly true
+  const isPartyPost = data.isPartyPost === true
+  // Both-feeds post: has partyId but not party-only (shows in both user and party feeds)
+  const isBothFeedsPost = !isPartyPost && (!!data.partyId || !!data.party)
   // For party posts from API, use party identity; for local posts, user is already set to party
   const partyName = data.party?.name || data.user?.party
   const partyAvatar = (data.party?.avatarUrl) || data.user?.avatar || 'https://i.pravatar.cc/40?img=1'
@@ -502,6 +505,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             )}
             <div className="reel-user-row">
               {isPartyPost ? (
+                // Party-only post: show party identity
                 <>
                   <img
                     src={partyAvatar}
@@ -516,7 +520,39 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     </button>
                   </div>
                 </>
+              ) : isBothFeedsPost ? (
+                // Both-feeds post: show gray party tag above, party + user inline below
+                <>
+                  <img
+                    src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    alt={data.user?.username || 'user'}
+                    className="reel-user-avatar clickable"
+                    style={{ borderColor: getPartyColor(data.user?.party) }}
+                    onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
+                  />
+                  <div className="reel-user-details both-feeds">
+                    <button className="party-tag-above clickable" onClick={() => { pauseVideo(); onPartyClick?.(partyName) }}>
+                      {partyName}
+                    </button>
+                    <div className="reel-user-tags-row">
+                      <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(partyName) }}>
+                        {partyName}
+                      </button>
+                      <div className="username-with-avatar" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
+                        <img
+                          src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                          alt={data.user?.username || 'user'}
+                          className="username-mini-avatar"
+                        />
+                        <button className="username clickable">
+                          {data.user?.username || 'unknown'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
               ) : (
+                // User-only post: show user identity
                 <>
                   <img
                     src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
