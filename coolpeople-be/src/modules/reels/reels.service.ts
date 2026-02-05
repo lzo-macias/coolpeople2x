@@ -55,8 +55,9 @@ const formatReel = (
       displayName: reel.user.displayName,
       avatarUrl: reel.user.avatarUrl,
     },
+    partyId: reel.partyId ?? null,
     party: reel.party
-      ? { id: reel.party.id, name: reel.party.name, handle: reel.party.handle }
+      ? { id: reel.party.id, name: reel.party.name, handle: reel.party.handle, avatarUrl: reel.party.avatarUrl }
       : null,
     videoUrl: reel.videoUrl,
     thumbnailUrl: reel.thumbnailUrl,
@@ -116,7 +117,7 @@ const reelIncludes = (viewerId?: string) => ({
     },
   },
   party: {
-    select: { id: true, name: true, handle: true },
+    select: { id: true, name: true, handle: true, avatarUrl: true },
   },
   hashtags: {
     include: { hashtag: { select: { name: true } } },
@@ -282,7 +283,7 @@ export const getUserReels = async (
   limit: number = 20
 ): Promise<{ reels: ReelResponse[]; nextCursor: string | null }> => {
   const reels = await prisma.reel.findMany({
-    where: { userId, deletedAt: null },
+    where: { userId, deletedAt: null, partyId: null },
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { createdAt: 'desc' },

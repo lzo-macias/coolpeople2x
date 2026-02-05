@@ -374,6 +374,10 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   }
 
   const data = reel || defaultReel
+  const isPartyPost = data.isPartyPost || !!data.partyId || !!data.party
+  // For party posts from API, use party identity; for local posts, user is already set to party
+  const partyName = data.party?.name || data.user?.party
+  const partyAvatar = (data.party?.avatarUrl) || data.user?.avatar || 'https://i.pravatar.cc/40?img=1'
 
   if (isPreview) {
     return (
@@ -384,16 +388,24 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         />
         <div className="reel-preview-overlay">
           <div className="reel-preview-info">
-            {data.user?.party ? (
-              <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
-                {data.user?.party}
+            {isPartyPost ? (
+              <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(partyName) }}>
+                {partyName}
               </button>
             ) : (
-              <span className="party-tag">Independent</span>
+              <>
+                {data.user?.party ? (
+                  <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
+                    {data.user?.party}
+                  </button>
+                ) : (
+                  <span className="party-tag">Independent</span>
+                )}
+                <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
+                  @{data.user?.username || 'unknown'}
+                </button>
+              </>
             )}
-            <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
-              @{data.user?.username || 'unknown'}
-            </button>
           </div>
         </div>
       </div>
@@ -489,25 +501,44 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               </button>
             )}
             <div className="reel-user-row">
-              <img
-                src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
-                alt={data.user?.username || 'user'}
-                className="reel-user-avatar clickable"
-                style={{ borderColor: getPartyColor(data.user?.party) }}
-                onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
-              />
-              <div className="reel-user-details">
-                {data.user?.party ? (
-                  <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
-                    {data.user?.party}
-                  </button>
-                ) : (
-                  <span className="party-tag">Independent</span>
-                )}
-                <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
-                  {data.user?.username || 'unknown'}
-                </button>
-              </div>
+              {isPartyPost ? (
+                <>
+                  <img
+                    src={partyAvatar}
+                    alt={partyName || 'party'}
+                    className="reel-user-avatar clickable"
+                    style={{ borderColor: getPartyColor(partyName) }}
+                    onClick={() => { pauseVideo(); onPartyClick?.(partyName) }}
+                  />
+                  <div className="reel-user-details">
+                    <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(partyName) }}>
+                      {partyName}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <img
+                    src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    alt={data.user?.username || 'user'}
+                    className="reel-user-avatar clickable"
+                    style={{ borderColor: getPartyColor(data.user?.party) }}
+                    onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}
+                  />
+                  <div className="reel-user-details">
+                    {data.user?.party ? (
+                      <button className="party-tag clickable" onClick={() => { pauseVideo(); onPartyClick?.(data.user?.party) }}>
+                        {data.user?.party}
+                      </button>
+                    ) : (
+                      <span className="party-tag">Independent</span>
+                    )}
+                    <button className="username clickable" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
+                      {data.user?.username || 'unknown'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
             <p className="reel-title">{data.title}</p>
             <p className="reel-caption">{data.caption}</p>

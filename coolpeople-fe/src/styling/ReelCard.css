@@ -108,6 +108,7 @@
   font-family: inherit;
   text-align: left;
   transition: opacity 0.2s ease;
+  color: var(--text-primary);
 }
 
 .party-tag.clickable:hover {

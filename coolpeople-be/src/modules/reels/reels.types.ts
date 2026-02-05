@@ -28,10 +28,12 @@ export interface ReelResponse {
     avatarUrl: string | null;
   };
 
+  partyId: string | null;
   party?: {
     id: string;
     name: string;
     handle: string;
+    avatarUrl: string | null;
   } | null;
 
   // Media

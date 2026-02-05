@@ -313,7 +313,9 @@ function AppContent() {
       const response = await reelsApi.getUserReels(authUser.id)
       const posts = response.data || response
       if (posts) {
-        setUserPosts(posts)
+        // Filter out party-only posts (those with partyId belong to the party profile, not the user profile)
+        const filtered = posts.filter(p => !p.partyId)
+        setUserPosts(filtered)
       }
     } catch (error) {
       console.log('Using local posts:', error.message)
@@ -762,11 +764,27 @@ function AppContent() {
         },
       ]
 
+      // postTo is now an array for multi-select
+      const postToArray = Array.isArray(postData.postTo) ? postData.postTo : [postData.postTo || 'Your Feed']
+      const isPostingToFeed = postToArray.includes('Your Feed')
+      const isPostingToPartyFeed = effectiveParty && postToArray.some(target => target !== 'Your Feed' && (target.includes(effectiveParty.name) || target.includes('Party')))
+      const isPartyOnlyPost = isPostingToPartyFeed && !isPostingToFeed
+
+      // Party avatar for party-only posts
+      const partyAvatar = effectiveParty?.photo || effectiveParty?.avatarUrl || (effectiveParty?.name ? `https://ui-avatars.com/api/?name=${encodeURIComponent(effectiveParty.name)}&background=${effectiveParty.color?.replace('#', '') || 'e91e8c'}&color=fff&size=150` : null)
+
       const newReel = {
         id: `reel-${timestamp}`,
         videoUrl: postData.videoUrl || null,
         thumbnail: postData.videoUrl || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=800&fit=crop',
-        user: {
+        user: isPartyOnlyPost ? {
+          // Party post: use party identity
+          id: effectiveParty.id,
+          username: effectiveParty.handle || effectiveParty.name,
+          displayName: effectiveParty.name,
+          party: effectiveParty.name,
+          avatar: partyAvatar,
+        } : {
           ...currentUser,
           party: effectiveParty?.name || currentUser.party,
         },
@@ -779,38 +797,33 @@ function AppContent() {
         createdAt: new Date().toISOString(),
         isMirrored: postData.isMirrored || false,
         textOverlays: postData.textOverlays || [],
+        isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style
+        partyId: isPartyOnlyPost ? effectiveParty.id : null,
       }
 
-      // postTo is now an array for multi-select
-      const postToArray = Array.isArray(postData.postTo) ? postData.postTo : [postData.postTo || 'Your Feed']
-
-      // Add to feed if posting to feed
-      if (postToArray.includes('Your Feed')) {
-        console.log('Adding new reel to feed:', newReel)
-        setReels(prev => [newReel, ...prev])
-      }
+      // Add to main feed (party-only posts still appear in the algorithm feed)
+      console.log('Adding new reel to feed:', newReel)
+      setReels(prev => [newReel, ...prev])
 
       // Add to party posts if posting to party
-      if (effectiveParty && postToArray.some(target => target.includes(effectiveParty.name) || target.includes('Party'))) {
+      if (isPostingToPartyFeed) {
         console.log('Adding to party posts:', newReel)
         setPartyPosts(prev => [newReel, ...prev])
       }
 
-      // Add to user's posts
-      console.log('Adding to user posts:', newReel)
-      setUserPosts(prev => [newReel, ...prev])
+      // Only add to user's posts if posting to their own feed (not party-only)
+      if (!isPartyOnlyPost) {
+        console.log('Adding to user posts:', newReel)
+        setUserPosts(prev => [newReel, ...prev])
+      }
 
       // Save to backend
       try {
-        // Only include partyId if user selected a party destination (not just "Your Feed")
-        const isPostingToParty = effectiveParty && postToArray.some(target =>
-          target !== 'Your Feed' && (target.includes(effectiveParty.name) || target.includes('Party'))
-        )
         const reelData = {
           videoUrl: postData.videoUrl,
           title: postData.title || '',
           description: postData.caption || '', // Backend expects 'description' not 'caption'
-          partyId: isPostingToParty ? effectiveParty.id : null,
+          partyId: isPartyOnlyPost ? effectiveParty.id : null, // Only set for party-only posts so loadUserPosts can filter by partyId
           duration: 30, // Default duration
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
         }
