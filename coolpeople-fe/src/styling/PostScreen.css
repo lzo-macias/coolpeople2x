@@ -266,6 +266,63 @@
   box-shadow: 0 0 6px rgba(232, 168, 85, 0.5);
 }
 
+/* Compete Toggle */
+.post-option-row.compete-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.post-compete-toggle {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-track {
+  width: 44px;
+  height: 24px;
+  background: #ddd;
+  border-radius: 12px;
+  position: relative;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+}
+
+.post-compete-toggle.active .toggle-track {
+  background: linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 100%);
+  border: 1px solid #444;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+}
+
+.post-compete-toggle.active .toggle-thumb {
+  transform: translateX(20px);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.compete-row .post-option-label {
+  min-width: unset;
+  flex: 1;
+}
+
 /* Location */
 .post-location-icon {
   color: #222;

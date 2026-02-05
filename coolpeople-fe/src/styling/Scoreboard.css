@@ -275,7 +275,24 @@
 
 .section-dots {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.section-dots.clickable {
+  cursor: pointer;
+  padding: 6px 10px;
+  margin: -6px -10px;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+
+.section-dots.clickable:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.section-dot-more {
+  display: none;
 }
 
 /* Section dropdown for more than 5 races */
@@ -300,6 +317,111 @@
   color: #00c4c4;
 }
 
+/* Races Overlay - Heavy blur with cards grid */
+.races-overlay-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 2147483640;
+}
+
+.races-overlay-grid {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  padding: 20px;
+  width: calc(100% - 40px);
+  max-width: 360px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 2147483641;
+}
+
+.races-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px;
+  background: #fff;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.races-overlay-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.races-overlay-card.active {
+  box-shadow: 0 0 0 2px #00c4c4, 0 4px 16px rgba(0, 196, 196, 0.2);
+}
+
+.races-overlay-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.races-overlay-card-count {
+  font-size: 12px;
+  color: #666;
+}
+
+.races-overlay-card-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.races-overlay-card-tag.party {
+  background: #ffe4ec;
+  color: #e91e8c;
+}
+
+.races-overlay-card-tag.user {
+  background: #e4f7f7;
+  color: #00a3a3;
+}
+
+.races-overlay-card-unfollow {
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.races-overlay-card-unfollow:hover {
+  background: #fee;
+  border-color: #e57373;
+  color: #d32f2f;
+}
+
+/* Legacy dropdown styles - kept for backwards compatibility */
 .section-dropdown-backdrop {
   position: fixed;
   inset: 0;

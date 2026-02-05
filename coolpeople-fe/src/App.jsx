@@ -819,6 +819,58 @@ function AppContent() {
 
       // Save to backend
       try {
+        let raceId = null
+
+        // Create new race if needed
+        if (postData.isCreatingNewRace && postData.targetRace) {
+          console.log('Creating new race:', postData.targetRace)
+          try {
+            // Convert deadline to full ISO 8601 format if provided (frontend stores as YYYY-MM-DDTHH:MM)
+            let endDateISO = null
+            if (postData.raceDeadline) {
+              const deadlineDate = new Date(postData.raceDeadline)
+              if (!isNaN(deadlineDate.getTime())) {
+                endDateISO = deadlineDate.toISOString()
+              }
+            }
+            const raceData = {
+              title: postData.targetRace,
+              raceType: postData.raceType === 'party' ? 'PARTY_VS_PARTY' : 'CANDIDATE_VS_CANDIDATE',
+              winCondition: postData.winMethod === 'ballot' ? 'BALLOT' : 'POINTS',
+              endDate: endDateISO,
+            }
+            const raceResult = await racesApi.createRace(raceData)
+            // Response structure is { data: { race: { id, ... } } }
+            raceId = raceResult.data?.race?.id || raceResult.race?.id || raceResult.data?.id || raceResult.id
+
+            // If user wants to compete, join the race
+            if (postData.wantToCompete && raceId) {
+              try {
+                await racesApi.competeInRace(raceId)
+                console.log('Joined race as competitor')
+              } catch (competeError) {
+                console.error('Failed to join race as competitor:', competeError)
+              }
+            }
+          } catch (raceError) {
+            console.error('Failed to create race:', raceError)
+          }
+        } else if (postData.selectedExistingRace) {
+          // Using existing race
+          raceId = postData.selectedExistingRace.id
+          console.log('Using existing race ID:', raceId)
+
+          // If user wants to compete in existing race, join it
+          if (postData.wantToCompete && raceId) {
+            try {
+              await racesApi.competeInRace(raceId)
+              console.log('Joined existing race as competitor')
+            } catch (competeError) {
+              console.error('Failed to join race as competitor:', competeError)
+            }
+          }
+        }
+
         const reelData = {
           videoUrl: postData.videoUrl,
           title: postData.title || '',
@@ -828,9 +880,11 @@ function AppContent() {
           duration: 30, // Default duration
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
         }
-        // Add raceIds if targeting a race (backend expects array of UUIDs)
-        if (postData.targetRace) {
-          // If it's a UUID, wrap in array; otherwise skip
+        // Add raceIds if we have a race (new or existing)
+        if (raceId) {
+          reelData.raceIds = [raceId]
+        } else if (postData.targetRace) {
+          // Fallback: If it's a UUID, wrap in array; otherwise skip
           const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
           if (uuidPattern.test(postData.targetRace)) {
             reelData.raceIds = [postData.targetRace]

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import AddSound from './AddSound'
+import { racesApi } from '../services/api'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
 
@@ -55,9 +56,10 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [recordedVideoUrl])
   const [isEditingRace, setIsEditingRace] = useState(false)
-  const [raceType, setRaceType] = useState('user') // 'user' or 'party'
-  const [winMethod, setWinMethod] = useState('points') // 'ballot' or 'points'
-  const [selectedExistingRace, setSelectedExistingRace] = useState(null) // Track if user selected an existing race
+  // raceType, winMethod, selectedExistingRace come from props now
+  const setRaceType = onRaceTypeChange || (() => {})
+  const setWinMethod = onWinMethodChange || (() => {})
+  const setSelectedExistingRace = onSelectedExistingRaceChange || (() => {})
   const [forceNewRace, setForceNewRace] = useState(false) // Track if user clicked "new" to create new race
   const [showUserPanel, setShowUserPanel] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState([])
@@ -165,15 +167,27 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     { id: 103, phone: '+1 (555) 345-6789', name: 'Sarah K' },
   ]
 
-  // Mock existing races for race picker
-  const existingRaces = [
-    { id: 1, name: 'Mayor Race', location: 'NYC', participants: 12 },
-    { id: 2, name: 'City Council District 5', location: 'Brooklyn', participants: 8 },
-    { id: 3, name: 'Governor Race', location: 'New York', participants: 24 },
-    { id: 4, name: 'Senate Race 2026', location: 'New York', participants: 45 },
-    { id: 5, name: 'School Board Election', location: 'Queens', participants: 6 },
-    { id: 6, name: 'State Assembly', location: 'Manhattan', participants: 15 },
-  ]
+  // Existing races from backend
+  const [existingRaces, setExistingRaces] = useState([])
+  const [racesLoading, setRacesLoading] = useState(false)
+
+  // Fetch races from backend
+  useEffect(() => {
+    const fetchRaces = async () => {
+      setRacesLoading(true)
+      try {
+        const response = await racesApi.listRaces()
+        const races = response.data || response.races || []
+        setExistingRaces(races)
+      } catch (error) {
+        console.error('Failed to fetch races:', error)
+        setExistingRaces([])
+      } finally {
+        setRacesLoading(false)
+      }
+    }
+    fetchRaces()
+  }, [])
 
   // Race picker state
   const [showRacePicker, setShowRacePicker] = useState(false)
@@ -321,12 +335,12 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     if (!raceName || !raceName.trim()) return existingRaces
     const query = raceName.toLowerCase()
     return existingRaces.filter(race =>
-      race.name.toLowerCase().includes(query)
+      race.title?.toLowerCase().includes(query)
     )
   }
 
   const handleSelectRace = (race) => {
-    onRaceNameChange(race.name)
+    onRaceNameChange(race.title)
     setSelectedExistingRace(race) // Track that user selected an existing race
     setShowRacePicker(false) // Close panel immediately - just targeting this race
   }
@@ -1236,21 +1250,47 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
             {!forceNewRace && (
               <div className="race-picker-list">
-                {filteredRaces.map(race => (
-                  <div
-                    key={race.id}
-                    className="race-picker-item"
-                    onClick={() => handleSelectRace(race)}
-                  >
-                    <div className="race-picker-item-info">
-                      <span className="race-picker-item-name">{race.name}</span>
-                      <span className="race-picker-item-meta">{race.location} • {race.participants} participants</span>
+                {racesLoading ? (
+                  <div className="race-picker-empty">Loading races...</div>
+                ) : filteredRaces.length === 0 ? (
+                  <div className="race-picker-empty">No races found. Create a new one above.</div>
+                ) : (
+                  filteredRaces.map(race => (
+                    <div
+                      key={race.id}
+                      className="race-picker-item"
+                      onClick={() => handleSelectRace(race)}
+                    >
+                      <div className="race-picker-item-info">
+                        <span className="race-picker-item-name">{race.title}</span>
+                        <span className="race-picker-item-meta">{race.competitorCount || 0} competitors</span>
+                      </div>
+                      <div className="race-picker-item-right">
+                        <div className="race-picker-item-type">
+                          {race.raceType === 'PARTY_VS_PARTY' ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                          )}
+                          <span>{race.raceType === 'PARTY_VS_PARTY' ? 'Party' : 'User'}</span>
+                        </div>
+                        {race.endDate && (
+                          <span className="race-picker-item-deadline">
+                            {new Date(race.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
           </div>

@@ -7,18 +7,11 @@ import QuoteNominateScreen from './QuoteNominateScreen'
 import { getPartyColor } from '../data/mockData'
 import { racesApi, reelsApi } from '../services/api'
 
-// Helper to generate sparkline data
-// Mock race candidates for the chart
-const raceChartData = [
-  { id: 1, name: 'William H.', avatar: 'https://i.pravatar.cc/40?img=12', data: [1.2, 1.5, 1.8, 2.1, 2.4, 2.6, 2.8, 2.9, 3.0], nominations: '25,000', stars: 4.8, sparkline: [] },
-  { id: 2, name: 'Sarah J.', avatar: 'https://i.pravatar.cc/40?img=5', data: [1.1, 1.3, 1.6, 1.9, 2.2, 2.4, 2.5, 2.6, 2.7], nominations: '18,500', stars: 4.5, sparkline: [] },
-  { id: 3, name: 'Alex M.', avatar: 'https://i.pravatar.cc/40?img=3', data: [1.0, 1.2, 1.4, 1.7, 1.9, 2.1, 2.3, 2.4, 2.5], nominations: '15,200', stars: 4.3, sparkline: [] },
-  { id: 4, name: 'Mike T.', avatar: 'https://i.pravatar.cc/40?img=8', data: [0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.0, 2.1, 2.2], nominations: '12,800', stars: 4.1, sparkline: [] },
-  { id: 5, name: 'Jordan P.', avatar: 'https://i.pravatar.cc/40?img=14', data: [0.8, 1.0, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9], nominations: '9,400', stars: 3.9, sparkline: [] },
-  { id: 6, name: 'Casey R.', avatar: 'https://i.pravatar.cc/40?img=16', data: [0.7, 0.9, 1.0, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7], nominations: '7,100', stars: 3.7, sparkline: [] },
-  { id: 7, name: 'Taylor M.', avatar: 'https://i.pravatar.cc/40?img=18', data: [0.6, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], nominations: '5,600', stars: 3.5, sparkline: [] },
-  { id: 8, name: 'Morgan L.', avatar: 'https://i.pravatar.cc/40?img=20', data: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3], nominations: '3,200', stars: 3.2, sparkline: [] },
-]
+// Helper to format points for display (e.g., 25000 -> "25,000")
+const formatPoints = (points) => {
+  if (!points && points !== 0) return '0'
+  return points.toLocaleString()
+}
 
 // Mini sparkline for contestant rows
 function MiniSparkline({ data, width = 50, height = 20 }) {
@@ -212,16 +205,11 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   // Race modal state
   const [showRaceModal, setShowRaceModal] = useState(false)
   const [nominatedCandidates, setNominatedCandidates] = useState(new Set())
-  const [nominationCounts, setNominationCounts] = useState(() => {
-    const counts = {}
-    raceChartData.forEach(c => {
-      counts[c.id] = parseNominations(c.nominations)
-    })
-    return counts
-  })
+  const [nominationCounts, setNominationCounts] = useState({})
   const [raceFollowed, setRaceFollowed] = useState(false)
   const [raceParticipating, setRaceParticipating] = useState(false)
   const [raceScoreboard, setRaceScoreboard] = useState([])
+  const [raceDetails, setRaceDetails] = useState(null)
 
   // Record view when reel becomes visible (only for valid UUIDs, not temp IDs)
   useEffect(() => {
@@ -238,50 +226,63 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     }
   }, [isVisible, reel?.id])
 
-  // Fetch scoreboard when race modal opens
+  // Fetch race details and scoreboard when race modal opens
   useEffect(() => {
-    const fetchScoreboard = async () => {
+    const fetchRaceData = async () => {
       if (!showRaceModal || !reel?.targetRace) return
       try {
-        // Try to find race by name and get scoreboard
+        // Find race by name
         const racesResponse = await racesApi.listRaces()
         const race = racesResponse.data?.find(r => r.title === reel.targetRace)
         if (race) {
+          // Store race details (including endDate, isFollowing, isCompeting)
+          setRaceDetails(race)
+          setRaceFollowed(race.isFollowing || false)
+          setRaceParticipating(race.isCompeting || false)
+
+          // Fetch scoreboard
           const scoreboardResponse = await racesApi.getScoreboard(race.id, { period: '7d' })
           if (scoreboardResponse.data) {
-            setRaceScoreboard(scoreboardResponse.data.map((entry, idx) => ({
+            const scoreboard = scoreboardResponse.data.map((entry) => ({
               id: entry.user?.id || entry.id,
-              name: entry.user?.displayName || entry.user?.username,
-              avatar: entry.user?.avatarUrl,
-              data: entry.sparkline?.map(s => s.points) || [],
-              nominations: formatNominations(entry.totalPoints || 0),
-              stars: 4.5, // Default rating
-              sparkline: entry.sparkline?.map(s => s.points) || [],
-            })))
+              name: entry.user?.displayName || entry.user?.username || 'Unknown',
+              avatar: entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`,
+              data: entry.sparkline?.map(s => s.points) || [0],
+              totalPoints: entry.totalPoints || 0,
+              rank: entry.rank,
+              tier: entry.tier,
+              sparkline: entry.sparkline?.map(s => s.points) || [0],
+              change: entry.change || 0,
+            }))
+            setRaceScoreboard(scoreboard)
+            // Initialize nomination counts from totalPoints
+            const counts = {}
+            scoreboard.forEach(c => {
+              counts[c.id] = c.totalPoints
+            })
+            setNominationCounts(counts)
           }
         }
       } catch (error) {
-        console.log('Using mock scoreboard:', error.message)
+        console.log('Error fetching race data:', error.message)
       }
     }
-    fetchScoreboard()
+    fetchRaceData()
   }, [showRaceModal, reel?.targetRace])
 
-  
-  // Mock race deadline (290 days from now for demo)
-  const [raceDeadline] = useState(() => {
-    const deadline = new Date()
-    deadline.setDate(deadline.getDate() + 290)
-    deadline.setHours(deadline.getHours() + 1)
-    deadline.setMinutes(deadline.getMinutes() + 15)
-    return deadline
-  })
+  // Race deadline from real data or fallback
+  const raceDeadline = raceDetails?.endDate ? new Date(raceDetails.endDate) : null
 
   // Live countdown state
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
-  // Update countdown every second
+  // Update countdown every second (only if we have a deadline)
   useEffect(() => {
+    if (!raceDeadline) {
+      setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+      return
+    }
+
     const calculateTimeRemaining = () => {
       const now = new Date()
       const diff = raceDeadline - now
@@ -648,27 +649,33 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             <div className="race-modal-handle" />
 
             {/* Countdown Timer */}
-            <div className="race-countdown">
-              <div className="countdown-segment">
-                <span className="segment-value">{timeRemaining.days}</span>
-                <span className="segment-label">Day(s)</span>
+            {raceDeadline ? (
+              <div className="race-countdown">
+                <div className="countdown-segment">
+                  <span className="segment-value">{timeRemaining.days}</span>
+                  <span className="segment-label">Day(s)</span>
+                </div>
+                <span className="countdown-colon">:</span>
+                <div className="countdown-segment">
+                  <span className="segment-value">{String(timeRemaining.hours).padStart(2, '0')}</span>
+                  <span className="segment-label">Hour(s)</span>
+                </div>
+                <span className="countdown-colon">:</span>
+                <div className="countdown-segment">
+                  <span className="segment-value">{String(timeRemaining.minutes).padStart(2, '0')}</span>
+                  <span className="segment-label">Minute(s)</span>
+                </div>
+                <span className="countdown-colon">:</span>
+                <div className="countdown-segment">
+                  <span className="segment-value">{String(timeRemaining.seconds).padStart(2, '0')}</span>
+                  <span className="segment-label">Second(s)</span>
+                </div>
               </div>
-              <span className="countdown-colon">:</span>
-              <div className="countdown-segment">
-                <span className="segment-value">{String(timeRemaining.hours).padStart(2, '0')}</span>
-                <span className="segment-label">Hour(s)</span>
+            ) : (
+              <div className="race-countdown no-deadline">
+                <span className="no-deadline-text">Ongoing Race</span>
               </div>
-              <span className="countdown-colon">:</span>
-              <div className="countdown-segment">
-                <span className="segment-value">{String(timeRemaining.minutes).padStart(2, '0')}</span>
-                <span className="segment-label">Minute(s)</span>
-              </div>
-              <span className="countdown-colon">:</span>
-              <div className="countdown-segment">
-                <span className="segment-value">{String(timeRemaining.seconds).padStart(2, '0')}</span>
-                <span className="segment-label">Second(s)</span>
-              </div>
-            </div>
+            )}
 
             <div className="race-modal-header">
               <div className="race-modal-title-row">
@@ -677,105 +684,109 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   <button
                     className={`race-modal-btn follow ${raceFollowed ? 'checked' : ''}`}
                     onClick={async () => {
+                      if (!raceDetails?.id) return
                       try {
-                        // Find race ID
-                        const racesResponse = await racesApi.listRaces()
-                        const race = racesResponse.data?.find(r => r.title === data.targetRace)
-                        if (race) {
-                          await racesApi.followRace(race.id)
+                        if (raceFollowed) {
+                          await racesApi.unfollowRace(raceDetails.id)
+                          setRaceFollowed(false)
+                        } else {
+                          await racesApi.followRace(raceDetails.id)
+                          setRaceFollowed(true)
                         }
                       } catch (error) {
                         console.log('Follow race error:', error.message)
                       }
-                      setRaceFollowed(true)
-                      setTimeout(() => setShowRaceModal(false), 400)
                     }}
                   >
-                    {raceFollowed ? '✓' : 'Follow'}
+                    {raceFollowed ? '✓ Following' : 'Follow'}
                   </button>
                   <button
                     className={`race-modal-btn participate ${raceParticipating ? 'checked' : ''}`}
                     onClick={async () => {
+                      if (!raceDetails?.id) return
                       try {
-                        // Find race ID
-                        const racesResponse = await racesApi.listRaces()
-                        const race = racesResponse.data?.find(r => r.title === data.targetRace)
-                        if (race) {
-                          await racesApi.competeInRace(race.id)
-                        }
+                        await racesApi.competeInRace(raceDetails.id)
+                        setRaceParticipating(true)
                       } catch (error) {
                         console.log('Compete in race error:', error.message)
                       }
-                      setRaceParticipating(true)
-                      setTimeout(() => setShowRaceModal(false), 400)
                     }}
                   >
-                    {raceParticipating ? '✓' : 'Race'}
+                    {raceParticipating ? '✓ Racing' : 'Join Race'}
                   </button>
                 </div>
               </div>
             </div>
             <div className="race-modal-chart">
-              <RaceChart
-                candidates={raceChartData}
-                onCandidateClick={(candidate) => { pauseVideo(); onUsernameClick?.({
-                  username: candidate.name,
-                  avatar: candidate.avatar,
-                  party: null
-                }) }}
-              />
+              {raceScoreboard.length > 0 ? (
+                <RaceChart
+                  candidates={raceScoreboard}
+                  onCandidateClick={(candidate) => { pauseVideo(); onUsernameClick?.({
+                    username: candidate.name,
+                    avatar: candidate.avatar,
+                    party: null
+                  }) }}
+                />
+              ) : (
+                <div className="race-chart-empty">No competitors yet</div>
+              )}
             </div>
             <div className="race-contestants-list">
-              {raceChartData.map((candidate, idx) => {
-                const isNominated = nominatedCandidates.has(candidate.id)
-                return (
-                  <div
-                    key={candidate.id}
-                    className="race-contestant-row"
-                    onClick={() => { pauseVideo(); onUsernameClick?.({
-                      username: candidate.name,
-                      avatar: candidate.avatar,
-                      party: null
-                    }) }}
-                  >
-                    <span className="race-contestant-rank">{idx + 1}</span>
-                    <img src={candidate.avatar} alt={candidate.name} className="race-contestant-avatar" />
-                    <div className="race-contestant-info">
-                      <span className="race-contestant-name">{candidate.name}</span>
-                      <span className="race-contestant-nominations">{formatNominations(nominationCounts[candidate.id])} nominations</span>
-                    </div>
-                    <div className="race-contestant-stats">
-                      <div className="race-contestant-stars">
-                        <span className="star-icon">★</span>
-                        <span>{candidate.stars}</span>
-                      </div>
-                      <MiniSparkline data={candidate.sparkline} />
-                    </div>
-                    <button
-                      className={`race-nominate-btn ${isNominated ? 'nominated' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const wasNominated = nominatedCandidates.has(candidate.id)
-                        setNominatedCandidates(prev => {
-                          const next = new Set(prev)
-                          if (next.has(candidate.id)) {
-                            next.delete(candidate.id)
-                          } else {
-                            next.add(candidate.id)
-                          }
-                          return next
-                        })
-                        setNominationCounts(prev => ({
-                          ...prev,
-                          [candidate.id]: prev[candidate.id] + (wasNominated ? -1 : 1)
-                        }))
-                      }}
+              {raceScoreboard.length > 0 ? (
+                raceScoreboard.map((candidate, idx) => {
+                  const isNominated = nominatedCandidates.has(candidate.id)
+                  return (
+                    <div
+                      key={candidate.id}
+                      className="race-contestant-row"
+                      onClick={() => { pauseVideo(); onUsernameClick?.({
+                        username: candidate.name,
+                        avatar: candidate.avatar,
+                        party: null
+                      }) }}
                     >
-                      {isNominated ? '✓' : '+'}
-                    </button>
-                  </div>
-                )
-              })}
+                      <span className="race-contestant-rank">{candidate.rank || idx + 1}</span>
+                      <img src={candidate.avatar} alt={candidate.name} className="race-contestant-avatar" />
+                      <div className="race-contestant-info">
+                        <span className="race-contestant-name">{candidate.name}</span>
+                        <span className="race-contestant-nominations">{formatPoints(nominationCounts[candidate.id] || candidate.totalPoints)} pts</span>
+                      </div>
+                      <div className="race-contestant-stats">
+                        <div className="race-contestant-change">
+                          <span className={`change-value ${candidate.change >= 0 ? 'positive' : 'negative'}`}>
+                            {candidate.change >= 0 ? '+' : ''}{candidate.change}
+                          </span>
+                        </div>
+                        {candidate.sparkline?.length > 1 && <MiniSparkline data={candidate.sparkline} />}
+                      </div>
+                      <button
+                        className={`race-nominate-btn ${isNominated ? 'nominated' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const wasNominated = nominatedCandidates.has(candidate.id)
+                          setNominatedCandidates(prev => {
+                            const next = new Set(prev)
+                            if (next.has(candidate.id)) {
+                              next.delete(candidate.id)
+                            } else {
+                              next.add(candidate.id)
+                            }
+                            return next
+                          })
+                          setNominationCounts(prev => ({
+                            ...prev,
+                            [candidate.id]: (prev[candidate.id] || candidate.totalPoints) + (wasNominated ? -1 : 1)
+                          }))
+                        }}
+                      >
+                        {isNominated ? '✓' : '+'}
+                      </button>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="race-contestants-empty">No competitors yet. Be the first to join!</div>
+              )}
             </div>
           </div>
         </>,

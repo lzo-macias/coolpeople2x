@@ -503,6 +503,41 @@
   margin-top: 2px;
 }
 
+.race-countdown.no-deadline {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.race-countdown .no-deadline-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(232, 168, 85, 0.8);
+}
+
+.race-chart-empty,
+.race-contestants-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  color: rgba(232, 168, 85, 0.6);
+  font-size: 14px;
+  text-align: center;
+}
+
+.race-contestant-change .change-value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.race-contestant-change .change-value.positive {
+  color: #4ade80;
+}
+
+.race-contestant-change .change-value.negative {
+  color: #f87171;
+}
+
 .race-modal-header {
   margin-bottom: 12px;
 }

@@ -37,6 +37,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [showPartyCreationFlow, setShowPartyCreationFlow] = useState(false)
   const [raceName, setRaceName] = useState('')
   const [raceDeadline, setRaceDeadline] = useState(null)
+  const [raceType, setRaceType] = useState('user') // 'user' or 'party'
+  const [winMethod, setWinMethod] = useState('points') // 'ballot' or 'points'
+  const [selectedExistingRace, setSelectedExistingRace] = useState(null) // Track if user selected existing race
   const [facingMode, setFacingMode] = useState('user') // 'user' = front, 'environment' = back
   const [cameraError, setCameraError] = useState(null)
   const durations = ['10m', '60s', '15s', 'PHOTO']
@@ -514,6 +517,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     // Use targetRace from PostScreen if provided, otherwise use raceName from race mode
     const finalTargetRace = postData.targetRace || (selectedMode === 'race' ? raceName : null)
 
+    // Check if creating a new race (race mode with name but no existing race selected)
+    const isCreatingNewRace = selectedMode === 'race' && raceName && !selectedExistingRace
+
     // Create the post with video and all data
     // Use base64 version for persistence (blob URLs are temporary)
     if (onPostCreated) {
@@ -525,6 +531,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         isNomination: selectedMode === 'nominate',
         taggedUser: selectedTag,
         textOverlays: textOverlays,
+        // Race creation data
+        isCreatingNewRace,
+        selectedExistingRace,
+        raceDeadline: isCreatingNewRace ? raceDeadline : null,
+        raceType: isCreatingNewRace ? raceType : null,
+        winMethod: isCreatingNewRace ? winMethod : null,
       })
     } else {
       setShowPostScreen(false)
@@ -1260,6 +1272,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onRaceNameChange={setRaceName}
           raceDeadline={raceDeadline}
           onRaceDeadlineChange={setRaceDeadline}
+          raceType={raceType}
+          onRaceTypeChange={setRaceType}
+          winMethod={winMethod}
+          onWinMethodChange={setWinMethod}
+          selectedExistingRace={selectedExistingRace}
+          onSelectedExistingRaceChange={setSelectedExistingRace}
           recordedVideoUrl={recordedVideoUrl}
           isMirrored={recordedWithFrontCamera}
           isConversationMode={isConversationMode}

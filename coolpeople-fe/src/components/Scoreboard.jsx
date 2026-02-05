@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardPartyRow from './ScoreboardPartyRow'
@@ -30,6 +31,7 @@ const frontRunners = [
 function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 0, onFavoriteChange, currentUserId, userRacesFollowing = [], userRacesCompeting = [] }) {
   const [users, setUsers] = useState(mockScoreboard)
   const [parties, setParties] = useState(mockPartyScoreboard)
+  const [raceScoreboards, setRaceScoreboards] = useState({}) // Store scoreboards per race ID
   const [viewMode, setViewMode] = useState('global') // 'global' or 'local'
   const [activeSection, setActiveSection] = useState(0)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -44,74 +46,101 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
   const [searchResults, setSearchResults] = useState({ people: [], races: [] })
   const swipeRef = useRef({ startX: 0, accumulatedDelta: 0 })
 
-  // Fetch scoreboard data from API for the active race
+  // Fetch scoreboard data from API for all races
   useEffect(() => {
     const fetchScoreboard = async () => {
-      // Skip if not active or no races loaded
       if (!isActive) return
       setIsLoading(true)
       try {
-        // Fetch list of races first
         const racesResponse = await racesApi.listRaces()
         if (racesResponse.data && racesResponse.data.length > 0) {
           setRaces(racesResponse.data)
 
-          // Fetch scoreboard for each race
-          const scoreboardPromises = racesResponse.data.slice(0, 5).map(async (race) => {
+          // Find CoolPeople and Best Party races
+          const coolPeopleRace = racesResponse.data.find(r => r.title?.toLowerCase() === 'coolpeople')
+          const bestPartyRace = racesResponse.data.find(r => r.title?.toLowerCase() === 'best party')
+
+          // Fetch scoreboards for all races we need
+          const racesToFetch = [
+            coolPeopleRace,
+            bestPartyRace,
+            ...userRacesFollowing,
+            ...userRacesCompeting
+          ].filter(Boolean).filter((race, index, self) =>
+            self.findIndex(r => r.id === race.id) === index
+          )
+
+          const scoreboardPromises = racesToFetch.map(async (race) => {
             try {
               const scoreboardResponse = await racesApi.getScoreboard(race.id, { limit: 20, period: '7d' })
-              return { raceId: race.id, data: scoreboardResponse.data || [] }
+              return { race, data: scoreboardResponse.data || [] }
             } catch (err) {
-              return { raceId: race.id, data: [] }
+              return { race, data: [] }
             }
           })
 
           const scoreboards = await Promise.all(scoreboardPromises)
+          const newRaceScoreboards = {}
 
-          // Update users/parties based on race type
           scoreboards.forEach(sb => {
-            const race = racesResponse.data.find(r => r.id === sb.raceId)
-            if (race && sb.data.length > 0) {
+            const { race, data } = sb
+            if (race && data.length > 0) {
               if (race.raceType === 'PARTY_VS_PARTY') {
-                setParties(sb.data.map((entry, idx) => ({
-                  ...entry,
-                  rank: idx + 1,
-                  partyId: entry.party?.id || entry.id,
-                  partyName: entry.party?.name || entry.name,
-                  color: entry.party?.color || '#e91e8c',
-                  avatar: entry.party?.avatarUrl || entry.avatarUrl,
-                  members: entry.party?.memberCount || entry.memberCount || 0,
-                  score: entry.totalPoints || 0,
-                  change: entry.change || 0,
-                  sparklineData: entry.sparkline?.map(s => s.points) || [],
-                  isFavorited: entry.isFavorited || false,
-                })))
+                newRaceScoreboards[race.id] = {
+                  isPartyRace: true,
+                  data: data.map((entry, idx) => ({
+                    ...entry,
+                    rank: idx + 1,
+                    partyId: entry.party?.id || entry.id,
+                    partyName: entry.party?.name || entry.name,
+                    color: entry.party?.color || '#e91e8c',
+                    avatar: entry.party?.avatarUrl || entry.avatarUrl,
+                    members: entry.party?.memberCount || entry.memberCount || 0,
+                    score: entry.totalPoints || 0,
+                    change: entry.change || 0,
+                    sparklineData: entry.sparkline?.map(s => s.points) || [],
+                    isFavorited: entry.isFavorited || false,
+                  }))
+                }
+                // Set parties for Best Party section
+                if (race.id === bestPartyRace?.id) {
+                  setParties(newRaceScoreboards[race.id].data)
+                }
               } else {
-                setUsers(sb.data.map((entry, idx) => ({
-                  ...entry,
-                  rank: idx + 1,
-                  userId: entry.user?.id || entry.id,
-                  username: entry.user?.username || entry.username,
-                  avatar: entry.user?.avatarUrl || entry.avatarUrl,
-                  party: entry.user?.party?.name || entry.party,
-                  partyId: entry.user?.party?.id || null,
-                  score: entry.totalPoints,
-                  sparklineData: entry.sparkline?.map(s => s.points) || [],
-                  isFavorited: entry.isFavorited || false,
-                })))
+                newRaceScoreboards[race.id] = {
+                  isPartyRace: false,
+                  data: data.map((entry, idx) => ({
+                    ...entry,
+                    rank: idx + 1,
+                    userId: entry.user?.id || entry.id,
+                    username: entry.user?.username || entry.username,
+                    avatar: entry.user?.avatarUrl || entry.avatarUrl,
+                    party: entry.user?.party?.name || entry.party,
+                    partyId: entry.user?.party?.id || null,
+                    score: entry.totalPoints,
+                    sparklineData: entry.sparkline?.map(s => s.points) || [],
+                    isFavorited: entry.isFavorited || false,
+                  }))
+                }
+                // Set users for CoolPeople section
+                if (race.id === coolPeopleRace?.id) {
+                  setUsers(newRaceScoreboards[race.id].data)
+                }
               }
             }
           })
+
+          setRaceScoreboards(newRaceScoreboards)
+          console.log('[Scoreboard] Fetched scoreboards:', newRaceScoreboards)
         }
       } catch (error) {
         console.log('Using mock scoreboard data:', error.message)
-        // Keep mock data on error
       } finally {
         setIsLoading(false)
       }
     }
     fetchScoreboard()
-  }, [isActive, refreshKey])
+  }, [isActive, refreshKey, userRacesFollowing, userRacesCompeting])
 
   // Handle search
   useEffect(() => {
@@ -183,12 +212,26 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
     ? users.filter(u => u.party === currentUserParty)
     : []
 
+  // Find CoolPeople and Best Party race IDs from the races list
+  const coolPeopleRace = races.find(r => r.title?.toLowerCase() === 'coolpeople')
+  const bestPartyRace = races.find(r => r.title?.toLowerCase() === 'best party')
+
   // Define sections dynamically based on user's races
-  // Always show CoolPeople and Best Party, then add user's followed/competing races (cap at 5)
+  // Always show CoolPeople and Best Party, then add user's followed/competing races
   const sections = (() => {
     const result = [
-      { id: 'coolpeople', label: 'CoolPeople', users: frontrunnerUsers, isPartyRace: false },
-      { id: 'bestparty', label: 'Best Party', users: parties, isPartyRace: true },
+      {
+        id: coolPeopleRace?.id || 'coolpeople',
+        label: 'CoolPeople',
+        users: raceScoreboards[coolPeopleRace?.id]?.data || frontrunnerUsers,
+        isPartyRace: false
+      },
+      {
+        id: bestPartyRace?.id || 'bestparty',
+        label: 'Best Party',
+        users: raceScoreboards[bestPartyRace?.id]?.data || parties,
+        isPartyRace: true
+      },
     ]
 
     // Combine user's following and competing races, removing duplicates and the base races
@@ -201,15 +244,20 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
         race.title?.toLowerCase() !== 'best party'
       )
 
-    // Add user's races up to cap of 5 total
-    userRaces.slice(0, 3).forEach(race => {
+    // Add all user's followed/competing races (no cap)
+    userRaces.forEach(race => {
+      const scoreboard = raceScoreboards[race.id]
       result.push({
         id: race.id,
         label: race.title,
-        users: frontrunnerUsers, // TODO: fetch specific race scoreboard
-        isPartyRace: false,
+        users: scoreboard?.data || [],
+        isPartyRace: scoreboard?.isPartyRace || race.raceType === 'PARTY_VS_PARTY',
       })
     })
+
+    console.log('[Scoreboard] raceScoreboards:', raceScoreboards)
+    console.log('[Scoreboard] sections:', result)
+    console.log('[Scoreboard] sections.length:', result.length, '> 5?', result.length > 5)
 
     return result
   })()
@@ -455,45 +503,79 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
           <div className="section-header-top">
             <span className="section-title">{sections[activeSection].label}</span>
             <div className="section-nav">
-              <div className="section-dots">
-                {sections.slice(0, 5).map((_, index) => (
-                  <span
-                    key={index}
-                    className={`section-dot ${activeSection === index ? 'active' : ''}`}
-                    onClick={() => setActiveSection(index)}
-                  />
-                ))}
-              </div>
-              {sections.length > 5 && (
-                <div className="section-dropdown-container">
-                  <button
-                    className={`section-dropdown-trigger ${activeSection >= 5 ? 'has-active' : ''}`}
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </button>
-                  {isDropdownOpen && (
-                    <>
-                      <div className="section-dropdown-backdrop" onClick={() => setIsDropdownOpen(false)} />
-                      <div className="section-dropdown">
-                        {sections.slice(5).map((section, index) => (
-                          <button
-                            key={section.id}
-                            className={`section-dropdown-item ${activeSection === index + 5 ? 'active' : ''}`}
-                            onClick={() => {
-                              setActiveSection(index + 5)
-                              setIsDropdownOpen(false)
-                            }}
-                          >
-                            {section.label}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+              {sections.length > 5 ? (
+                <div
+                  className="section-dots clickable"
+                  onClick={() => {
+                    console.log('[Scoreboard] Dots clicked, opening modal')
+                    setIsDropdownOpen(true)
+                  }}
+                >
+                  {sections.slice(0, 5).map((_, index) => (
+                    <span
+                      key={index}
+                      className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                    />
+                  ))}
+                  <span className="section-dot-more">+{sections.length - 5}</span>
                 </div>
+              ) : (
+                <div className="section-dots">
+                  {sections.slice(0, 5).map((_, index) => (
+                    <span
+                      key={index}
+                      className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                      onClick={() => setActiveSection(index)}
+                    />
+                  ))}
+                </div>
+              )}
+              {isDropdownOpen && createPortal(
+                <>
+                  <div className="races-overlay-backdrop" onClick={() => setIsDropdownOpen(false)} />
+                  <div className="races-overlay-grid">
+                    {sections.map((section, index) => {
+                      const race = [...userRacesFollowing, ...userRacesCompeting].find(r => r.id === section.id)
+                      const isPartyRace = section.isPartyRace || race?.raceType === 'PARTY_VS_PARTY'
+                      const competitorCount = race?.competitorCount || section.users?.length || 0
+                      const isDefaultRace = section.label === 'CoolPeople' || section.label === 'Best Party'
+                      return (
+                        <div
+                          key={section.id}
+                          className={`races-overlay-card ${activeSection === index ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveSection(index)
+                            setIsDropdownOpen(false)
+                          }}
+                        >
+                          <span className="races-overlay-card-name">{section.label}</span>
+                          <span className="races-overlay-card-count">{competitorCount} competitors</span>
+                          <span className={`races-overlay-card-tag ${isPartyRace ? 'party' : 'user'}`}>
+                            {isPartyRace ? 'Party' : 'User'}
+                          </span>
+                          {!isDefaultRace && (
+                            <button
+                              className="races-overlay-card-unfollow"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                try {
+                                  await racesApi.unfollowRace(section.id)
+                                  // Trigger refresh by closing overlay
+                                  setIsDropdownOpen(false)
+                                } catch (err) {
+                                  console.log('Unfollow error:', err)
+                                }
+                              }}
+                            >
+                              Unfollow
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>,
+                document.body
               )}
             </div>
           </div>

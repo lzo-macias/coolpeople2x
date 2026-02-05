@@ -24,6 +24,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
+  const [wantToCompete, setWantToCompete] = useState(false) // Default to just following (not competing)
 
   // Build target races from user's followed/competing races
   // If in race mode, use the raceName; otherwise show races user follows/competes in
@@ -111,7 +112,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined })
   }
 
   const handleSaveDraft = () => {
@@ -330,6 +331,21 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Compete Toggle - only show in race mode */}
+        {isRaceMode && (
+          <div className="post-option-row compete-row">
+            <span className="post-option-label">Do you want to compete in {raceName} race?</span>
+            <button
+              className={`post-compete-toggle ${wantToCompete ? 'active' : ''}`}
+              onClick={() => setWantToCompete(!wantToCompete)}
+            >
+              <span className="toggle-track">
+                <span className="toggle-thumb"></span>
+              </span>
+            </button>
           </div>
         )}
 

@@ -1190,6 +1190,40 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+.race-picker-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+.race-picker-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.race-picker-item-type {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.race-picker-item-type svg {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.race-picker-item-deadline {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .race-picker-item svg {
   color: rgba(255, 255, 255, 0.3);
 }
