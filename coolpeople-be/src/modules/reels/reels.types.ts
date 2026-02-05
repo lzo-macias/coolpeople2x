@@ -112,6 +112,7 @@ export interface CreateReelRequest {
   title?: string;
   description?: string;
   partyId?: string;
+  isPartyPost?: boolean; // True = party-only post (shows only in party feed)
   quoteParentId?: string;
   soundId?: string;
   locationId?: string;

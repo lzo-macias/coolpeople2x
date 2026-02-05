@@ -465,6 +465,7 @@ model Reel {
   // Creator
   userId          String
   partyId         String?   // If collaborative post with party
+  isPartyPost     Boolean   @default(false)  // True = party-only post, False = user post (may also have partyId for both-feeds)
 
   // Media
   videoUrl        String

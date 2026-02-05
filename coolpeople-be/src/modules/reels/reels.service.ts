@@ -195,6 +195,7 @@ export const createReel = async (
     data: {
       userId,
       partyId: data.partyId,
+      isPartyPost: data.isPartyPost ?? false, // True = party-only, False = user post (may also be in party feed)
       videoUrl: data.videoUrl,
       thumbnailUrl: data.thumbnailUrl,
       selfieOverlayUrl: data.selfieOverlayUrl,
@@ -283,7 +284,7 @@ export const getUserReels = async (
   limit: number = 20
 ): Promise<{ reels: ReelResponse[]; nextCursor: string | null }> => {
   const reels = await prisma.reel.findMany({
-    where: { userId, deletedAt: null, partyId: null },
+    where: { userId, deletedAt: null, isPartyPost: false }, // Exclude party-only posts, include both-feeds posts
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { createdAt: 'desc' },

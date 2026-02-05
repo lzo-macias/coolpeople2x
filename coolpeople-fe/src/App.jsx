@@ -797,8 +797,8 @@ function AppContent() {
         createdAt: new Date().toISOString(),
         isMirrored: postData.isMirrored || false,
         textOverlays: postData.textOverlays || [],
-        isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style
-        partyId: isPartyOnlyPost ? effectiveParty.id : null,
+        isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style (only when party-only)
+        partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (including both feeds)
       }
 
       // Add to main feed (party-only posts still appear in the algorithm feed)
@@ -823,7 +823,8 @@ function AppContent() {
           videoUrl: postData.videoUrl,
           title: postData.title || '',
           description: postData.caption || '', // Backend expects 'description' not 'caption'
-          partyId: isPartyOnlyPost ? effectiveParty.id : null, // Only set for party-only posts so loadUserPosts can filter by partyId
+          partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (both feeds or party-only)
+          isPartyPost: isPartyOnlyPost, // True = party-only (shows only in party feed), False = user post (may also show in party feed)
           duration: 30, // Default duration
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
         }

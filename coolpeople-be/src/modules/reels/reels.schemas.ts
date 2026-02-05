@@ -68,6 +68,7 @@ export const createReelSchema = z.object({
     title: z.string().max(100, 'Title must be at most 100 characters').optional(),
     description: z.string().max(2000, 'Description must be at most 2000 characters').optional(),
     partyId: z.string().uuid('Invalid party ID').optional().nullable(),
+    isPartyPost: z.boolean().optional().default(false), // True = party-only post (shows only in party feed)
     quoteParentId: z.string().uuid('Invalid quote parent ID').optional(),
     soundId: z.string().uuid('Invalid sound ID').optional(),
     locationId: z.string().uuid('Invalid location ID').optional(),
