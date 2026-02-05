@@ -389,7 +389,9 @@ export const getScoreboard = async (
 
   // Get viewer's favorites to determine isFavorited for each entry
   let favoritedUserIds = new Set<string>();
+  let followedPartyIds = new Set<string>();
   if (viewerId) {
+    // Check user favorites
     const userIds = competitors.map((c) => c.user?.id).filter((id): id is string => !!id);
     if (userIds.length > 0) {
       const favorites = await prisma.favorite.findMany({
@@ -401,6 +403,19 @@ export const getScoreboard = async (
       });
       favoritedUserIds = new Set(favorites.map((f) => f.favoritedUserId));
     }
+
+    // Check party follows
+    const partyIds = competitors.map((c) => c.party?.id).filter((id): id is string => !!id);
+    if (partyIds.length > 0) {
+      const follows = await prisma.partyFollow.findMany({
+        where: {
+          userId: viewerId,
+          partyId: { in: partyIds },
+        },
+        select: { partyId: true },
+      });
+      followedPartyIds = new Set(follows.map((f) => f.partyId));
+    }
   }
 
   const entries: ScoreboardEntry[] = competitors.map((c) => {
@@ -410,11 +425,16 @@ export const getScoreboard = async (
     if (sparkline.length >= 2) {
       change = Math.round((sparkline[sparkline.length - 1].points - sparkline[0].points) * 100) / 100;
     }
+    // Set isFavorited based on user favorites or party follows
+    const isFavorited = viewerId
+      ? (c.user?.id ? favoritedUserIds.has(c.user.id) : false) ||
+        (c.party?.id ? followedPartyIds.has(c.party.id) : false)
+      : false;
     return {
       ...c,
       sparkline,
       change,
-      isFavorited: viewerId && c.user?.id ? favoritedUserIds.has(c.user.id) : false,
+      isFavorited,
     };
   });
 

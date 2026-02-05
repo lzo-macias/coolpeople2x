@@ -4,7 +4,7 @@ import '../styling/Scoreboard.css'
 import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardPartyRow from './ScoreboardPartyRow'
 import InviteFriends from './InviteFriends'
-import { racesApi, favoritesApi, searchApi } from '../services/api'
+import { racesApi, favoritesApi, searchApi, partiesApi } from '../services/api'
 import { mockScoreboard, mockPartyScoreboard, getPartyColor } from '../data/mockData'
 
 // Mock recommended users
@@ -84,6 +84,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
 
           scoreboards.forEach(sb => {
             const { race, data } = sb
+            console.log('[Scoreboard] Raw scoreboard data for race:', race?.title, data)
             if (race && data.length > 0) {
               if (race.raceType === 'PARTY_VS_PARTY') {
                 newRaceScoreboards[race.id] = {
@@ -99,7 +100,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                     score: entry.totalPoints || 0,
                     change: entry.change || 0,
                     sparklineData: entry.sparkline?.map(s => s.points) || [],
-                    isFavorited: entry.isFavorited || false,
+                    isFavorited: entry.isFavorited || entry.isFollowing || false,
                   }))
                 }
                 // Set parties for Best Party section
@@ -119,7 +120,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                     partyId: entry.user?.party?.id || null,
                     score: entry.totalPoints,
                     sparklineData: entry.sparkline?.map(s => s.points) || [],
-                    isFavorited: entry.isFavorited || false,
+                    isFavorited: entry.isFavorited || entry.isFollowing || false,
                   }))
                 }
                 // Set users for CoolPeople section
@@ -286,6 +287,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
 
   const handleToggleFavorite = async (userId) => {
     const user = users.find(u => u.userId === userId)
+    const newFavoritedState = !user?.isFavorited
 
     // If we're in favorited view and unfavoriting, add to pending unfavorites
     if (listFilter === 'favorited' && user?.isFavorited) {
@@ -301,12 +303,30 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
       })
     }
 
-    // Optimistic update
+    // Optimistic update - update both users state and raceScoreboards
     setUsers(users.map(u =>
       u.userId === userId
-        ? { ...u, isFavorited: !u.isFavorited }
+        ? { ...u, isFavorited: newFavoritedState }
         : u
     ))
+
+    // Also update raceScoreboards for immediate UI feedback
+    setRaceScoreboards(prev => {
+      const updated = { ...prev }
+      Object.keys(updated).forEach(raceId => {
+        if (updated[raceId]?.data) {
+          updated[raceId] = {
+            ...updated[raceId],
+            data: updated[raceId].data.map(item =>
+              item.userId === userId
+                ? { ...item, isFavorited: newFavoritedState }
+                : item
+            )
+          }
+        }
+      })
+      return updated
+    })
 
     // Sync with API
     try {
@@ -316,7 +336,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
         await favoritesApi.addFavorite(userId)
       }
       // Notify parent about favorite change for global cache update
-      onFavoriteChange?.(userId, user?.username, !user?.isFavorited)
+      onFavoriteChange?.(userId, user?.username, newFavoritedState)
     } catch (error) {
       // Revert on error
       console.log('Favorite toggle error:', error.message)
@@ -325,11 +345,28 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
           ? { ...u, isFavorited: user?.isFavorited }
           : u
       ))
+      setRaceScoreboards(prev => {
+        const updated = { ...prev }
+        Object.keys(updated).forEach(raceId => {
+          if (updated[raceId]?.data) {
+            updated[raceId] = {
+              ...updated[raceId],
+              data: updated[raceId].data.map(item =>
+                item.userId === userId
+                  ? { ...item, isFavorited: user?.isFavorited }
+                  : item
+              )
+            }
+          }
+        })
+        return updated
+      })
     }
   }
 
   const handleTogglePartyFavorite = async (partyId) => {
     const party = parties.find(p => p.partyId === partyId)
+    const newFavoritedState = !party?.isFavorited
 
     // If we're in favorited view and unfavoriting, add to pending unfavorites
     if (listFilter === 'favorited' && party?.isFavorited) {
@@ -345,16 +382,72 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
       })
     }
 
-    // Optimistic update
+    // Optimistic update - update both parties state and raceScoreboards
     setParties(parties.map(p =>
       p.partyId === partyId
-        ? { ...p, isFavorited: !p.isFavorited }
+        ? { ...p, isFavorited: newFavoritedState }
         : p
     ))
 
-    // Note: Party favorites not yet implemented on backend
-    // For now, keep the optimistic update for visual feedback
-    // TODO: Implement party favorites API when needed
+    // Also update raceScoreboards for immediate UI feedback
+    setRaceScoreboards(prev => {
+      const updated = { ...prev }
+      Object.keys(updated).forEach(raceId => {
+        if (updated[raceId]?.data && updated[raceId]?.isPartyRace) {
+          updated[raceId] = {
+            ...updated[raceId],
+            data: updated[raceId].data.map(item =>
+              item.partyId === partyId
+                ? { ...item, isFavorited: newFavoritedState }
+                : item
+            )
+          }
+        }
+      })
+      return updated
+    })
+
+    // Sync with API - use party follow/unfollow for favorites
+    try {
+      if (party?.isFavorited) {
+        await partiesApi.unfollowParty(partyId)
+      } else {
+        await partiesApi.followParty(partyId)
+      }
+    } catch (error) {
+      // 409 = already following (when trying to follow) - treat as success
+      // 404 = not following (when trying to unfollow) - treat as success
+      const isAlreadyInDesiredState =
+        (error.message?.includes('409') && !party?.isFavorited) ||
+        (error.message?.includes('404') && party?.isFavorited)
+
+      if (!isAlreadyInDesiredState) {
+        // Revert on actual error
+        console.log('Party favorite toggle error:', error.message)
+        setParties(parties.map(p =>
+          p.partyId === partyId
+            ? { ...p, isFavorited: party?.isFavorited }
+            : p
+        ))
+        setRaceScoreboards(prev => {
+          const updated = { ...prev }
+          Object.keys(updated).forEach(raceId => {
+            if (updated[raceId]?.data && updated[raceId]?.isPartyRace) {
+              updated[raceId] = {
+                ...updated[raceId],
+                data: updated[raceId].data.map(item =>
+                  item.partyId === partyId
+                    ? { ...item, isFavorited: party?.isFavorited }
+                    : item
+                )
+              }
+            }
+          })
+          return updated
+        })
+      }
+      // If already in desired state, keep the optimistic update
+    }
   }
 
   return (
