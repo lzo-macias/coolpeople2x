@@ -1341,6 +1341,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           selectedExistingRace={selectedExistingRace}
           onSelectedExistingRaceChange={setSelectedExistingRace}
           recordedVideoUrl={recordedVideoUrl}
+          recordedVideoBase64={recordedVideoBase64}
           isMirrored={recordedWithFrontCamera}
           isConversationMode={isConversationMode}
           conversationUser={conversationUser}

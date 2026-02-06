@@ -1,15 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
-import { racesApi, messagesApi, usersApi } from '../services/api'
+import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
   const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const searchTimeoutRef = useRef(null)
 
   // Selfie overlay visibility (for drafts - can be deleted/restored)
   const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
@@ -80,7 +84,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     setShowUserPanel(true)
   }
 
-  // Fetch real platform users (DM contacts + following)
+  // Fetch real contacts (DM users + following + groupchats) for the panel
   const fetchPanelUsers = useCallback(async () => {
     if (!authUser?.id) return
     setLoadingUsers(true)
@@ -100,6 +104,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 id: otherUser.id,
                 username: otherUser.handle || otherUser.username || otherUser.displayName || 'user',
                 avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/40?u=${otherUser.id}`,
+                type: 'user',
               })
             }
           })
@@ -120,12 +125,36 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 id: followedUser.id,
                 username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
                 avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/40?u=${followedUser.id}`,
+                type: 'user',
               })
             }
           })
         }
       } catch (e) {
         console.warn('Failed to fetch following for panel:', e)
+      }
+
+      // 3. Fetch groupchats (with member lists)
+      try {
+        const gcRes = await groupchatsApi.getAll()
+        if (gcRes.data) {
+          gcRes.data.forEach(gc => {
+            const gcId = `group-${gc.id}`
+            if (!seenIds.has(gcId)) {
+              seenIds.add(gcId)
+              users.push({
+                id: gcId,
+                groupChatId: gc.id,
+                username: gc.name || `Group (${gc.members?.length || 0})`,
+                avatar: gc.avatarUrl || gc.members?.[0]?.avatarUrl || `https://i.pravatar.cc/40?u=group-${gc.id}`,
+                type: 'group',
+                members: gc.members || [],
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch groupchats for panel:', e)
       }
 
       setFetchedPlatformUsers(users)
@@ -144,21 +173,91 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   }, [showUserPanel, fetchedPlatformUsers.length, fetchPanelUsers])
 
   const platformUsers = fetchedPlatformUsers
-  const contactsList = []
 
-  // Get users based on source and search query
+  // Debounced search for users/parties/groupchats across the app
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+
+    if (!userSearchQuery || userSearchQuery.length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await searchApi.search(userSearchQuery, { limit: 20 })
+        const results = []
+        const seenIds = new Set()
+
+        if (res.data) {
+          if (res.data.users) {
+            res.data.users.forEach(u => {
+              if (!seenIds.has(u.id)) {
+                seenIds.add(u.id)
+                results.push({
+                  id: u.id,
+                  username: u.handle || u.username || u.displayName || 'user',
+                  avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/40?u=${u.id}`,
+                  type: 'user',
+                })
+              }
+            })
+          }
+          if (res.data.parties) {
+            res.data.parties.forEach(p => {
+              // Only show parties where user has chat permission
+              const perms = p.myPermissions || []
+              const canChat = perms.includes('chat') || perms.includes('admin') || perms.includes('leader')
+              if (!canChat) return
+
+              const pid = `party-${p.id}`
+              if (!seenIds.has(pid)) {
+                seenIds.add(pid)
+                results.push({
+                  id: pid,
+                  partyId: p.id,
+                  username: p.name || p.handle || 'Party',
+                  avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/40?u=party-${p.id}`,
+                  type: 'party',
+                })
+              }
+            })
+          }
+        }
+
+        // Also filter local groupchats by search query
+        const query = userSearchQuery.toLowerCase()
+        fetchedPlatformUsers
+          .filter(u => u.type === 'group' && u.username.toLowerCase().includes(query))
+          .forEach(gc => {
+            if (!seenIds.has(gc.id)) {
+              seenIds.add(gc.id)
+              results.push(gc)
+            }
+          })
+
+        setSearchResults(results)
+      } catch (e) {
+        console.warn('User search failed:', e)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current) }
+  }, [userSearchQuery, fetchedPlatformUsers])
+
+  // Show search results when searching, otherwise show fetched contacts
   const getAvailableUsers = () => {
-    const users = userSource === 'platform' ? platformUsers : contactsList
+    if (userSearchQuery.trim().length >= 2) return searchResults
+
     const baseList = conversationUser
-      ? [conversationUser, ...users.filter(u => u.id !== conversationUser.id)]
-      : users
-
-    if (!userSearchQuery.trim()) return baseList
-
-    const query = userSearchQuery.toLowerCase()
-    return baseList.filter(user =>
-      user.username.toLowerCase().includes(query)
-    )
+      ? [conversationUser, ...platformUsers.filter(u => u.id !== conversationUser.id)]
+      : platformUsers
+    return baseList
   }
 
   const availableUsers = getAvailableUsers()
@@ -173,12 +272,126 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
   const isSelected = (user) => selectedRecipients.find(u => u.id === user.id)
 
-  const handleSend = () => {
-    if (selectedRecipients.length === 0 && conversationUser) {
-      // If no one selected but we have conversation user, send to them
-      onSend?.([conversationUser])
-    } else {
-      onSend?.(selectedRecipients)
+  // Gather all unique member IDs from selected parties, groupchats, and users
+  const collectAllMemberIds = async (recipients) => {
+    const allMemberIds = new Set()
+
+    for (const r of recipients) {
+      if (r.type === 'party' && r.partyId) {
+        // Fetch party members
+        try {
+          const membersRes = await partiesApi.getMembers(r.partyId)
+          if (membersRes.data?.members) {
+            membersRes.data.members.forEach(m => allMemberIds.add(m.userId))
+          } else if (Array.isArray(membersRes.data)) {
+            membersRes.data.forEach(m => allMemberIds.add(m.userId || m.id))
+          }
+        } catch (e) {
+          console.warn('Failed to fetch party members for:', r.username, e)
+        }
+      } else if (r.type === 'group') {
+        // Use member list already on the groupchat object
+        if (r.members?.length > 0) {
+          r.members.forEach(m => allMemberIds.add(m.id))
+        } else if (r.groupChatId) {
+          // Fallback: fetch groupchat details for members
+          try {
+            const gcRes = await groupchatsApi.get(r.groupChatId)
+            if (gcRes.data?.members) {
+              gcRes.data.members.forEach(m => allMemberIds.add(m.id))
+            }
+          } catch (e) {
+            console.warn('Failed to fetch groupchat members for:', r.username, e)
+          }
+        }
+      } else {
+        // Individual user
+        allMemberIds.add(r.id)
+      }
+    }
+
+    // Remove current user from the set (API will add them as creator)
+    if (authUser?.id) allMemberIds.delete(authUser.id)
+
+    return [...allMemberIds]
+  }
+
+  const handleSend = async () => {
+    const recipients = selectedRecipients.length > 0
+      ? selectedRecipients
+      : conversationUser ? [conversationUser] : []
+
+    if (recipients.length === 0) return
+
+    setIsSending(true)
+    try {
+      // Use base64 for persistence (blob URLs are session-only)
+      const videoUrl = recordedVideoBase64 || recordedVideoUrl || ''
+      const videoMetadata = {
+        type: 'video',
+        videoUrl: videoUrl,
+        isMirrored: isMirrored || false,
+      }
+
+      if (sendTogether) {
+        // Gather ALL member IDs from parties, groupchats, and individual users
+        // into one large groupchat
+        try {
+          const allMemberIds = await collectAllMemberIds(recipients)
+          if (allMemberIds.length > 0) {
+            const gcRes = await groupchatsApi.create(allMemberIds)
+            if (gcRes.data?.id) {
+              await groupchatsApi.sendMessage(gcRes.data.id, 'Sent a video', videoMetadata)
+              console.log('Sent video to combined group chat:', gcRes.data.id, 'with', allMemberIds.length, 'members')
+            }
+          }
+        } catch (e) {
+          console.error('Failed to create combined group chat / send:', e)
+        }
+      } else {
+        // Send separately to each recipient
+        const partyRecipients = recipients.filter(u => u.type === 'party')
+        const groupRecipients = recipients.filter(u => u.type === 'group')
+        const userRecipients = recipients.filter(u => u.type === 'user' || (!u.type))
+
+        // Send to parties via party chat
+        for (const party of partyRecipients) {
+          try {
+            await partiesApi.sendChatMessage(party.partyId, 'Sent a video')
+            console.log('Sent video to party chat:', party.username)
+          } catch (e) {
+            console.error('Failed to send to party:', party.username, e)
+          }
+        }
+
+        // Send to existing groupchats
+        for (const gc of groupRecipients) {
+          try {
+            await groupchatsApi.sendMessage(gc.groupChatId, 'Sent a video', videoMetadata)
+            console.log('Sent video to groupchat:', gc.username)
+          } catch (e) {
+            console.error('Failed to send to groupchat:', gc.username, e)
+          }
+        }
+
+        // Send to individual users via DM
+        for (const user of userRecipients) {
+          try {
+            await messagesApi.sendMessage({
+              receiverId: user.id,
+              content: 'Sent a video',
+              metadata: videoMetadata,
+            })
+            console.log('Sent video to user:', user.username)
+          } catch (e) {
+            console.error('Failed to send to user:', user.username, e)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Send error:', error)
+    } finally {
+      setIsSending(false)
     }
   }
   const [pillPosition, setPillPosition] = useState({ x: 20, y: null }) // y: null means use default bottom position
@@ -1078,18 +1291,28 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             </div>
 
             <div className="user-panel-list">
-              {availableUsers.map(user => (
-                <div key={user.id} className="user-panel-item">
-                  <img src={user.avatar} alt={user.username} />
-                  <span>{user.username}</span>
-                  <button
-                    className={`user-panel-send-btn ${isSelected(user) ? 'sent' : ''}`}
-                    onClick={() => toggleRecipient(user)}
-                  >
-                    {isSelected(user) ? 'Sent' : 'Send'}
-                  </button>
+              {(loadingUsers && availableUsers.length === 0) || isSearching ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                  {isSearching ? 'Searching...' : 'Loading...'}
                 </div>
-              ))}
+              ) : availableUsers.length === 0 && userSearchQuery.length >= 2 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                  No results for "{userSearchQuery}"
+                </div>
+              ) : (
+                availableUsers.map(user => (
+                  <div key={user.id} className="user-panel-item">
+                    <img src={user.avatar} alt={user.username} />
+                    <span>{user.type === 'party' ? `${user.username}` : user.username}</span>
+                    <button
+                      className={`user-panel-send-btn ${isSelected(user) ? 'sent' : ''}`}
+                      onClick={() => toggleRecipient(user)}
+                    >
+                      {isSelected(user) ? 'Sent' : 'Send'}
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Send Together Button */}
@@ -1107,21 +1330,20 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
             <button
               className={`user-panel-done ${selectedRecipients.length > 0 ? 'active' : ''}`}
-              onClick={() => {
-                // Pause any playing video
+              disabled={isSending}
+              onClick={async () => {
                 if (videoRef.current) {
                   videoRef.current.pause()
                 }
-                handleSend()
+                await handleSend()
                 setShowUserPanel(false)
                 setUserSearchQuery('')
-                // Navigate to scoreboard
                 if (onCompleteToScoreboard) {
                   onCompleteToScoreboard()
                 }
               }}
             >
-              Complete
+              {isSending ? 'Sending...' : 'Complete'}
             </button>
           </div>
         </div>

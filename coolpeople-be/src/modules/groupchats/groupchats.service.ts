@@ -302,11 +302,42 @@ export const getUserGroupChats = async (userId: string): Promise<GroupChatRespon
     },
   });
 
+  // For party-converted groupchats, check if user has chat permission in the party
+  const partyIds = memberships
+    .map(m => m.groupChat.partyId)
+    .filter((id): id is string => !!id);
+
+  const partyMemberships = partyIds.length > 0
+    ? await prisma.partyMembership.findMany({
+        where: {
+          userId,
+          partyId: { in: partyIds },
+        },
+        select: {
+          partyId: true,
+          permissions: true,
+        },
+      })
+    : [];
+
+  const partyPermMap = new Map(
+    partyMemberships.map(pm => [pm.partyId, pm.permissions])
+  );
+
   // Filter and transform memberships
   const results: GroupChatResponse[] = [];
 
   for (const m of memberships) {
     const groupChat = m.groupChat;
+
+    // Skip party-converted groupchats where user is not a party member
+    // or doesn't have chat permission
+    if (groupChat.partyId) {
+      const perms = partyPermMap.get(groupChat.partyId);
+      if (!perms) continue; // Not a party member at all
+      const canChat = perms.includes('chat') || perms.includes('admin') || perms.includes('leader');
+      if (!canChat) continue; // No chat permission
+    }
 
     // Filter messages to only those after clearedAt (if set)
     const visibleMessages = m.clearedAt
