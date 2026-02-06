@@ -2308,14 +2308,14 @@ video.activity-video-thumbnail.mirrored {
   background: none;
 }
 
-/* Dots Menu Popup */
-.dots-menu-wrapper {
+/* Dots Menu Popup (scoped to profile to avoid overriding ReelActions dots menu) */
+.candidate-profile .dots-menu-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.dots-menu-backdrop {
+.candidate-profile .dots-menu-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -2324,7 +2324,7 @@ video.activity-video-thumbnail.mirrored {
   z-index: 99;
 }
 
-.dots-menu-popup {
+.candidate-profile .dots-menu-popup {
   position: absolute;
   bottom: calc(100% + 8px);
   right: 0;
@@ -2336,7 +2336,7 @@ video.activity-video-thumbnail.mirrored {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-.dots-menu-item {
+.candidate-profile .dots-menu-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2347,17 +2347,17 @@ video.activity-video-thumbnail.mirrored {
   transition: background 0.2s ease;
 }
 
-.dots-menu-item:hover {
+.candidate-profile .dots-menu-item:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.dots-menu-item span {
+.candidate-profile .dots-menu-item span {
   font-size: 14px;
   font-weight: 400;
   color: #FFFFFF;
 }
 
-.dots-menu-item.active span {
+.candidate-profile .dots-menu-item.active span {
   color: #FF2A55;
 }
 

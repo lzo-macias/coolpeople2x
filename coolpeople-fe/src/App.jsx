@@ -711,6 +711,7 @@ function AppContent() {
     console.log('handlePostCreated called with:', postData)
     const timestamp = Date.now()
     const effectiveParty = forParty || userParty
+    let savedReelId = null // Track the backend reel ID for sharing
 
     // Check if this is a nomination (should go to stories)
     if (postData.isNomination) {
@@ -906,6 +907,7 @@ function AppContent() {
         // Update local reel ID with the real UUID from backend
         const backendReelId = result.data?.reel?.id || result.reel?.id || result.data?.id
         if (backendReelId) {
+          savedReelId = backendReelId
           const tempId = newReel.id
           // Update in reels feed
           setReels(prev => prev.map(r => r.id === tempId ? { ...r, id: backendReelId } : r))
@@ -952,12 +954,19 @@ function AppContent() {
 
     // Handle sending to users/chats from the picker modal
     if (postData.sendToUsers && postData.sendToUsers.length > 0) {
+      if (!savedReelId) {
+        console.warn('⚠️ No savedReelId available - reel sharing messages will not support like/comment actions')
+      }
       const reelMessage = {
         type: 'reel',
         videoUrl: postData.videoUrl,
         caption: postData.caption || '',
+        title: postData.title || '',
+        targetRace: postData.targetRace || null,
+        reelId: savedReelId || null,
         isMirrored: postData.isMirrored || false,
         thumbnail: postData.videoUrl,
+        user: currentUser,
       }
 
       // Send to each recipient

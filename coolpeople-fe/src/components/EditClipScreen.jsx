@@ -1,11 +1,15 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
-import { racesApi } from '../services/api'
+import { racesApi, messagesApi, usersApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 
 function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
+  const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
+  const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   // Selfie overlay visibility (for drafts - can be deleted/restored)
   const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
@@ -76,23 +80,71 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     setShowUserPanel(true)
   }
 
-  // Mock users for the selection panel - conversation user first if exists
-  const platformUsers = [
-    { id: 1, username: 'maya_creates', avatar: 'https://i.pravatar.cc/40?img=1' },
-    { id: 2, username: 'alex.design', avatar: 'https://i.pravatar.cc/40?img=2' },
-    { id: 3, username: 'jordan_photo', avatar: 'https://i.pravatar.cc/40?img=4' },
-    { id: 4, username: 'sam_music', avatar: 'https://i.pravatar.cc/40?img=5' },
-    { id: 5, username: 'taylor.art', avatar: 'https://i.pravatar.cc/40?img=6' },
-    { id: 6, username: 'chris_dev', avatar: 'https://i.pravatar.cc/40?img=7' },
-  ]
+  // Fetch real platform users (DM contacts + following)
+  const fetchPanelUsers = useCallback(async () => {
+    if (!authUser?.id) return
+    setLoadingUsers(true)
+    try {
+      const users = []
+      const seenIds = new Set()
 
-  // Mock contacts
-  const contactsList = [
-    { id: 101, username: 'Mom', avatar: 'https://i.pravatar.cc/40?img=32', phone: '+1 (555) 123-4567' },
-    { id: 102, username: 'David Martinez', avatar: 'https://i.pravatar.cc/40?img=33', phone: '+1 (555) 234-5678' },
-    { id: 103, username: 'Sarah K', avatar: 'https://i.pravatar.cc/40?img=34', phone: '+1 (555) 345-6789' },
-    { id: 104, username: 'Work - John', avatar: 'https://i.pravatar.cc/40?img=35', phone: '+1 (555) 456-7890' },
-  ]
+      // 1. Fetch recent DM conversations
+      try {
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data) {
+          conversationsRes.data.forEach(conv => {
+            const otherUser = conv.otherUser
+            if (otherUser && !seenIds.has(otherUser.id)) {
+              seenIds.add(otherUser.id)
+              users.push({
+                id: otherUser.id,
+                username: otherUser.handle || otherUser.username || otherUser.displayName || 'user',
+                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/40?u=${otherUser.id}`,
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch conversations for panel:', e)
+      }
+
+      // 2. Fetch following
+      try {
+        const followingRes = await usersApi.getFollowing(authUser.id)
+        if (followingRes.data) {
+          followingRes.data.slice(0, 20).forEach(f => {
+            const followedUser = f.following || f
+            if (followedUser && !seenIds.has(followedUser.id)) {
+              seenIds.add(followedUser.id)
+              users.push({
+                id: followedUser.id,
+                username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
+                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/40?u=${followedUser.id}`,
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch following for panel:', e)
+      }
+
+      setFetchedPlatformUsers(users)
+    } catch (error) {
+      console.error('Error fetching panel users:', error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }, [authUser?.id])
+
+  // Fetch users when panel opens
+  useEffect(() => {
+    if (showUserPanel && fetchedPlatformUsers.length === 0) {
+      fetchPanelUsers()
+    }
+  }, [showUserPanel, fetchedPlatformUsers.length, fetchPanelUsers])
+
+  const platformUsers = fetchedPlatformUsers
+  const contactsList = []
 
   // Get users based on source and search query
   const getAvailableUsers = () => {
@@ -153,19 +205,15 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionSource, setMentionSource] = useState('platform')
 
-  // Mock users for mentions
-  const mentionPlatformUsers = [
-    { id: 1, username: 'angelrivas', name: 'Angel Rivas', avatar: 'https://i.pravatar.cc/100?img=1' },
-    { id: 2, username: 'maya.creates', name: 'Maya Johnson', avatar: 'https://i.pravatar.cc/100?img=5' },
-    { id: 3, username: 'jordan_photo', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=8' },
-    { id: 4, username: 'alex.design', name: 'Alex Chen', avatar: 'https://i.pravatar.cc/100?img=11' },
-  ]
+  // Reuse fetched platform users for mentions
+  const mentionPlatformUsers = fetchedPlatformUsers.map(u => ({
+    id: u.id,
+    username: u.username,
+    name: u.username,
+    avatar: u.avatar,
+  }))
 
-  const mentionContactUsers = [
-    { id: 101, phone: '+1 (555) 123-4567', name: 'Mom' },
-    { id: 102, phone: '+1 (555) 234-5678', name: 'David Martinez' },
-    { id: 103, phone: '+1 (555) 345-6789', name: 'Sarah K' },
-  ]
+  const mentionContactUsers = []
 
   // Existing races from backend
   const [existingRaces, setExistingRaces] = useState([])

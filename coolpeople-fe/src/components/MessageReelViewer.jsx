@@ -7,17 +7,22 @@ import CommentsSection from './CommentsSection'
 import { getPartyColor } from '../data/mockData'
 import { reelsApi, partiesApi } from '../services/api'
 
-function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite, senderUser, currentUserAvatar, onTrackActivity, onLikeChange, onCommentAdded }) {
+function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite, senderUser, currentUserAvatar, onTrackActivity, onLikeChange, onCommentAdded, onOpenProfile, onOpenPartyProfile }) {
   // Track video load errors to fallback to thumbnail
   const [videoError, setVideoError] = useState(false)
 
   // Filter messages with video content (party invites with videos or media messages)
+  // Must match the same criteria as isSharedReel() in Conversation.jsx
   const videoMessages = messages.filter(msg => {
     if (msg.metadata?.type === 'party_invite') {
       // Support both base64 and URL formats, plus fallback to avatar
       return msg.metadata.introVideoBase64 || msg.metadata.introVideoUrl || msg.metadata.partyAvatar
     }
-    return msg.mediaUrl && (msg.mediaType === 'video' || msg.mediaUrl.includes('.mp4') || msg.mediaUrl.includes('.webm'))
+    if (msg.metadata?.type === 'reel') return true
+    if (msg.metadata?.videoUrl) return true
+    if (msg.mediaUrl && msg.mediaType === 'video') return true
+    if (msg.mediaUrl && (msg.mediaUrl.includes('.mp4') || msg.mediaUrl.includes('.webm') || msg.mediaUrl.includes('.mov') || msg.mediaUrl.includes('blob:'))) return true
+    return false
   })
 
   // Find initial index
@@ -34,17 +39,52 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
 
   const currentMessage = videoMessages[currentIndex]
   const isPartyInvite = currentMessage?.metadata?.type === 'party_invite'
+  const isSharedReel = currentMessage?.metadata?.type === 'reel' || currentMessage?.reelId || currentMessage?.metadata?.reelId
+  const isDirectVideo = !isPartyInvite && !isSharedReel
   // Get reel ID from message or metadata (party invites should include reelId)
-  const reelId = currentMessage?.reelId || currentMessage?.metadata?.reelId || null
+  const metadataReelId = currentMessage?.reelId || currentMessage?.metadata?.reelId || null
+  const [resolvedReelId, setResolvedReelId] = useState(null)
+  const reelId = metadataReelId || resolvedReelId
 
   // Track if video is ready to play
   const [videoReady, setVideoReady] = useState(false)
 
-  // Reset video error when index changes
+  // Reset video error and resolved reel ID when index changes
   useEffect(() => {
     setVideoError(false)
     setVideoReady(false)
+    setResolvedReelId(null)
   }, [currentIndex, currentMessage])
+
+  // Fallback: resolve reel ID by looking up user's reels when metadata doesn't have it
+  useEffect(() => {
+    const resolveReelId = async () => {
+      if (metadataReelId) return // Already have it
+      if (!currentMessage?.metadata) return
+
+      const videoUrl = currentMessage.metadata.videoUrl || currentMessage.metadata.introVideoUrl || currentMessage.mediaUrl
+      const userId = currentMessage.metadata.user?.id
+
+      if (!userId || !videoUrl) return
+
+      try {
+        console.log('Resolving reel ID - fetching reels for user:', userId)
+        const response = await reelsApi.getUserReels(userId)
+        const userReels = response.data || []
+        const matchingReel = userReels.find(r => r.videoUrl === videoUrl)
+        if (matchingReel) {
+          console.log('Resolved reel ID:', matchingReel.id)
+          setResolvedReelId(matchingReel.id)
+        } else {
+          console.warn('Could not resolve reel ID - no matching reel found for video URL')
+        }
+      } catch (error) {
+        console.log('Could not resolve reel ID:', error.message)
+      }
+    }
+
+    resolveReelId()
+  }, [metadataReelId, currentMessage])
 
   // Fetch reel stats from backend when reelId is available
   useEffect(() => {
@@ -63,7 +103,9 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             [reelId]: {
               likes: reel.likeCount || reel.stats?.likes || 0,
               comments: reel.commentCount || reel.stats?.comments || 0,
-              isLiked: reel.isLiked || false
+              isLiked: reel.isLiked || false,
+              reposts: reel.repostCount || reel.stats?.reposts || 0,
+              isReposted: reel.isReposted || false
             }
           }))
         }
@@ -140,7 +182,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
       // Prefer base64 (persistent) over blob URL (session-only)
       return currentMessage.metadata.introVideoBase64 || currentMessage.metadata.introVideoUrl
     }
-    return currentMessage?.mediaUrl
+    return currentMessage?.mediaUrl || currentMessage?.metadata?.videoUrl
   }
 
   const getThumbnail = () => {
@@ -156,6 +198,15 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
         username: currentMessage.metadata.partyHandle || currentMessage.metadata.partyName,
         avatar: currentMessage.metadata.partyAvatar,
         party: null
+      }
+    }
+    // Shared reels carry the original poster's info in metadata.user
+    if (isSharedReel && currentMessage.metadata?.user) {
+      const reelUser = currentMessage.metadata.user
+      return {
+        username: reelUser.username || reelUser.displayName || 'Unknown',
+        avatar: reelUser.avatar || reelUser.avatarUrl,
+        party: reelUser.party || null
       }
     }
     return currentMessage?.isOwn ? {
@@ -176,12 +227,12 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const videoUrl = getVideoUrl()
   const thumbnail = getThumbnail()
   const user = getUser()
-  const isMirrored = currentMessage.isMirrored || currentMessage.metadata?.introVideoMirrored
+  const isMirrored = currentMessage.isMirrored || currentMessage.metadata?.isMirrored || currentMessage.metadata?.introVideoMirrored
 
   // Debug log - important for troubleshooting action buttons
-  console.log('MessageReelViewer - reelId:', reelId, 'isPartyInvite:', isPartyInvite, 'videoError:', videoError, 'videoReady:', videoReady)
-  if (!reelId && isPartyInvite) {
-    console.warn('⚠️ Party invite has no reelId - likes/comments will NOT save to backend. This invite was created before the reel was saved.')
+  console.log('MessageReelViewer - metadataReelId:', metadataReelId, 'resolvedReelId:', resolvedReelId, 'effectiveReelId:', reelId, 'isPartyInvite:', isPartyInvite)
+  if (!reelId && (isSharedReel || isPartyInvite)) {
+    console.warn('⚠️ No reelId available yet - likes/comments will not save until reel ID is resolved')
   }
 
   // Get stats for current reel (from local state or from reel data)
@@ -189,7 +240,9 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const defaultStats = {
     likes: reelData.likeCount || reelData.stats?.likes || 0,
     comments: reelData.commentCount || reelData.stats?.comments || 0,
-    isLiked: reelData.isLiked || false
+    isLiked: reelData.isLiked || false,
+    reposts: reelData.repostCount || reelData.stats?.reposts || 0,
+    isReposted: reelData.isReposted || false
   }
   const messageStats = localStats[reelId || currentMessage.id] || defaultStats
 
@@ -200,8 +253,9 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     user: user,
     isMirrored: isMirrored,
     isLiked: messageStats.isLiked,
+    isReposted: messageStats.isReposted,
     stats: {
-      reposts: reelData.repostCount?.toString() || '0',
+      reposts: messageStats.reposts.toString(),
       likes: messageStats.likes.toString(),
       comments: messageStats.comments.toString(),
       shares: reelData.shareCount?.toString() || '0'
@@ -229,6 +283,20 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     if (changedReelId) {
       onLikeChange?.(changedReelId, liked)
     }
+  }
+
+  // Handle repost change from ReelActions
+  const handleLocalRepostChange = (changedReelId, reposted) => {
+    const stateKey = statsKey
+    console.log('Repost change - key:', stateKey, 'reposted:', reposted)
+    setLocalStats(prev => {
+      const current = prev[stateKey] || defaultStats
+      const newReposts = reposted ? (current.reposts || 0) + 1 : Math.max(0, (current.reposts || 0) - 1)
+      return {
+        ...prev,
+        [stateKey]: { ...current, reposts: newReposts, isReposted: reposted }
+      }
+    })
   }
 
   // Handle comment added from CommentsSection
@@ -370,113 +438,162 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
           </svg>
         </button>
 
-        {/* Right side actions */}
-        <div className="reel-actions-container">
-          <ReelActions
-            user={user}
-            stats={mockReel.stats}
-            onOpenComments={() => setShowComments(true)}
-            reel={mockReel}
-            onTrackActivity={onTrackActivity}
-            onLikeChange={handleLocalLikeChange}
-          />
-        </div>
+        {/* Right side actions - only for shared reels and party invites with a valid reel ID */}
+        {!isDirectVideo && reelId && (
+          <div className="reel-actions-container">
+            <ReelActions
+              user={user}
+              stats={mockReel.stats}
+              onOpenComments={() => setShowComments(true)}
+              reel={mockReel}
+              onTrackActivity={onTrackActivity}
+              onLikeChange={handleLocalLikeChange}
+              onRepostChange={handleLocalRepostChange}
+            />
+          </div>
+        )}
 
         {/* Bottom info - margin-top auto pushes to bottom */}
         <div className="reel-bottom" style={{ marginTop: 'auto' }}>
           <div className="reel-info">
-            {/* Join Party button - above user row */}
-            {isPartyInvite && !currentMessage.isOwn && (() => {
-              const partyId = currentMessage.metadata.partyId
-              const status = joinStatus[partyId] || 'idle'
-              const isAdmin = currentMessage.metadata.role === 'admin'
-
-              const handleJoinParty = async () => {
-                if (!partyId || status === 'joining' || status === 'joined') return
-
-                setJoinStatus(prev => ({ ...prev, [partyId]: 'joining' }))
-
-                try {
-                  console.log('Joining party:', partyId, 'as admin:', isAdmin)
-                  const response = await partiesApi.joinParty(partyId, { asAdmin: isAdmin })
-                  console.log('Join response:', response)
-
-                  // Response is { success: true, data: { joined, requested, upgraded } }
-                  const result = response.data || response
-
-                  if (result.joined) {
-                    setJoinStatus(prev => ({ ...prev, [partyId]: 'joined' }))
-                    onAcceptInvite?.(currentMessage)
-                  } else if (result.requested) {
-                    setJoinStatus(prev => ({ ...prev, [partyId]: 'requested' }))
-                  }
-                } catch (error) {
-                  console.error('Failed to join party:', error)
-                  setJoinStatus(prev => ({ ...prev, [partyId]: 'idle' }))
-                }
-              }
-
-              return (
-                <button
-                  className="join-party-btn"
-                  onClick={handleJoinParty}
-                  disabled={status === 'joining' || status === 'joined'}
-                  style={{
-                    marginBottom: '12px',
-                    alignSelf: 'flex-start',
-                    background: status === 'joined'
-                      ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
-                      : status === 'requested'
-                        ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
-                        : 'linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%)',
-                    border: 'none',
-                    borderRadius: '10px',
-                    padding: '11px 16px',
-                    color: '#fff',
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    cursor: status === 'joining' || status === 'joined' ? 'default' : 'pointer',
-                    opacity: status === 'joining' ? 0.7 : 1,
-                    transition: 'opacity 0.2s ease',
-                  }}
-                >
-                  {status === 'joining' ? (
-                    'Joining...'
-                  ) : status === 'joined' ? (
-                    'Joined!'
-                  ) : status === 'requested' ? (
-                    'Request Sent'
-                  ) : (
-                    isAdmin ? 'Join as Admin' : 'Join Party'
-                  )}
-                </button>
-              )
-            })()}
-            <div className="reel-user-row">
-              <img
-                src={user.avatar || 'https://i.pravatar.cc/40?img=1'}
-                alt={user.username}
-                className="reel-user-avatar"
-                style={{ borderColor: getPartyColor(user.party) }}
-              />
-              <div className="reel-user-details">
-                {user.party && (
-                  <span className="party-tag">{user.party}</span>
-                )}
-                <span className="username">{user.username}</span>
+            {/* Direct video - minimal UI: just avatar + username */}
+            {isDirectVideo ? (
+              <div className="reel-user-row">
+                <img
+                  src={user.avatar || 'https://i.pravatar.cc/40?img=1'}
+                  alt={user.username}
+                  className="reel-user-avatar"
+                  style={{ borderColor: getPartyColor(user.party) }}
+                />
+                <div className="reel-user-details">
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>Sent from</span>
+                  <span className="username">{user.username}</span>
+                </div>
               </div>
-            </div>
-            {getTitle() && <p className="reel-title">{getTitle()}</p>}
-            {getCaption() && <p className="reel-caption">{getCaption()}</p>}
+            ) : (
+              <>
+                {/* Join Party button - party invites only */}
+                {isPartyInvite && !currentMessage.isOwn && (() => {
+                  const partyId = currentMessage.metadata.partyId
+                  const status = joinStatus[partyId] || 'idle'
+                  const isAdmin = currentMessage.metadata.role === 'admin'
+
+                  const handleJoinParty = async () => {
+                    if (!partyId || status === 'joining' || status === 'joined') return
+
+                    setJoinStatus(prev => ({ ...prev, [partyId]: 'joining' }))
+
+                    try {
+                      console.log('Joining party:', partyId, 'as admin:', isAdmin)
+                      const response = await partiesApi.joinParty(partyId, { asAdmin: isAdmin })
+                      console.log('Join response:', response)
+
+                      const result = response.data || response
+
+                      if (result.joined) {
+                        setJoinStatus(prev => ({ ...prev, [partyId]: 'joined' }))
+                        onAcceptInvite?.(currentMessage)
+                      } else if (result.requested) {
+                        setJoinStatus(prev => ({ ...prev, [partyId]: 'requested' }))
+                      }
+                    } catch (error) {
+                      console.error('Failed to join party:', error)
+                      setJoinStatus(prev => ({ ...prev, [partyId]: 'idle' }))
+                    }
+                  }
+
+                  return (
+                    <button
+                      className="join-party-btn"
+                      onClick={handleJoinParty}
+                      disabled={status === 'joining' || status === 'joined'}
+                      style={{
+                        marginBottom: '12px',
+                        alignSelf: 'flex-start',
+                        background: status === 'joined'
+                          ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
+                          : status === 'requested'
+                            ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
+                            : 'linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%)',
+                        border: 'none',
+                        borderRadius: '10px',
+                        padding: '11px 16px',
+                        color: '#fff',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        cursor: status === 'joining' || status === 'joined' ? 'default' : 'pointer',
+                        opacity: status === 'joining' ? 0.7 : 1,
+                        transition: 'opacity 0.2s ease',
+                      }}
+                    >
+                      {status === 'joining' ? (
+                        'Joining...'
+                      ) : status === 'joined' ? (
+                        'Joined!'
+                      ) : status === 'requested' ? (
+                        'Request Sent'
+                      ) : (
+                        isAdmin ? 'Join as Admin' : 'Join Party'
+                      )}
+                    </button>
+                  )
+                })()}
+
+                {/* Target Race Pill - shared reels */}
+                {isSharedReel && currentMessage.metadata?.targetRace && (
+                  <button className="reel-target-pill" style={{ marginBottom: '6px' }}>
+                    <span className="target-pill-dot"></span>
+                    {currentMessage.metadata.targetRace}
+                  </button>
+                )}
+
+                {/* User row with clickable party tag */}
+                <div className="reel-user-row">
+                  <img
+                    src={user.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    alt={user.username}
+                    className="reel-user-avatar clickable"
+                    style={{ borderColor: getPartyColor(user.party) }}
+                    onClick={() => onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar })}
+                  />
+                  <div className="reel-user-details">
+                    {user.party ? (
+                      <button className="party-tag clickable" onClick={() => onOpenPartyProfile?.(user.party)}>
+                        {user.party}
+                      </button>
+                    ) : (
+                      <span className="party-tag">Independent</span>
+                    )}
+                    <button className="username clickable" onClick={() => onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar })}>
+                      {user.username}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Title - shared reels use metadata.title, party invites use getTitle() */}
+                {(isSharedReel && currentMessage.metadata?.title) ? (
+                  <p className="reel-title">{currentMessage.metadata.title}</p>
+                ) : getTitle() ? (
+                  <p className="reel-title">{getTitle()}</p>
+                ) : null}
+
+                {/* Description/Caption - shared reels use metadata.caption, party invites use getCaption() */}
+                {(isSharedReel && currentMessage.metadata?.caption && currentMessage.metadata.caption !== 'Shared a reel' && currentMessage.metadata.caption !== 'Sent a video') ? (
+                  <p className="reel-caption">{currentMessage.metadata.caption}</p>
+                ) : getCaption() ? (
+                  <p className="reel-caption">{getCaption()}</p>
+                ) : null}
+              </>
+            )}
           </div>
 
-          {/* Nominate button - right side */}
-          {isPartyInvite && !currentMessage.isOwn && (
+          {/* Nominate button - for shared reels and party invites */}
+          {(isSharedReel || (isPartyInvite && !currentMessage.isOwn)) && (
             <button
               className="nominate-btn"
               onClick={() => {
-                // Nominate action - same as in regular reels
                 console.log('Nominate clicked')
+                onTrackActivity?.('nominate', currentMessage)
               }}
             >
               <span>Nominate</span>
@@ -485,8 +602,8 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
         </div>
       </div>
 
-      {/* Comments Section */}
-      {showComments && (
+      {/* Comments Section - only for shared reels and party invites with a valid reel ID */}
+      {showComments && !isDirectVideo && reelId && (
         <CommentsSection
           reel={mockReel}
           onClose={() => setShowComments(false)}

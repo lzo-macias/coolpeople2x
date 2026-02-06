@@ -231,21 +231,21 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
     setRepostCount(stats?.reposts || '0')
   }, [reel?.id, reel?.isLiked, stats?.likes, reel?.isReposted, stats?.reposts])
 
-  // Calculate dots menu position when it opens
-  useEffect(() => {
-    if (showDotsMenu && dotsButtonRef.current) {
+  // Calculate dots menu position synchronously on click
+  const openDotsMenu = () => {
+    if (dotsButtonRef.current) {
       const rect = dotsButtonRef.current.getBoundingClientRect()
       setDotsMenuPosition({
-        position: 'fixed',
         bottom: window.innerHeight - rect.top + 4,
         right: window.innerWidth - rect.left + 8,
       })
     }
-  }, [showDotsMenu])
+    setShowDotsMenu(true)
+  }
 
-  // Close dots menu when page becomes inactive (user navigates away)
+  // Close menus when page becomes inactive (user navigates away)
   useEffect(() => {
-    if (!isPageActive) {
+    if (isPageActive === false) {
       setShowDotsMenu(false)
       setShowHideModal(false)
       setShowReportModal(false)
@@ -418,7 +418,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
       {/* Three dots menu */}
       <div className="dots-btn-wrapper" ref={dotsButtonRef}>
-        <button className="action-btn dots-btn" onClick={() => setShowDotsMenu(true)}>
+        <button className="action-btn dots-btn" onClick={openDotsMenu}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2" />
             <circle cx="12" cy="12" r="2" />

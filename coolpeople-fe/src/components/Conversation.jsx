@@ -1270,22 +1270,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                         muted
                         playsInline
                       />
-                      <div className="shared-reel-overlay">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white" stroke="none">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </div>
                     </div>
-                    {(() => {
-                      // Get caption, but filter out generic fallback text
-                      const caption = msg.metadata?.caption || msg.text || msg.content
-                      const isGenericText = !caption || caption === 'Shared a reel' || caption === 'Sent a video'
-                      return !isGenericText && (
-                        <div className="shared-reel-caption">
-                          {caption}
-                        </div>
-                      )
-                    })()}
                   </div>
                 ) : msg.mediaUrl ? (
                   <div
@@ -1441,6 +1426,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           senderUser={user}
           currentUserAvatar={userAvatar}
           onTrackActivity={onTrackActivity}
+          onOpenProfile={onOpenProfile}
+          onOpenPartyProfile={onOpenPartyProfile}
         />
       )}
 

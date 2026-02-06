@@ -1,19 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
 import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/CreateScreen.css'
-
-// Mock platform users for tagging
-const mockPlatformUsers = [
-  { id: 1, username: 'angelrivas', name: 'Angel Rivas', avatar: 'https://i.pravatar.cc/100?img=1', isOnPlatform: true },
-  { id: 2, username: 'maya.creates', name: 'Maya Johnson', avatar: 'https://i.pravatar.cc/100?img=5', isOnPlatform: true },
-  { id: 3, username: 'jordan_photo', name: 'Jordan Smith', avatar: 'https://i.pravatar.cc/100?img=8', isOnPlatform: true },
-  { id: 4, username: 'alex.design', name: 'Alex Chen', avatar: 'https://i.pravatar.cc/100?img=11', isOnPlatform: true },
-  { id: 5, username: 'sam_music', name: 'Sam Williams', avatar: 'https://i.pravatar.cc/100?img=15', isOnPlatform: true },
-  { id: 6, username: 'taylor.art', name: 'Taylor Brown', avatar: 'https://i.pravatar.cc/100?img=20', isOnPlatform: true },
-]
+import { messagesApi, usersApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 // Mock phone contacts
 const mockContacts = [
@@ -26,8 +18,11 @@ const mockContacts = [
 ]
 
 function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, currentUserId }) {
+  const { user: authUser } = useAuth()
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
+  const [platformUsers, setPlatformUsers] = useState([])
+  const [loadingPlatformUsers, setLoadingPlatformUsers] = useState(false)
   const [showAddSound, setShowAddSound] = useState(false)
   const [selectedSound, setSelectedSound] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -120,6 +115,73 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
     saveDraftsToStorage(drafts)
   }, [drafts])
+
+  // Fetch real platform users (DM contacts + following) for tagging
+  const fetchPlatformUsers = useCallback(async () => {
+    if (!authUser?.id) return
+    setLoadingPlatformUsers(true)
+    try {
+      const users = []
+      const seenIds = new Set()
+
+      // 1. Fetch recent DM conversations
+      try {
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data) {
+          conversationsRes.data.forEach(conv => {
+            const otherUser = conv.otherUser
+            if (otherUser && !seenIds.has(otherUser.id)) {
+              seenIds.add(otherUser.id)
+              users.push({
+                id: otherUser.id,
+                username: otherUser.handle || otherUser.username || otherUser.displayName || 'user',
+                name: otherUser.name || otherUser.displayName || otherUser.handle || 'User',
+                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/100?u=${otherUser.id}`,
+                isOnPlatform: true,
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch conversations for tagging:', e)
+      }
+
+      // 2. Fetch following
+      try {
+        const followingRes = await usersApi.getFollowing(authUser.id)
+        if (followingRes.data) {
+          followingRes.data.slice(0, 20).forEach(f => {
+            const followedUser = f.following || f
+            if (followedUser && !seenIds.has(followedUser.id)) {
+              seenIds.add(followedUser.id)
+              users.push({
+                id: followedUser.id,
+                username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
+                name: followedUser.name || followedUser.displayName || followedUser.handle || 'User',
+                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/100?u=${followedUser.id}`,
+                isOnPlatform: true,
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch following for tagging:', e)
+      }
+
+      setPlatformUsers(users)
+    } catch (error) {
+      console.error('Error fetching platform users:', error)
+    } finally {
+      setLoadingPlatformUsers(false)
+    }
+  }, [authUser?.id])
+
+  // Fetch platform users when tag flow opens
+  useEffect(() => {
+    if (showTagFlow && tagSource === 'platform' && platformUsers.length === 0) {
+      fetchPlatformUsers()
+    }
+  }, [showTagFlow, tagSource, platformUsers.length, fetchPlatformUsers])
 
   // Clear all drafts - call window.clearDrafts() in browser console
   useEffect(() => {
@@ -611,7 +673,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const getFilteredUsers = () => {
     const query = tagQuery.toLowerCase()
     if (tagSource === 'platform') {
-      return mockPlatformUsers.filter(user =>
+      return platformUsers.filter(user =>
         user.username.toLowerCase().includes(query) ||
         user.name.toLowerCase().includes(query)
       )
