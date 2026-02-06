@@ -816,6 +816,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               lastMessage: convData.lastMessage || existing.lastMessage,
               lastMessageAt: convData.lastMessageAt,
               timestamp: formatTimestamp(convData.lastMessageAt),
+              messages: convData.messages || existing.messages, // Include messages for Conversation component
             }
             hasChanges = true
           }
@@ -837,6 +838,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             isPinned: false,
             isMuted: false,
             isHidden: false,
+            messages: convData.messages || [], // Include messages for Conversation component
           })
           hasChanges = true
         }

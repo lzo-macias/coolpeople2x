@@ -98,7 +98,10 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const { user: currentUser, updateUser, refreshUser } = useAuth()
   const [messageText, setMessageText] = useState('')
   const [showCreateScreen, setShowCreateScreen] = useState(false)
-  const [localMessages, setLocalMessages] = useState([])
+  const [localMessages, setLocalMessages] = useState(() => {
+    // Initialize with messages from conversation prop if available (e.g., from PostScreen send-to)
+    return conversation?.messages || []
+  })
   const [fetchedMessages, setFetchedMessages] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [showPartySettings, setShowPartySettings] = useState(false)
@@ -153,6 +156,24 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   // Check if a message is a party invite
   const isPartyInvite = (msg) => {
     return msg.metadata?.type === 'party_invite'
+  }
+
+  // Check if a message is a shared reel
+  const isSharedReel = (msg) => {
+    // Check metadata type
+    if (msg.metadata?.type === 'reel') return true
+    // Check top-level media fields
+    if (msg.mediaUrl && msg.mediaType === 'video') return true
+    // Check for video URL in metadata
+    if (msg.metadata?.videoUrl) return true
+    // Check for mediaUrl without explicit type (assume video if it's a video file)
+    if (msg.mediaUrl && (msg.mediaUrl.includes('.mp4') || msg.mediaUrl.includes('.webm') || msg.mediaUrl.includes('.mov') || msg.mediaUrl.includes('blob:'))) return true
+    return false
+  }
+
+  // Get the video URL for a message (handles both top-level and metadata)
+  const getMessageVideoUrl = (msg) => {
+    return msg.mediaUrl || msg.metadata?.videoUrl || msg.metadata?.thumbnail
   }
 
   // Track message to show in reel viewer
@@ -999,20 +1020,6 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
   return (
     <div className="conversation-page">
-      {/* DEBUG BANNER - Remove after debugging */}
-      <div style={{
-        background: 'lime',
-        color: 'black',
-        padding: '20px',
-        fontSize: '18px',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        position: 'relative',
-        zIndex: 99999
-      }}>
-        CONVERSATION WITH: {user?.username || 'UNKNOWN'} (ID: {user?.id?.slice(0,8) || 'NO ID'})
-      </div>
-
       {/* Header */}
       <div className="conversation-header">
         <button className="conversation-back-btn" onClick={onBack}>
@@ -1248,6 +1255,37 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                         {msg.isOwn ? (isGroupChat ? 'Created' : 'Sent') : (msg.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party')}
                       </button>
                     </div>
+                  </div>
+                ) : isSharedReel(msg) ? (
+                  <div
+                    className="shared-reel-card"
+                    onClick={(e) => { e.stopPropagation(); handleOpenReelViewer(msg); }}
+                  >
+                    <div className="shared-reel-video">
+                      <video
+                        src={getMessageVideoUrl(msg)}
+                        className={`shared-reel-preview ${msg.isMirrored || msg.metadata?.isMirrored ? 'mirrored' : ''}`}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                      />
+                      <div className="shared-reel-overlay">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white" stroke="none">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </div>
+                    </div>
+                    {(() => {
+                      // Get caption, but filter out generic fallback text
+                      const caption = msg.metadata?.caption || msg.text || msg.content
+                      const isGenericText = !caption || caption === 'Shared a reel' || caption === 'Sent a video'
+                      return !isGenericText && (
+                        <div className="shared-reel-caption">
+                          {caption}
+                        </div>
+                      )
+                    })()}
                   </div>
                 ) : msg.mediaUrl ? (
                   <div

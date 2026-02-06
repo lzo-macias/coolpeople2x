@@ -1345,3 +1345,81 @@
 .party-conversion-join-btn:active {
   transform: scale(0.96);
 }
+
+/* Shared Reel Card */
+.shared-reel-card {
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid #FF2A55;
+  max-width: 220px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.shared-reel-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(255, 42, 85, 0.3);
+}
+
+.shared-reel-card:active {
+  transform: scale(0.98);
+}
+
+.shared-reel-video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9/16;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.shared-reel-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shared-reel-preview.mirrored {
+  transform: scaleX(-1);
+}
+
+.shared-reel-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.shared-reel-card:hover .shared-reel-overlay {
+  opacity: 1;
+}
+
+.shared-reel-overlay svg {
+  margin-left: 3px;
+}
+
+.shared-reel-caption {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #fff;
+  line-height: 1.4;
+  background: #1a1a1a;
+  border-top: 1px solid #333;
+}
+
+/* Own shared reel alignment */
+.chat-message.own .shared-reel-card {
+  margin-left: auto;
+}
