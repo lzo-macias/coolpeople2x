@@ -515,7 +515,10 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         following: fetchedProfile.followingCount?.toString() || passedCandidate?.following || defaults.following,
         cpPoints: fetchedProfile.points?.[0]?.total || passedCandidate?.score || defaults.cpPoints,
         change: passedCandidate?.change || defaults.change,
-        races: fetchedProfile.points?.map(p => p.raceName) || passedCandidate?.races || defaults.races,
+        // Only include candidate races (CANDIDATE_VS_CANDIDATE), exclude party races
+        races: fetchedProfile.points
+          ?.filter(p => p.raceType === 'CANDIDATE_VS_CANDIDATE')
+          .map(p => p.raceName) || passedCandidate?.races || defaults.races,
         racesCompeting: racesCompetingWithPoints,
         racesFollowing: fetchedProfile.racesFollowing || passedCandidate?.racesFollowing || [],
         racesWon: fetchedProfile.racesWon || passedCandidate?.racesWon || [],
@@ -597,6 +600,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [sparklinePoints, setSparklinePoints] = useState(null)
   const [periodChangeValue, setPeriodChangeValue] = useState(null)
   const [liveCpPoints, setLiveCpPoints] = useState(null)
+  const [liveCpPointsRaceId, setLiveCpPointsRaceId] = useState(null)
   const [showFollowingModal, setShowFollowingModal] = useState(false)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [showRacesModal, setShowRacesModal] = useState(false)
@@ -630,6 +634,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     setIsFavorited(candidate.isFavorited || false)
     setLocalFollowerCount(null) // Reset local count when candidate changes
   }, [candidate.isFollowing, candidate.isFavorited])
+
+  // Set selectedRace to default race (CoolPeople) or first race when candidate changes
+  useEffect(() => {
+    if (candidate.races && candidate.races.length > 0) {
+      // Prefer 'CoolPeople' as default if candidate is in that race
+      const defaultRace = candidate.races.includes('CoolPeople') ? 'CoolPeople' : candidate.races[0]
+      setSelectedRace(defaultRace)
+    }
+  }, [candidate.id, candidate.userId, candidate.races])
 
   // Fetch real sparkline data when period or candidate changes
   useEffect(() => {
@@ -679,8 +692,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     // Listen for live point updates
     const cleanup = onPointsUpdate((data) => {
       if (data.competitorId !== candidateId) return
-      // Update live points
+      // Update live points and track which race it's for
       setLiveCpPoints(data.newPoints)
+      setLiveCpPointsRaceId(data.raceId)
       // Re-fetch sparkline for the current period
       const racePoint = points.find(p => p.raceId === data.raceId)
       if (racePoint?.ledgerId) {
@@ -706,6 +720,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   // Reset live points when candidate changes
   useEffect(() => {
     setLiveCpPoints(null)
+    setLiveCpPointsRaceId(null)
   }, [candidate.id, candidate.userId])
 
   // Handle follow/unfollow with API call
@@ -1170,7 +1185,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     setDropPosition(null)
   }
 
-  const partyColor = getPartyColor(candidate.party)
+  const partyColor = getPartyColor(typeof candidate.party === 'object' ? candidate.party?.name : candidate.party)
 
   // Get color from gradient based on position (0-10 score)
   // Matches slider gradient: #FF2A55 (red) -> #8C2AFF (purple) -> #00F2EA (cyan)
@@ -1329,7 +1344,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                   className="profile-party-btn"
                   onClick={() => onPartyClick?.(candidate.party)}
                 >
-                  {candidate.party}
+                  {typeof candidate.party === 'object' ? candidate.party.name : candidate.party}
                 </button>
               ) : (
                 <span className="profile-party-text">Independent</span>
@@ -1624,9 +1639,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
 
         {/* CoolPeople Points Card */}
         {(() => {
-          // Always use candidate's real cpPoints from API
-          const cpPoints = liveCpPoints != null ? liveCpPoints : (candidate.cpPoints || 0)
-          const rawChange = candidate.change != null ? Number(candidate.change) : 0
+          // Get race-specific points data based on selectedRace
+          const racePointData = (candidate.points || []).find(p => p.raceName === selectedRace) || candidate.points?.[0]
+          // Use live points only if the update was for the currently selected race
+          const useLivePoints = liveCpPoints != null && liveCpPointsRaceId === racePointData?.raceId
+          const cpPoints = useLivePoints ? liveCpPoints : (racePointData?.total || candidate.cpPoints || 0)
+          const rawChange = racePointData?.change != null ? Number(racePointData.change) : (candidate.change != null ? Number(candidate.change) : 0)
           const raceChange = `${rawChange >= 0 ? '+' : ''}${rawChange.toFixed(2)}`
           const currentTier = getCurrentTier(cpPoints)
           const nextTier = getNextTier(cpPoints)
@@ -1874,7 +1892,12 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {candidate.races && candidate.races.length > 1 && (
           <div className="tag-pills-container">
             <div className="tag-pills">
-              {candidate.races.map((race) => (
+              {[...candidate.races].sort((a, b) => {
+                // Default race 'CoolPeople' always first
+                if (a === 'CoolPeople') return -1
+                if (b === 'CoolPeople') return 1
+                return 0
+              }).map((race) => (
                 <button
                   key={race}
                   className={`tag-pill ${selectedRace === race ? 'active' : ''}`}

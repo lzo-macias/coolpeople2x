@@ -35,7 +35,7 @@ export const getPublicProfile = async (
       pointLedgers: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
@@ -49,14 +49,14 @@ export const getPublicProfile = async (
       raceFollows: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
       raceCompetitions: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
@@ -121,10 +121,12 @@ export const getPublicProfile = async (
   profile.racesFollowing = user.raceFollows.map((f) => ({
     id: f.race.id,
     title: f.race.title,
+    raceType: f.race.raceType,
   }));
   profile.racesCompeting = user.raceCompetitions.map((c) => ({
     id: c.race.id,
     title: c.race.title,
+    raceType: c.race.raceType,
   }));
 
   // Add candidate-only fields
@@ -135,6 +137,7 @@ export const getPublicProfile = async (
       tier: ledger.tier,
       raceId: ledger.raceId,
       raceName: ledger.race.title,
+      raceType: ledger.race.raceType,
     }));
     profile.reviewsCount = user._count.reviewsReceived;
 
@@ -185,7 +188,7 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
       pointLedgers: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
@@ -206,14 +209,14 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
       raceFollows: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
       raceCompetitions: {
         include: {
           race: {
-            select: { id: true, title: true },
+            select: { id: true, title: true, raceType: true },
           },
         },
       },
@@ -254,10 +257,12 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
     racesFollowing: user.raceFollows.map((f) => ({
       id: f.race.id,
       title: f.race.title,
+      raceType: f.race.raceType,
     })),
     racesCompeting: user.raceCompetitions.map((c) => ({
       id: c.race.id,
       title: c.race.title,
+      raceType: c.race.raceType,
     })),
   };
 
@@ -269,6 +274,7 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
       tier: ledger.tier,
       raceId: ledger.raceId,
       raceName: ledger.race.title,
+      raceType: ledger.race.raceType,
     }));
     profile.reviewsCount = user._count.reviewsReceived;
 

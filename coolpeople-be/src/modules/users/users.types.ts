@@ -31,8 +31,8 @@ export interface PublicProfile {
   isFavorited?: boolean;
 
   // Races (sitewide - available for all profiles)
-  racesFollowing?: { id: string; title: string }[];
-  racesCompeting?: { id: string; title: string }[];
+  racesFollowing?: { id: string; title: string; raceType: string }[];
+  racesCompeting?: { id: string; title: string; raceType: string }[];
 
   // Candidate-only fields
   points?: {
@@ -41,6 +41,7 @@ export interface PublicProfile {
     tier: Tier;
     raceId: string;
     raceName: string;
+    raceType: string;
   }[];
   reviewsCount?: number;
   averageRating?: number;
@@ -64,8 +65,8 @@ export interface PrivateProfile extends PublicProfile {
   }[];
 
   // Races
-  racesFollowing: { id: string; title: string }[];
-  racesCompeting: { id: string; title: string }[];
+  racesFollowing: { id: string; title: string; raceType: string }[];
+  racesCompeting: { id: string; title: string; raceType: string }[];
 
   // Follow requests (pending count for private accounts)
   pendingFollowRequestsCount?: number;

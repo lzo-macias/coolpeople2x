@@ -124,8 +124,11 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   // Get CP points from fetched stats
   const partyCpPoints = partyData?.stats?.cpPoints ?? party.stats?.cpPoints ?? party.cpPoints ?? 0
 
-  // Build race data from fetched races
-  const partyRaceData = races.reduce((acc, race) => {
+  // Filter to only party vs party races (exclude candidate races)
+  const partyRaces = races.filter(r => r.raceType === 'PARTY_VS_PARTY')
+
+  // Build race data from fetched party races
+  const partyRaceData = partyRaces.reduce((acc, race) => {
     acc[race.raceName] = {
       ledgerId: race.ledgerId,
       cpPoints: race.totalPoints,
@@ -135,7 +138,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     return acc
   }, {})
 
-  // Ensure Best Party exists with default values if no races
+  // Ensure Best Party exists with default values if no party races
   if (!partyRaceData['Best Party'] && Object.keys(partyRaceData).length === 0) {
     partyRaceData['Best Party'] = {
       cpPoints: partyCpPoints,
@@ -144,8 +147,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     }
   }
 
-  // Get race names for pills
-  const raceNames = races.length > 0 ? races.map(r => r.raceName) : ['Best Party']
+  // Get race names for pills (only party races)
+  const raceNames = partyRaces.length > 0 ? partyRaces.map(r => r.raceName) : ['Best Party']
 
   // Format members for display
   const formattedMembers = members.map(m => ({
@@ -163,8 +166,8 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
     console.log('PartyProfile: formattedMembers:', formattedMembers)
   }
 
-  // Format races for display
-  const formattedRaces = races.map(r => ({
+  // Format races for display (only party races)
+  const formattedRaces = partyRaces.map(r => ({
     id: r.id,
     name: r.raceName,
     position: r.position,
@@ -241,10 +244,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
 
   // Fetch real sparkline data when period or race changes
   useEffect(() => {
-    if (!races || races.length === 0) return
+    // Use filtered party races only
+    const filteredRaces = races.filter(r => r.raceType === 'PARTY_VS_PARTY')
+    if (!filteredRaces || filteredRaces.length === 0) return
 
     // Find the race matching selectedRace, or first available
-    const raceData = races.find(r => r.raceName === selectedRace) || races[0]
+    const raceData = filteredRaces.find(r => r.raceName === selectedRace) || filteredRaces[0]
     if (!raceData?.ledgerId) return
 
     let cancelled = false
@@ -273,10 +278,12 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
 
   // Real-time points updates via WebSocket
   useEffect(() => {
-    if (!races || races.length === 0) return
+    // Use filtered party races only
+    const filteredRaces = races.filter(r => r.raceType === 'PARTY_VS_PARTY')
+    if (!filteredRaces || filteredRaces.length === 0) return
 
     const partyId = passedParty?.id
-    const raceIds = races.map(r => r.raceId).filter(Boolean)
+    const raceIds = filteredRaces.map(r => r.raceId).filter(Boolean)
     if (!partyId || raceIds.length === 0) return
 
     // Join race rooms
@@ -287,7 +294,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
       if (data.competitorId !== partyId) return
       setLiveCpPoints(data.newPoints)
       // Re-fetch sparkline for the current period
-      const raceData = races.find(r => r.raceId === data.raceId)
+      const raceData = filteredRaces.find(r => r.raceId === data.raceId)
       if (raceData?.ledgerId) {
         pointsApi.getSparkline(raceData.ledgerId, PERIOD_MAP[selectedPeriod])
           .then(res => {
@@ -644,7 +651,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                 <span className="stat-label">Followers</span>
               </div>
               <div className="stat-item clickable" onClick={() => setShowRacesModal(true)}>
-                <span className="stat-number">{partyData?.stats?.raceCount || races.length || 1}</span>
+                <span className="stat-number">{partyRaces.length || 1}</span>
                 <span className="stat-label">Races</span>
               </div>
               <div className="stat-item">
