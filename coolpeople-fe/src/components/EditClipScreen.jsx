@@ -605,7 +605,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [draggingTextId])
 
-  const canProceed = !isRaceMode || (raceName?.trim()?.length > 0 && raceDeadline)
+  const canProceed = !isRaceMode || selectedExistingRace || (raceName?.trim()?.length > 0 && raceDeadline)
 
   // Debug logging for quote nomination rendering
   console.log('EditClipScreen render:', {
