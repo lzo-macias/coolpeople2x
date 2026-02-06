@@ -334,19 +334,34 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       }
 
       if (sendTogether) {
-        // Gather ALL member IDs from parties, groupchats, and individual users
-        // into one large groupchat
-        try {
-          const allMemberIds = await collectAllMemberIds(recipients)
-          if (allMemberIds.length > 0) {
-            const gcRes = await groupchatsApi.create(allMemberIds)
-            if (gcRes.data?.id) {
-              await groupchatsApi.sendMessage(gcRes.data.id, 'Sent a video', videoMetadata)
-              console.log('Sent video to combined group chat:', gcRes.data.id, 'with', allMemberIds.length, 'members')
-            }
+        // Parties get sent separately (party chat), everything else grouped into one groupchat
+        const partyRecipients = recipients.filter(u => u.type === 'party')
+        const nonPartyRecipients = recipients.filter(u => u.type !== 'party')
+
+        // Send to each party individually via party chat
+        for (const party of partyRecipients) {
+          try {
+            await partiesApi.sendChatMessage(party.partyId, 'Sent a video')
+            console.log('Sent video to party chat:', party.username)
+          } catch (e) {
+            console.error('Failed to send to party:', party.username, e)
           }
-        } catch (e) {
-          console.error('Failed to create combined group chat / send:', e)
+        }
+
+        // Group all non-party recipients into one groupchat
+        if (nonPartyRecipients.length > 0) {
+          try {
+            const allMemberIds = await collectAllMemberIds(nonPartyRecipients)
+            if (allMemberIds.length > 0) {
+              const gcRes = await groupchatsApi.create(allMemberIds)
+              if (gcRes.data?.id) {
+                await groupchatsApi.sendMessage(gcRes.data.id, 'Sent a video', videoMetadata)
+                console.log('Sent video to combined group chat:', gcRes.data.id, 'with', allMemberIds.length, 'members')
+              }
+            }
+          } catch (e) {
+            console.error('Failed to create combined group chat / send:', e)
+          }
         }
       } else {
         // Send separately to each recipient

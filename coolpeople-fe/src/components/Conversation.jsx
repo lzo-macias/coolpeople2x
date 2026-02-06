@@ -124,7 +124,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   const [isJoining, setIsJoining] = useState(false)
   const [canChat, setCanChat] = useState(true) // Whether user has chat permission in party
   const [convertedToParty, setConvertedToParty] = useState(null) // Party info if groupchat was converted
-  const [partyName, setPartyName] = useState(conversation.party?.name || null) // Party name if groupchat converted to party
+  const [partyName, setPartyName] = useState(conversation.party?.name || conversation.partyName || null) // Party name if groupchat converted to party
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingIntervalRef = useRef(null)
@@ -1035,12 +1035,12 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               <div
                 className="conversation-avatar-group"
                 onClick={() => {
-                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name
+                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName
                   if (pName && onOpenPartyProfile) {
                     onOpenPartyProfile(pName)
                   }
                 }}
-                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name) ? 'pointer' : 'default' }}
+                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName) ? 'pointer' : 'default' }}
               >
                 {recipients.slice(0, 3).map((recipient, idx) => (
                   <div
@@ -1060,14 +1060,14 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
               <span
                 className="conversation-username"
                 onClick={() => {
-                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name
+                  const pName = convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName
                   if (pName && onOpenPartyProfile) {
                     onOpenPartyProfile(pName)
                   }
                 }}
-                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name) ? 'pointer' : 'default' }}
+                style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName) ? 'pointer' : 'default' }}
               >
-                {convertedToParty?.partyName || partyName || conversation.party?.name || `${recipients.length} people`}
+                {convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName || user?.displayName || (recipients.length > 0 ? `${recipients.length + 1} people` : user?.username)}
               </span>
             </>
           ) : (
