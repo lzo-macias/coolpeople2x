@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { usersApi, searchApi, favoritesApi } from '../services/api'
 import '../styling/PostScreen.css'
+import '../styling/PartyCreationFlow.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
@@ -22,6 +25,16 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
   const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
   const [selectedSendTo, setSelectedSendTo] = useState([])
+  const [selectedSendToUsers, setSelectedSendToUsers] = useState([]) // Users/chats selected from picker
+  const [showSendToPicker, setShowSendToPicker] = useState(false)
+  const [sendToSearch, setSendToSearch] = useState('')
+  const [sendToSearchResults, setSendToSearchResults] = useState([])
+  const [sendToSuggestions, setSendToSuggestions] = useState([]) // Combined chats and users
+  const [isSearchingSendTo, setIsSearchingSendTo] = useState(false)
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [sendTogether, setSendTogether] = useState(false) // Send as group or separate
+  const sendToSearchRef = useRef(null)
+  const searchTimeoutRef = useRef(null)
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
   const [wantToCompete, setWantToCompete] = useState(false) // Default to just following (not competing)
@@ -82,6 +95,194 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
 
   const locationOptions = ['Dumbo', 'Brooklyn', 'Manhattan', 'Queens']
 
+  // Load suggested chats and users when send-to picker opens (same pattern as user-picker-modal)
+  useEffect(() => {
+    if (!showSendToPicker) return
+
+    const fetchSuggestedUsers = async () => {
+      setIsLoadingSuggestions(true)
+      try {
+        // Fetch ALL users AND relationship data in parallel (same as PartyCreationFlow)
+        const [allUsersRes, followersRes, followingRes, favoritesRes] = await Promise.all([
+          searchApi.search('', { type: 'users', limit: 100 }).catch(() => ({ users: [] })),
+          usersApi.getFollowers(currentUserId || 'me').catch(() => ({ data: [] })),
+          usersApi.getFollowing(currentUserId || 'me').catch(() => ({ data: [] })),
+          favoritesApi.getFavorites().catch(() => ({ data: [] }))
+        ])
+
+        // Extract all users from search
+        const allUsers = allUsersRes.data?.users || allUsersRes.users || []
+
+        // Extract relationship data
+        const followers = followersRes.data?.followers || followersRes.followers || followersRes.data || []
+        const following = followingRes.data?.following || followingRes.following || followingRes.data || []
+        const favorites = Array.isArray(favoritesRes.data) ? favoritesRes.data : (favoritesRes.favorites || [])
+
+        // Create sets for quick lookup
+        const followerIds = new Set(followers.map(f => f.id))
+        const followingIds = new Set(following.map(f => f.id))
+        const favoriteIds = new Set(favorites.map(f => f.favoritedUser?.id || f.id))
+
+        // Get conversation partner IDs
+        const conversationUserIds = new Set(
+          Object.values(conversations || {})
+            .filter(c => c.participantId || c.userId)
+            .map(c => c.participantId || c.userId)
+        )
+
+        // Build conversations list from props
+        const conversationsList = Object.values(conversations || {}).map(conv => ({
+          id: conv.id || conv.recipientId,
+          name: conv.name || conv.title || conv.participantName,
+          username: conv.participantUsername,
+          avatar: conv.avatar || conv.participantAvatar,
+          type: conv.isGroup ? 'group' : 'dm',
+          isChat: true
+        })).filter(c => c.name)
+
+        // Add party chat if user has a party
+        const partyChats = []
+        if (userParty && userParty.name && userParty.name !== 'Independent') {
+          partyChats.push({
+            id: `party-${userParty.id || userParty.name}`,
+            name: userParty.name,
+            avatar: userParty.avatar || userParty.logo,
+            type: 'party',
+            isChat: true
+          })
+        }
+
+        // Score all users based on relationship (same algorithm as PartyCreationFlow)
+        const scoredUsers = allUsers
+          .filter(u => u.id !== currentUserId)
+          .map(user => {
+            let score = 0
+            const reasons = []
+
+            // Mutual = follow each other = highest priority
+            if (followerIds.has(user.id) && followingIds.has(user.id)) {
+              score += 100
+              reasons.push('mutual')
+            }
+
+            // Favorites = explicitly marked as important
+            if (favoriteIds.has(user.id)) {
+              score += 80
+              reasons.push('favorite')
+            }
+
+            // Recent conversations = active engagement
+            if (conversationUserIds.has(user.id)) {
+              score += 60
+              reasons.push('messaged')
+            }
+
+            // Followers = they're interested in you
+            if (followerIds.has(user.id) && !reasons.includes('mutual')) {
+              score += 40
+              reasons.push('follower')
+            }
+
+            // Following = you're interested in them
+            if (followingIds.has(user.id) && !reasons.includes('mutual')) {
+              score += 20
+              reasons.push('following')
+            }
+
+            return {
+              id: user.id,
+              username: user.username,
+              name: user.displayName || user.name,
+              avatar: user.avatarUrl || user.avatar,
+              userType: user.userType,
+              score,
+              reasons,
+              isChat: false
+            }
+          })
+          .sort((a, b) => b.score - a.score)
+
+        // Combine all: party chats first, then conversations, then scored users
+        const allSuggestions = [
+          ...partyChats,
+          ...conversationsList.slice(0, 5),
+          ...scoredUsers
+        ]
+
+        setSendToSuggestions(allSuggestions)
+      } catch (err) {
+        console.error('Failed to load suggestions:', err)
+        setSendToSuggestions([])
+      } finally {
+        setIsLoadingSuggestions(false)
+      }
+    }
+
+    fetchSuggestedUsers()
+    // Focus search input
+    setTimeout(() => sendToSearchRef.current?.focus(), 100)
+  }, [showSendToPicker, currentUserId, conversations, userParty])
+
+  // Search all users when search query changes (same pattern as PartyCreationFlow)
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // If no search query, clear search results
+    if (!sendToSearch || sendToSearch.length < 2) {
+      setSendToSearchResults([])
+      setIsSearchingSendTo(false)
+      return
+    }
+
+    // Debounce search
+    setIsSearchingSendTo(true)
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await searchApi.search(sendToSearch, { type: 'users' })
+        const users = response.data?.users || response.users || []
+        // Transform to match our format
+        const transformedUsers = users
+          .filter(u => u.id !== currentUserId)
+          .map(u => ({
+            id: u.id,
+            username: u.username,
+            name: u.displayName || u.name,
+            avatar: u.avatarUrl || u.avatar,
+            userType: u.userType,
+            score: 0,
+            reasons: [],
+            isChat: false
+          }))
+        setSendToSearchResults(transformedUsers)
+      } catch (error) {
+        console.error('Search error:', error)
+        setSendToSearchResults([])
+      } finally {
+        setIsSearchingSendTo(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [sendToSearch, currentUserId])
+
+  // Get reason badge text (same as PartyCreationFlow)
+  const getReasonBadge = (reasons) => {
+    if (!reasons || reasons.length === 0) return null
+    if (reasons.includes('mutual')) return 'Mutual'
+    if (reasons.includes('favorite')) return 'Favorite'
+    if (reasons.includes('messaged')) return 'Messaged'
+    if (reasons.includes('follower')) return 'Follows you'
+    if (reasons.includes('following')) return 'Following'
+    return null
+  }
+
   const togglePostTo = (option) => {
     setSelectedPostTo(prev =>
       prev.includes(option)
@@ -98,6 +299,20 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
     )
   }
 
+  const toggleSendToUser = (user) => {
+    setSelectedSendToUsers(prev => {
+      const exists = prev.find(u => u.id === user.id)
+      if (exists) {
+        return prev.filter(u => u.id !== user.id)
+      }
+      return [...prev, user]
+    })
+  }
+
+  const isUserSelectedForSend = (userId) => {
+    return selectedSendToUsers.some(u => u.id === userId)
+  }
+
   const toggleSocial = (social) => {
     setSelectedSocials(prev =>
       prev.includes(social)
@@ -112,7 +327,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined })
   }
 
   const handleSaveDraft = () => {
@@ -365,23 +580,38 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           </div>
         </div>
 
-        {/* Send To - only show if user has party or active conversations */}
-        {sendToOptions.length > 0 && (
-          <div className="post-option-row">
-            <span className="post-option-label">Send To</span>
-            <div className="post-option-tags">
-              {sendToOptions.map(option => (
-                <button
-                  key={option}
-                  className={`post-tag ${selectedSendTo.includes(option) ? 'active' : ''}`}
-                  onClick={() => toggleSendTo(option)}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+        {/* Send To */}
+        <div className="post-option-row">
+          <span className="post-option-label">Send To</span>
+          <div className="post-option-tags">
+            {sendToOptions.map(option => (
+              <button
+                key={option}
+                className={`post-tag ${selectedSendTo.includes(option) ? 'active' : ''}`}
+                onClick={() => toggleSendTo(option)}
+              >
+                {option}
+              </button>
+            ))}
+            {selectedSendToUsers.map(item => (
+              <button
+                key={item.id}
+                className={`post-tag active user-tag ${item.isChat ? 'chat-tag' : ''}`}
+                onClick={() => toggleSendToUser(item)}
+              >
+                <img src={item.avatar || `https://ui-avatars.com/api/?name=${item.name || item.username}&background=random`} alt="" className="tag-avatar" />
+                {item.name || item.username}
+                <span className="tag-remove">×</span>
+              </button>
+            ))}
+            <button className="send-to-search-btn" onClick={() => setShowSendToPicker(true)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Location */}
         <div className="post-option-row">
@@ -445,6 +675,168 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           Post
         </button>
       </div>
+
+      {/* Send To Picker Modal */}
+      {showSendToPicker && createPortal(
+        <div className="user-picker-overlay" onClick={() => setShowSendToPicker(false)}>
+          <div className="user-picker-modal send-to-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Drag handle */}
+            <div className="user-picker-handle" />
+
+            {/* Header */}
+            <div className="user-picker-header">
+              <button className="user-picker-close" onClick={() => setShowSendToPicker(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+              <h3 className="user-picker-title">Send To</h3>
+              <button
+                className="user-picker-done"
+                onClick={() => setShowSendToPicker(false)}
+              >
+                Done
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div className="user-picker-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                ref={sendToSearchRef}
+                type="text"
+                placeholder="Search chats & users..."
+                value={sendToSearch}
+                onChange={(e) => setSendToSearch(e.target.value)}
+              />
+              {sendToSearch && (
+                <button className="user-picker-clear" onClick={() => setSendToSearch('')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M15 9l-6 6M9 9l6 6" stroke="white" strokeWidth="2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* List */}
+            <div className="user-picker-list">
+              {isLoadingSuggestions || isSearchingSendTo ? (
+                <div className="user-picker-loading">
+                  <div className="user-picker-spinner" />
+                  <span>{isSearchingSendTo ? 'Searching...' : 'Loading...'}</span>
+                </div>
+              ) : (() => {
+                const items = sendToSearch && sendToSearch.length >= 2
+                  ? sendToSearchResults
+                  : sendToSuggestions
+
+                if (items.length === 0) {
+                  return (
+                    <div className="user-picker-empty">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="M21 21l-4.35-4.35" />
+                      </svg>
+                      <span>
+                        {sendToSearch && sendToSearch.length >= 2
+                          ? `No results for "${sendToSearch}"`
+                          : 'Search for users or chats'
+                        }
+                      </span>
+                    </div>
+                  )
+                }
+
+                return items.map(item => (
+                  <button
+                    key={item.id}
+                    className={`user-picker-row ${isUserSelectedForSend(item.id) ? 'selected' : ''}`}
+                    onClick={() => toggleSendToUser(item)}
+                  >
+                    <div className="send-to-avatar-wrap">
+                      <img
+                        src={item.avatar || `https://ui-avatars.com/api/?name=${item.name || item.username}&background=random`}
+                        alt={item.name || item.username}
+                        className="user-picker-avatar"
+                      />
+                      {item.isChat && (
+                        <div className={`send-to-type-badge ${item.type}`}>
+                          {item.type === 'party' ? (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            </svg>
+                          ) : item.type === 'group' ? (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                              <circle cx="9" cy="7" r="4"/>
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                          ) : (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="user-picker-info">
+                      <div className="user-picker-name-row">
+                        <span className="user-picker-name">{item.name || item.username}</span>
+                        {item.isChat && (
+                          <span className="send-to-type-label">
+                            {item.type === 'party' ? 'Party' : item.type === 'group' ? 'Group' : 'Chat'}
+                          </span>
+                        )}
+                        {item.userType === 'CANDIDATE' && (
+                          <span className="user-picker-candidate-badge">Candidate</span>
+                        )}
+                      </div>
+                      {!item.isChat && item.username && (
+                        <span className="user-picker-handle">@{item.username}</span>
+                      )}
+                      {!item.isChat && item.reasons && getReasonBadge(item.reasons) && (
+                        <span className={`user-picker-reason ${item.reasons[0]}`}>
+                          {getReasonBadge(item.reasons)}
+                        </span>
+                      )}
+                    </div>
+                    {isUserSelectedForSend(item.id) && (
+                      <div className="user-picker-check">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                ))
+              })()}
+            </div>
+
+            {/* Send Together Toggle */}
+            {selectedSendToUsers.length > 1 && (
+              <div className="send-to-toggle-row">
+                <button
+                  className={`send-to-toggle-btn ${!sendTogether ? 'active' : ''}`}
+                  onClick={() => setSendTogether(false)}
+                >
+                  Send Separate
+                </button>
+                <button
+                  className={`send-to-toggle-btn ${sendTogether ? 'active' : ''}`}
+                  onClick={() => setSendTogether(true)}
+                >
+                  Send Together
+                </button>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

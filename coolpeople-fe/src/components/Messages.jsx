@@ -787,6 +787,65 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     return () => clearInterval(expiryCheckInterval)
   }, [userParty])
 
+  // Sync conversations from props (for messages sent from PostScreen send-to picker)
+  useEffect(() => {
+    if (!conversations || Object.keys(conversations).length === 0) return
+
+    setMessages(prev => {
+      let updated = [...prev]
+      let hasChanges = false
+
+      Object.entries(conversations).forEach(([convId, convData]) => {
+        if (!convData || !convData.participantId) return
+
+        const existingIndex = updated.findIndex(m =>
+          m.id === convId ||
+          m.user?.id === convData.participantId ||
+          m.user?.id === convData.recipientId
+        )
+
+        if (existingIndex >= 0) {
+          // Update existing conversation if there's a newer message
+          const existing = updated[existingIndex]
+          const newTime = convData.lastMessageAt ? new Date(convData.lastMessageAt) : new Date(0)
+          const existingTime = existing.lastMessageAt ? new Date(existing.lastMessageAt) : new Date(0)
+
+          if (newTime > existingTime) {
+            updated[existingIndex] = {
+              ...existing,
+              lastMessage: convData.lastMessage || existing.lastMessage,
+              lastMessageAt: convData.lastMessageAt,
+              timestamp: formatTimestamp(convData.lastMessageAt),
+            }
+            hasChanges = true
+          }
+        } else {
+          // Add new conversation
+          updated.push({
+            id: convId,
+            user: {
+              id: convData.participantId || convData.recipientId,
+              username: convData.participantUsername || convData.participantName,
+              avatar: convData.participantAvatar,
+            },
+            lastMessage: convData.lastMessage || 'Sent a video',
+            lastMessageAt: convData.lastMessageAt,
+            timestamp: formatTimestamp(convData.lastMessageAt),
+            unreadCount: 0,
+            hasUnread: false,
+            isOnline: false,
+            isPinned: false,
+            isMuted: false,
+            isHidden: false,
+          })
+          hasChanges = true
+        }
+      })
+
+      return hasChanges ? sortMessages(updated) : prev
+    })
+  }, [conversations])
+
   // Handle starting a conversation with a specific user (from profile "Message" button)
   useEffect(() => {
     if (!startConversationWith) return

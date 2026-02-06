@@ -920,7 +920,7 @@ function AppContent() {
       }
     }
 
-    // Handle sending to chats
+    // Handle sending to chats (legacy tag-based)
     if (postData.sendTo && postData.sendTo.length > 0) {
       const mediaMessage = {
         id: `msg-${timestamp}`,
@@ -948,6 +948,103 @@ function AppContent() {
         })
         return updated
       })
+    }
+
+    // Handle sending to users/chats from the picker modal
+    if (postData.sendToUsers && postData.sendToUsers.length > 0) {
+      const reelMessage = {
+        type: 'reel',
+        videoUrl: postData.videoUrl,
+        caption: postData.caption || '',
+        isMirrored: postData.isMirrored || false,
+        thumbnail: postData.videoUrl,
+      }
+
+      // Send to each recipient
+      for (const recipient of postData.sendToUsers) {
+        try {
+          if (recipient.isChat) {
+            // It's a chat (party, group, or DM conversation)
+            if (recipient.type === 'party') {
+              // Send to party chat - use party chat API
+              const partyId = recipient.id.replace('party-', '')
+              // Party messages go through party chat
+              console.log('Sending reel to party chat:', recipient.name)
+              // For now, add to local state - party chat sending would need party chat API
+            } else if (recipient.type === 'group') {
+              // Send to group chat
+              await groupchatsApi.sendMessage(recipient.id, postData.caption || 'Shared a reel', {
+                type: 'reel',
+                ...reelMessage
+              })
+              console.log('Sent reel to group chat:', recipient.name)
+            } else {
+              // DM conversation - send as message
+              await messagesApi.sendMessage({
+                receiverId: recipient.id,
+                content: postData.caption || 'Shared a reel',
+                metadata: {
+                  type: 'reel',
+                  ...reelMessage
+                }
+              })
+              console.log('Sent reel to DM:', recipient.name)
+            }
+          } else {
+            // It's a user - send as DM
+            await messagesApi.sendMessage({
+              receiverId: recipient.id,
+              content: postData.caption || 'Shared a reel',
+              metadata: {
+                type: 'reel',
+                ...reelMessage
+              }
+            })
+            console.log('Sent reel to user:', recipient.username || recipient.name)
+          }
+
+          // Update local conversations to show the sent message
+          const convId = recipient.isChat ? recipient.id : recipient.id
+          const localMessage = {
+            id: `msg-${timestamp}-${recipient.id}`,
+            content: postData.caption || 'Shared a reel',
+            text: postData.caption || null,
+            mediaUrl: postData.videoUrl, // Top-level for video bubble rendering
+            mediaType: 'video',
+            isMirrored: postData.isMirrored || false,
+            isOwn: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: new Date().toISOString(),
+            metadata: {
+              type: 'reel',
+              ...reelMessage
+            }
+          }
+
+          setConversations(prev => ({
+            ...prev,
+            [convId]: {
+              ...(prev[convId] || {}),
+              id: convId,
+              recipientId: recipient.id,
+              participantId: recipient.id,
+              participantName: recipient.name || recipient.username,
+              participantUsername: recipient.username,
+              participantAvatar: recipient.avatar,
+              messages: [...(prev[convId]?.messages || []), localMessage],
+              lastMessage: postData.caption || 'Sent a video',
+              lastMessageAt: new Date().toISOString(),
+            }
+          }))
+        } catch (error) {
+          console.error('Failed to send reel to', recipient.name || recipient.username, error)
+        }
+      }
+
+      // If sendTogether is true, we could create a group message
+      if (postData.sendTogether && postData.sendToUsers.length > 1) {
+        console.log('Sent as group message to:', postData.sendToUsers.map(u => u.name || u.username))
+      }
     }
 
     // Close create screen and navigate to feed

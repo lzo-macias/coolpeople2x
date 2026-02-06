@@ -483,3 +483,149 @@
   font-weight: 600;
   color: #E8A855;
 }
+
+/* Send To Search Button */
+.send-to-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 50%;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.send-to-search-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.send-to-search-btn:active {
+  transform: scale(0.95);
+}
+
+/* User tag in post options */
+.post-tag.user-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.post-tag.chat-tag {
+  background: linear-gradient(135deg, #667eea22, #764ba222);
+  border-color: #667eea44;
+}
+
+.post-tag .tag-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.post-tag .tag-remove {
+  margin-left: 4px;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+/* User picker selected state */
+.user-picker-row.selected {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.user-picker-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #3b82f6;
+  border-radius: 50%;
+  color: white;
+  margin-left: auto;
+}
+
+/* Send To Modal Enhancements */
+.send-to-modal {
+  max-height: 85vh;
+}
+
+/* Avatar with type badge */
+.send-to-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.send-to-type-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+}
+
+.send-to-type-badge.party {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.send-to-type-badge.group {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.send-to-type-badge.dm {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+.send-to-type-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #999;
+  margin-left: 6px;
+  text-transform: uppercase;
+}
+
+/* Send Together Toggle Row */
+.send-to-toggle-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+  background: #fafafa;
+}
+
+.send-to-toggle-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: #f0f0f0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.send-to-toggle-btn.active {
+  background: white;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.send-to-toggle-btn:hover:not(.active) {
+  background: #e8e8e8;
+}
