@@ -1,10 +1,14 @@
 import '../styling/Sparkline.css'
 
 function Sparkline({ data: rawData, color = '#00ff00', width = 80, height = 30, dashed = false, strokeWidth = 1.5, showBaseline = false }) {
-  if (!rawData || rawData.length === 0) return null
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) return null
+
+  // Filter out non-numeric values
+  const numericData = rawData.filter(val => typeof val === 'number' && !isNaN(val))
+  if (numericData.length === 0) return null
 
   // If only one data point, duplicate it so we can render a flat line
-  const data = rawData.length === 1 ? [rawData[0], rawData[0]] : rawData
+  const data = numericData.length === 1 ? [numericData[0], numericData[0]] : numericData
 
   const min = Math.min(...data)
   const max = Math.max(...data)

@@ -15,11 +15,21 @@ const formatPoints = (points) => {
 
 // Mini sparkline for contestant rows
 function MiniSparkline({ data, width = 50, height = 20 }) {
-  const min = Math.min(...data)
-  const max = Math.max(...data)
+  // Guard against empty or invalid data
+  if (!data || !Array.isArray(data) || data.length === 0) return null
+
+  // Filter out non-numeric values
+  const numericData = data.filter(val => typeof val === 'number' && !isNaN(val))
+  if (numericData.length === 0) return null
+
+  // If only one data point, duplicate it so we can render a flat line
+  const chartData = numericData.length === 1 ? [numericData[0], numericData[0]] : numericData
+
+  const min = Math.min(...chartData)
+  const max = Math.max(...chartData)
   const range = max - min || 1
-  const points = data.map((val, i) =>
-    `${(i / (data.length - 1)) * width},${height - ((val - min) / range) * height}`
+  const points = chartData.map((val, i) =>
+    `${(i / (chartData.length - 1)) * width},${height - ((val - min) / range) * height}`
   ).join(' ')
 
   return (
@@ -38,13 +48,34 @@ function RaceChart({ candidates, onCandidateClick }) {
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
 
-  const allValues = candidates.flatMap(c => c.data)
-  const minY = Math.min(...allValues) * 0.9
-  const maxY = Math.max(...allValues) * 1.1
+  // Filter candidates to only those with valid data
+  const validCandidates = candidates.filter(c => {
+    if (!c.data || !Array.isArray(c.data) || c.data.length === 0) return false
+    return c.data.some(val => typeof val === 'number' && !isNaN(val))
+  }).map(c => ({
+    ...c,
+    data: c.data.filter(val => typeof val === 'number' && !isNaN(val))
+  }))
+
+  // If no valid candidates, don't render
+  if (validCandidates.length === 0) {
+    return <div className="race-chart-empty">No chart data available</div>
+  }
+
+  const allValues = validCandidates.flatMap(c => c.data)
+  const minY = Math.min(...allValues) * 0.9 || 0
+  const maxY = Math.max(...allValues) * 1.1 || 1
+  const yRange = maxY - minY || 1
   const xLabels = ['9th', '18th', 'Today']
 
-  const getX = (index, total) => padding.left + (index / (total - 1)) * chartWidth
-  const getY = (value) => padding.top + chartHeight - ((value - minY) / (maxY - minY)) * chartHeight
+  const getX = (index, total) => {
+    if (total <= 1) return padding.left + chartWidth / 2
+    return padding.left + (index / (total - 1)) * chartWidth
+  }
+  const getY = (value) => {
+    if (typeof value !== 'number' || isNaN(value)) return padding.top + chartHeight / 2
+    return padding.top + chartHeight - ((value - minY) / yRange) * chartHeight
+  }
 
   // Orange color palette from dark to light
   const colors = [
@@ -69,14 +100,18 @@ function RaceChart({ candidates, onCandidateClick }) {
       ))}
 
       {/* Lines */}
-      {candidates.map((candidate, idx) => {
-        const points = candidate.data.map((val, i) => `${getX(i, candidate.data.length)},${getY(val)}`).join(' ')
+      {validCandidates.map((candidate, idx) => {
+        // Ensure at least 2 points for the line
+        const chartData = candidate.data.length === 1
+          ? [candidate.data[0], candidate.data[0]]
+          : candidate.data
+        const points = chartData.map((val, i) => `${getX(i, chartData.length)},${getY(val)}`).join(' ')
         return (
           <polyline
             key={candidate.id}
             points={points}
             fill="none"
-            stroke={colors[idx]}
+            stroke={colors[idx % colors.length]}
             strokeWidth={idx === 0 ? 3 : 2}
             opacity={1 - idx * 0.08}
             className="race-chart-line"
@@ -89,13 +124,16 @@ function RaceChart({ candidates, onCandidateClick }) {
       })}
 
       {/* Avatar circles at end of lines - render hovered one last so it's on top */}
-      {candidates
+      {validCandidates
         .map((candidate, idx) => ({ candidate, idx, isHovered: hoveredId === candidate.id }))
         .sort((a, b) => (a.isHovered ? 1 : 0) - (b.isHovered ? 1 : 0))
         .map(({ candidate, idx, isHovered }) => {
-          const lastX = getX(candidate.data.length - 1, candidate.data.length)
-          const lastY = getY(candidate.data[candidate.data.length - 1])
-          const scale = isHovered ? 1.6 : 1
+          // Use same data handling as the lines
+          const chartData = candidate.data.length === 1
+            ? [candidate.data[0], candidate.data[0]]
+            : candidate.data
+          const lastX = getX(chartData.length - 1, chartData.length)
+          const lastY = getY(chartData[chartData.length - 1])
           const radius = isHovered ? 18 : 12
           const imgSize = isHovered ? 30 : 20
           const imgOffset = imgSize / 2
@@ -114,7 +152,7 @@ function RaceChart({ candidates, onCandidateClick }) {
                 cy={lastY}
                 r={radius}
                 fill="#2A1F0F"
-                stroke={colors[idx]}
+                stroke={colors[idx % colors.length]}
                 strokeWidth={isHovered ? 3 : 2}
               />
               <clipPath id={`clip-${candidate.id}`}>
@@ -261,16 +299,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
                 : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
 
+              // Extract and validate sparkline data - filter out non-numeric values
+              const rawSparkline = entry.sparkline?.map(s => s.points) || []
+              const validSparkline = rawSparkline.filter(v => typeof v === 'number' && !isNaN(v))
+              const sparklineData = validSparkline.length > 0 ? validSparkline : [entry.totalPoints || 0]
+
               return {
                 id: entityId,
                 username: entityHandle || 'unknown',
                 name: entityName,
                 avatar: entityAvatar,
-                data: entry.sparkline?.map(s => s.points) || [0],
+                data: sparklineData,
                 totalPoints: entry.totalPoints || 0,
                 rank: entry.rank,
                 tier: entry.tier,
-                sparkline: entry.sparkline?.map(s => s.points) || [0],
+                sparkline: sparklineData,
                 change: entry.change || 0,
                 isPartyEntry, // Track whether this is a party entry for navigation
                 partyName: isPartyEntry ? entry.party?.name : null,
@@ -654,9 +697,16 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               onClick={async () => {
                 if (data.targetRace && raceDetails?.id) {
                   // Has target race - call API to toggle nomination
+                  const wasNominated = hasNominatedPoster
+                  const targetId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
+
+                  // OPTIMISTIC UI UPDATE - update immediately before API call
+                  setHasNominatedPoster(!wasNominated)
+                  if (!wasNominated) {
+                    playNominateSound()
+                  }
+
                   try {
-                    // Determine target: party for party posts, user otherwise
-                    const targetId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
                     const boostData = data.isPartyPost
                       ? { targetPartyId: targetId }
                       : { targetUserId: targetId }
@@ -667,8 +717,10 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
                     const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
 
-                    // IMMEDIATE UI update - don't wait
-                    setHasNominatedPoster(result.boosted)
+                    // Verify the result matches our optimistic update, revert if needed
+                    if (result.boosted !== !wasNominated) {
+                      setHasNominatedPoster(result.boosted)
+                    }
 
                     if (targetId) {
                       // Update nominated candidates set
@@ -682,29 +734,38 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                         return next
                       })
 
+                      // Ensure newPoints is a valid number
+                      const newPoints = typeof result.newPoints === 'number' && !isNaN(result.newPoints)
+                        ? result.newPoints
+                        : oldPoints
+
                       // Update nomination counts
                       setNominationCounts(prev => ({
                         ...prev,
-                        [targetId]: result.newPoints
+                        [targetId]: newPoints
                       }))
 
-                      // IMMEDIATE scoreboard update - update the actual scoreboard state
+                      // Update scoreboard with validated numeric data
                       setRaceScoreboard(prev => prev.map(candidate => {
                         if (candidate.id === targetId) {
-                          const newSparkline = [...(candidate.sparkline || []).slice(-8), result.newPoints]
+                          // Filter existing sparkline to only numeric values
+                          const existingSparkline = (candidate.sparkline || [])
+                            .filter(v => typeof v === 'number' && !isNaN(v))
+                            .slice(-8)
+                          const newSparkline = [...existingSparkline, newPoints]
                           return {
                             ...candidate,
-                            totalPoints: result.newPoints,
+                            totalPoints: newPoints,
                             sparkline: newSparkline,
                             data: newSparkline,
-                            change: (candidate.change || 0) + (result.newPoints - oldPoints)
+                            change: (candidate.change || 0) + (newPoints - oldPoints)
                           }
                         }
                         return candidate
                       }))
 
                       // Trigger real-time animations
-                      const pointsChange = result.newPoints - oldPoints
+                      const pointsChange = newPoints - oldPoints
                       if (result.boosted && pointsChange > 0) {
                         setRecentBoosts(prev => ({
                           ...prev,
@@ -721,15 +782,14 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       }
                     }
 
-                    if (result.boosted) {
-                      playNominateSound()
-                      if (onTrackActivity) {
-                        onTrackActivity('nominate', data)
-                      }
+                    if (result.boosted && onTrackActivity) {
+                      onTrackActivity('nominate', data)
                     }
                     // Trigger global scoreboard refresh
                     onScoreboardRefresh?.()
                   } catch (error) {
+                    // Revert optimistic update on error
+                    setHasNominatedPoster(wasNominated)
                     console.log('Nominate error:', error.message)
                   }
                 } else if (!data.targetRace) {
@@ -870,16 +930,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                                 const entityAvatar = isPartyEntry
                                   ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
                                   : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                                // Validate sparkline data
+                                const rawSparkline = entry.sparkline?.map(s => s.points) || []
+                                const validSparkline = rawSparkline.filter(v => typeof v === 'number' && !isNaN(v))
+                                const sparklineData = validSparkline.length > 0 ? validSparkline : [entry.totalPoints || 0]
+
                                 return {
                                   id: entityId,
                                   username: entityHandle || 'unknown',
                                   name: entityName,
                                   avatar: entityAvatar,
-                                  data: entry.sparkline?.map(s => s.points) || [0],
+                                  data: sparklineData,
                                   totalPoints: entry.totalPoints || 0,
                                   rank: entry.rank,
                                   tier: entry.tier,
-                                  sparkline: entry.sparkline?.map(s => s.points) || [0],
+                                  sparkline: sparklineData,
                                   change: entry.change || 0,
                                   isPartyEntry,
                                   partyName: isPartyEntry ? entry.party?.name : null,
@@ -933,16 +998,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                               const entityAvatar = isPartyEntry
                                 ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
                                 : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                              // Validate sparkline data
+                              const rawSparkline = entry.sparkline?.map(s => s.points) || []
+                              const validSparkline = rawSparkline.filter(v => typeof v === 'number' && !isNaN(v))
+                              const sparklineData = validSparkline.length > 0 ? validSparkline : [entry.totalPoints || 0]
+
                               return {
                                 id: entityId,
                                 username: entityHandle || 'unknown',
                                 name: entityName,
                                 avatar: entityAvatar,
-                                data: entry.sparkline?.map(s => s.points) || [0],
+                                data: sparklineData,
                                 totalPoints: entry.totalPoints || 0,
                                 rank: entry.rank,
                                 tier: entry.tier,
-                                sparkline: entry.sparkline?.map(s => s.points) || [0],
+                                sparkline: sparklineData,
                                 change: entry.change || 0,
                                 isPartyEntry,
                                 partyName: isPartyEntry ? entry.party?.name : null,
@@ -1053,6 +1123,24 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                           onClick={async (e) => {
                             e.stopPropagation()
 
+                            const wasNominated = isNominated
+                            const oldPoints = nominationCounts[candidate.id] || candidate.totalPoints || 0
+
+                            // OPTIMISTIC UI UPDATE - update immediately before API call
+                            setNominatedCandidates(prev => {
+                              const next = new Set(prev)
+                              if (wasNominated) {
+                                next.delete(candidate.id)
+                              } else {
+                                next.add(candidate.id)
+                              }
+                              return next
+                            })
+
+                            if (!wasNominated) {
+                              playNominateSound()
+                            }
+
                             try {
                               // Build boost data based on whether this is a party or user entry
                               const boostData = candidate.isPartyEntry
@@ -1061,33 +1149,41 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
                               const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
 
-                              // Calculate points change for animation
-                              const oldPoints = nominationCounts[candidate.id] || candidate.totalPoints || 0
-                              const pointsChange = result.newPoints - oldPoints
+                              // Verify result matches optimistic update, revert if needed
+                              if (result.boosted === wasNominated) {
+                                setNominatedCandidates(prev => {
+                                  const next = new Set(prev)
+                                  if (result.boosted) {
+                                    next.add(candidate.id)
+                                  } else {
+                                    next.delete(candidate.id)
+                                  }
+                                  return next
+                                })
+                              }
 
-                              // IMMEDIATE UI updates - all at once
-                              setNominatedCandidates(prev => {
-                                const next = new Set(prev)
-                                if (result.boosted) {
-                                  next.add(candidate.id)
-                                } else {
-                                  next.delete(candidate.id)
-                                }
-                                return next
-                              })
+                              // Ensure newPoints is a valid number
+                              const newPoints = typeof result.newPoints === 'number' && !isNaN(result.newPoints)
+                                ? result.newPoints
+                                : oldPoints
+                              const pointsChange = newPoints - oldPoints
 
                               setNominationCounts(prev => ({
                                 ...prev,
-                                [candidate.id]: result.newPoints
+                                [candidate.id]: newPoints
                               }))
 
-                              // IMMEDIATE scoreboard update - directly modify raceScoreboard
+                              // Update scoreboard with validated numeric data
                               setRaceScoreboard(prev => prev.map(c => {
                                 if (c.id === candidate.id) {
-                                  const newSparkline = [...(c.sparkline || []).slice(-8), result.newPoints]
+                                  // Filter existing sparkline to only numeric values
+                                  const existingSparkline = (c.sparkline || [])
+                                    .filter(v => typeof v === 'number' && !isNaN(v))
+                                    .slice(-8)
+                                  const newSparkline = [...existingSparkline, newPoints]
                                   return {
                                     ...c,
-                                    totalPoints: result.newPoints,
+                                    totalPoints: newPoints,
                                     sparkline: newSparkline,
                                     data: newSparkline,
                                     change: (c.change || 0) + pointsChange
@@ -1118,12 +1214,19 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                                 setHasNominatedPoster(result.boosted)
                               }
 
-                              if (result.boosted) {
-                                playNominateSound()
-                              }
                               // Trigger global scoreboard refresh
                               onScoreboardRefresh?.()
                             } catch (error) {
+                              // Revert optimistic update on error
+                              setNominatedCandidates(prev => {
+                                const next = new Set(prev)
+                                if (wasNominated) {
+                                  next.add(candidate.id)
+                                } else {
+                                  next.delete(candidate.id)
+                                }
+                                return next
+                              })
                               console.log('Boost error:', error.message)
                             }
                           }}
