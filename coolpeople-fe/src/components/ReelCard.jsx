@@ -1043,6 +1043,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   candidates={raceScoreboard}
                   onCandidateClick={(candidate) => {
                     pauseVideo()
+                    setShowRaceModal(false)
                     if (candidate.isPartyEntry) {
                       // Navigate to party profile for party races
                       onPartyClick?.(candidate.partyName)
@@ -1080,6 +1081,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       className={`race-contestant-row ${isRecentlyBoosted ? 'just-boosted' : ''}`}
                       onClick={() => {
                         pauseVideo()
+                        setShowRaceModal(false)
                         if (candidate.isPartyEntry) {
                           // Navigate to party profile for party races
                           onPartyClick?.(candidate.partyName)
