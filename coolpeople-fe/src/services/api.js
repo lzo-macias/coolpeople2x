@@ -295,6 +295,13 @@ export const racesApi = {
     method: 'POST',
   }),
 
+  enterPartyInRace: (raceId, partyId) => apiFetch(`/api/races/${raceId}/compete/party`, {
+    method: 'POST',
+    body: JSON.stringify({ partyId }),
+  }),
+
+  canEnterPartyInRace: (raceId, partyId) => apiFetch(`/api/races/${raceId}/compete/party/can-enter?partyId=${partyId}`),
+
   leaveRace: (raceId) => apiFetch(`/api/races/${raceId}/compete`, {
     method: 'DELETE',
   }),

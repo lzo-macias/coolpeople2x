@@ -6,7 +6,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { getIO } from '../../lib/socket.js';
 import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
-import { POINT_WEIGHTS, POINT_DECAY_WINDOW_DAYS, BASE_STARTER_POINTS, getTierFromPoints } from '../../config/constants.js';
+import { POINT_WEIGHTS, POINT_DECAY_WINDOW_DAYS, BASE_STARTER_POINTS, getTierFromPoints, POINT_ATTRIBUTION } from '../../config/constants.js';
 import type { RecordPointEventParams, PointSummary, PointHistoryItem, SparklineDataPoint } from './points.types.js';
 
 // -----------------------------------------------------------------------------
@@ -149,7 +149,10 @@ export const recordPointEvent = async (params: RecordPointEventParams): Promise<
 
 // -----------------------------------------------------------------------------
 // Record Points for Reel Engagement
-// Handles race targeting logic: raceTargets on reel → those races, else CoolPeople
+// Implements Hybrid Point Attribution:
+// - Global races (CoolPeople/BestParty) always get 100%
+// - Tagged races get 100%
+// - Other active races get trickle (20% if tagged, 27% if untargeted)
 // -----------------------------------------------------------------------------
 
 export const recordReelEngagementPoints = async (
@@ -160,31 +163,77 @@ export const recordReelEngagementPoints = async (
 ): Promise<void> => {
   if (creatorId === sourceUserId) return;
 
-  const points = POINT_WEIGHTS[action];
+  const basePoints = POINT_WEIGHTS[action];
 
-  // Get race targets for this reel
+  // Get race targets for this reel (explicit tags via race pill)
   const raceTargets = await prisma.raceTarget.findMany({
     where: { reelId },
     select: { raceId: true },
   });
+  const taggedRaceIds = new Set(raceTargets.map((t) => t.raceId));
 
-  let raceIds: string[];
-
-  if (raceTargets.length > 0) {
-    raceIds = raceTargets.map((t) => t.raceId);
-  } else {
-    // Default to CoolPeople system race
-    const coolPeopleRace = await prisma.race.findFirst({
+  // Get global system races
+  const [coolPeopleRace, bestPartyRace] = await Promise.all([
+    prisma.race.findFirst({
       where: { isSystemRace: true, raceType: 'CANDIDATE_VS_CANDIDATE' },
       select: { id: true },
-    });
-    if (!coolPeopleRace) return;
-    raceIds = [coolPeopleRace.id];
+    }),
+    prisma.race.findFirst({
+      where: { isSystemRace: true, raceType: 'PARTY_VS_PARTY' },
+      select: { id: true },
+    }),
+  ]);
+
+  // Get all races the creator is actively competing in
+  const activeCompetitions = await prisma.raceCompetitor.findMany({
+    where: { userId: creatorId },
+    select: { raceId: true },
+  });
+  const activeRaceIds = new Set(activeCompetitions.map((c) => c.raceId));
+
+  const isTaggedPost = taggedRaceIds.size > 0;
+
+  // Build point awards: { raceId: pointsToAward }
+  const pointAwards: Map<string, number> = new Map();
+
+  // 1. Global race (CoolPeople) ALWAYS gets 100%
+  if (coolPeopleRace) {
+    pointAwards.set(coolPeopleRace.id, basePoints);
   }
 
-  // Award points in each targeted race
+  if (isTaggedPost) {
+    // 2a. Tagged races get 100%
+    for (const raceId of taggedRaceIds) {
+      // Don't double-award if it's the global race
+      if (raceId !== coolPeopleRace?.id) {
+        pointAwards.set(raceId, basePoints);
+      }
+    }
+
+    // 2b. Other active races get trickle (20%)
+    for (const raceId of activeRaceIds) {
+      if (!taggedRaceIds.has(raceId) && raceId !== coolPeopleRace?.id) {
+        const tricklePoints = Math.round(basePoints * POINT_ATTRIBUTION.OTHER_ACTIVE_RACE_TRICKLE * 100) / 100;
+        if (tricklePoints > 0) {
+          pointAwards.set(raceId, tricklePoints);
+        }
+      }
+    }
+  } else {
+    // 3. Untargeted post: each active race gets 27% trickle
+    for (const raceId of activeRaceIds) {
+      if (raceId !== coolPeopleRace?.id) {
+        const tricklePoints = Math.round(basePoints * POINT_ATTRIBUTION.UNTARGETED_TO_ACTIVE_RACE * 100) / 100;
+        if (tricklePoints > 0) {
+          pointAwards.set(raceId, tricklePoints);
+        }
+      }
+    }
+  }
+
+  // Award points in all applicable races
   await Promise.all(
-    raceIds.map((raceId) =>
+    Array.from(pointAwards.entries()).map(([raceId, points]) =>
       recordPointEvent({
         targetUserId: creatorId,
         raceId,
@@ -196,26 +245,48 @@ export const recordReelEngagementPoints = async (
     )
   );
 
-  // If reel has a party, also award to party in Best Party race
+  // Handle party points separately (Best Party race)
   const reel = await prisma.reel.findUnique({
     where: { id: reelId },
     select: { partyId: true },
   });
 
-  if (reel?.partyId) {
-    const bestPartyRace = await prisma.race.findFirst({
-      where: { isSystemRace: true, raceType: 'PARTY_VS_PARTY' },
-      select: { id: true },
+  if (reel?.partyId && bestPartyRace) {
+    // Party always gets 100% in Best Party race
+    recordPointEvent({
+      targetPartyId: reel.partyId,
+      raceId: bestPartyRace.id,
+      action,
+      points: basePoints,
+      sourceUserId,
+      sourceReelId: reelId,
+    }).catch(() => {});
+
+    // If party is competing in other PARTY_VS_PARTY races, trickle to those
+    const partyCompetitions = await prisma.raceCompetitor.findMany({
+      where: { partyId: reel.partyId },
+      select: { raceId: true },
     });
-    if (bestPartyRace) {
-      recordPointEvent({
-        targetPartyId: reel.partyId,
-        raceId: bestPartyRace.id,
-        action,
-        points,
-        sourceUserId,
-        sourceReelId: reelId,
-      }).catch(() => {});
+
+    const partyActiveRaceIds = partyCompetitions.map((c) => c.raceId);
+    const trickleRate = isTaggedPost
+      ? POINT_ATTRIBUTION.OTHER_ACTIVE_RACE_TRICKLE
+      : POINT_ATTRIBUTION.UNTARGETED_TO_ACTIVE_RACE;
+
+    for (const raceId of partyActiveRaceIds) {
+      if (raceId !== bestPartyRace.id) {
+        const tricklePoints = Math.round(basePoints * trickleRate * 100) / 100;
+        if (tricklePoints > 0) {
+          recordPointEvent({
+            targetPartyId: reel.partyId,
+            raceId,
+            action,
+            points: tricklePoints,
+            sourceUserId,
+            sourceReelId: reelId,
+          }).catch(() => {});
+        }
+      }
     }
   }
 };

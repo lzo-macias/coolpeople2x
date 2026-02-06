@@ -48,6 +48,7 @@ function AppContent() {
   const [showCreateScreen, setShowCreateScreen] = useState(false)
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
   const [userParty, setUserParty] = useState(null) // User's created party
+  const [canEnterPartyInRaces, setCanEnterPartyInRaces] = useState(false) // Whether user can enter their party into races (leader/admin)
   const [hasOptedIn, setHasOptedIn] = useState(false) // Whether user has opted into social credit
   const [customAvatar, setCustomAvatar] = useState(null) // User's custom profile photo
   const [userBio, setUserBio] = useState('') // User's bio text
@@ -270,6 +271,14 @@ function AppContent() {
 
       // Load user's party if they have one (from new partyId relation)
       console.log('Profile party data:', profile.party)
+
+      // Check party permissions from memberships (available in both paths)
+      if (profile.parties && profile.parties.length > 0) {
+        const primaryPartyInfo = profile.parties[0]
+        const permissions = primaryPartyInfo.permissions || []
+        setCanEnterPartyInRaces(permissions.includes('leader') || permissions.includes('admin'))
+      }
+
       if (profile.party && profile.party.id) {
         console.log('Loading full party details for:', profile.party.id)
         try {
@@ -1659,6 +1668,10 @@ function AppContent() {
                   userRacesFollowing={userRacesFollowing}
                   hasOptedIn={hasOptedIn}
                   onOptIn={handleOptIn}
+                  currentUserId={currentUser.id}
+                  userPartyId={userParty?.id}
+                  canEnterPartyInRaces={canEnterPartyInRaces}
+                  onScoreboardRefresh={() => setScoreboardRefreshKey(prev => prev + 1)}
                 />
               )
             })}

@@ -44,7 +44,7 @@ function EngagementScoreBar({ scores, onItemClick, raceName }) {
 
         return (
           <div
-            key={score.id || idx}
+            key={`${score.id || 'score'}-${idx}`}
             className="engagement-item clickable"
             onClick={() => onItemClick?.(score)}
           >

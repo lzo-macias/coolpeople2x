@@ -100,6 +100,28 @@ export const userNominationsParamSchema = z.object({
 });
 
 // -----------------------------------------------------------------------------
+// Enter Party in Race
+// -----------------------------------------------------------------------------
+
+export const enterPartySchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid race ID'),
+  }),
+  body: z.object({
+    partyId: z.string().uuid('Invalid party ID'),
+  }),
+});
+
+export const canEnterPartyQuerySchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid race ID'),
+  }),
+  query: z.object({
+    partyId: z.string().uuid('Invalid party ID'),
+  }),
+});
+
+// -----------------------------------------------------------------------------
 // Boost Competitor
 // -----------------------------------------------------------------------------
 

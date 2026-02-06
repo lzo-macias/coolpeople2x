@@ -155,7 +155,7 @@ const formatNominations = (num) => num.toLocaleString()
 // Default race for nominations
 const DEFAULT_RACE = { id: 'coolpeople', name: 'CoolPeople', icon: '/coolpeople-icon.png' }
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [], hasOptedIn = false, onOptIn }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [], hasOptedIn = false, onOptIn, currentUserId, userPartyId, canEnterPartyInRaces = false, onScoreboardRefresh }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -211,6 +211,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [raceScoreboard, setRaceScoreboard] = useState([])
   const [raceDetails, setRaceDetails] = useState(null)
   const [showOptInConfirm, setShowOptInConfirm] = useState(false)
+  const [recentBoosts, setRecentBoosts] = useState({}) // { odid: { points: X, timestamp: Y } }
 
   // Record view when reel becomes visible (only for valid UUIDs, not temp IDs)
   useEffect(() => {
@@ -341,15 +342,18 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
   // Update countdown every second (only if we have a deadline)
+  // Use endDate string as dependency to avoid infinite loop from Date object recreation
+  const endDateString = raceDetails?.endDate
   useEffect(() => {
-    if (!raceDeadline) {
+    if (!endDateString) {
       setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 })
       return
     }
 
+    const deadline = new Date(endDateString)
     const calculateTimeRemaining = () => {
       const now = new Date()
-      const diff = raceDeadline - now
+      const diff = deadline - now
       if (diff <= 0) {
         return { days: 0, hours: 0, minutes: 0, seconds: 0 }
       }
@@ -366,7 +370,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [raceDeadline])
+  }, [endDateString])
 
   // Main nominate button flow state
   const [showNominateRaceSelect, setShowNominateRaceSelect] = useState(false)
@@ -652,18 +656,22 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                   // Has target race - call API to toggle nomination
                   try {
                     // Determine target: party for party posts, user otherwise
+                    const targetId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
                     const boostData = data.isPartyPost
-                      ? { targetPartyId: data.partyId || data.party?.id }
-                      : { targetUserId: data.user?.id }
+                      ? { targetPartyId: targetId }
+                      : { targetUserId: targetId }
+
+                    // Get old points for animation from scoreboard or nominationCounts
+                    const candidateInScoreboard = raceScoreboard.find(c => c.id === targetId)
+                    const oldPoints = nominationCounts[targetId] || candidateInScoreboard?.totalPoints || 0
 
                     const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
 
-                    // Update UI based on result
+                    // IMMEDIATE UI update - don't wait
                     setHasNominatedPoster(result.boosted)
 
-                    // Update nomination counts in modal if it's open
-                    const targetId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
                     if (targetId) {
+                      // Update nominated candidates set
                       setNominatedCandidates(prev => {
                         const next = new Set(prev)
                         if (result.boosted) {
@@ -673,10 +681,44 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                         }
                         return next
                       })
+
+                      // Update nomination counts
                       setNominationCounts(prev => ({
                         ...prev,
                         [targetId]: result.newPoints
                       }))
+
+                      // IMMEDIATE scoreboard update - update the actual scoreboard state
+                      setRaceScoreboard(prev => prev.map(candidate => {
+                        if (candidate.id === targetId) {
+                          const newSparkline = [...(candidate.sparkline || []).slice(-8), result.newPoints]
+                          return {
+                            ...candidate,
+                            totalPoints: result.newPoints,
+                            sparkline: newSparkline,
+                            data: newSparkline,
+                            change: (candidate.change || 0) + (result.newPoints - oldPoints)
+                          }
+                        }
+                        return candidate
+                      }))
+
+                      // Trigger real-time animations
+                      const pointsChange = result.newPoints - oldPoints
+                      if (result.boosted && pointsChange > 0) {
+                        setRecentBoosts(prev => ({
+                          ...prev,
+                          [targetId]: { points: pointsChange, timestamp: Date.now() }
+                        }))
+                        // Clear animation after 2 seconds
+                        setTimeout(() => {
+                          setRecentBoosts(prev => {
+                            const next = { ...prev }
+                            delete next[targetId]
+                            return next
+                          })
+                        }, 2000)
+                      }
                     }
 
                     if (result.boosted) {
@@ -685,6 +727,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                         onTrackActivity('nominate', data)
                       }
                     }
+                    // Trigger global scoreboard refresh
+                    onScoreboardRefresh?.()
                   } catch (error) {
                     console.log('Nominate error:', error.message)
                   }
@@ -798,8 +842,64 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       {raceFollowed ? '✓ Following' : 'Follow'}
                     </button>
                   )}
-                  {/* System races: candidates show "Racing" (auto-enrolled), participants show "Race" with opt-in flow */}
-                  {raceDetails?.isSystemRace ? (
+                  {/* Race button logic:
+                      - System races: candidates show "Racing" (auto-enrolled), participants show "Race" with opt-in flow
+                      - Party races: only show if user has permission to enter their party
+                      - User races: show join button for candidates
+                  */}
+                  {raceDetails?.raceType === 'PARTY_VS_PARTY' ? (
+                    // Party race - only show button if user can enter their party
+                    canEnterPartyInRaces && userPartyId && (
+                      <button
+                        className={`race-modal-btn participate ${raceParticipating ? 'checked' : ''}`}
+                        onClick={async () => {
+                          if (!raceDetails?.id || !userPartyId) return
+                          try {
+                            await racesApi.enterPartyInRace(raceDetails.id, userPartyId)
+                            setRaceParticipating(true)
+                            // Refresh scoreboard after joining
+                            const scoreboardResponse = await racesApi.getScoreboard(raceDetails.id, { period: '7d' })
+                            if (scoreboardResponse.data) {
+                              const scoreboard = scoreboardResponse.data.map((entry) => {
+                                const isPartyEntry = !entry.user && entry.party
+                                const entityId = isPartyEntry ? entry.party?.id : entry.user?.id || entry.id
+                                const entityName = isPartyEntry
+                                  ? entry.party?.name
+                                  : (entry.user?.displayName || entry.user?.username || 'Unknown')
+                                const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
+                                const entityAvatar = isPartyEntry
+                                  ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
+                                  : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                                return {
+                                  id: entityId,
+                                  username: entityHandle || 'unknown',
+                                  name: entityName,
+                                  avatar: entityAvatar,
+                                  data: entry.sparkline?.map(s => s.points) || [0],
+                                  totalPoints: entry.totalPoints || 0,
+                                  rank: entry.rank,
+                                  tier: entry.tier,
+                                  sparkline: entry.sparkline?.map(s => s.points) || [0],
+                                  change: entry.change || 0,
+                                  isPartyEntry,
+                                  partyName: isPartyEntry ? entry.party?.name : null,
+                                }
+                              })
+                              setRaceScoreboard(scoreboard)
+                              const counts = {}
+                              scoreboard.forEach(c => { counts[c.id] = c.totalPoints })
+                              setNominationCounts(counts)
+                            }
+                          } catch (error) {
+                            console.log('Enter party in race error:', error.message)
+                            alert('Could not enter party: ' + error.message)
+                          }
+                        }}
+                      >
+                        {raceParticipating ? '✓ Racing' : 'Enter Party'}
+                      </button>
+                    )
+                  ) : raceDetails?.isSystemRace ? (
                     hasOptedIn ? (
                       <button className="race-modal-btn participate checked" disabled>
                         ✓ Racing
@@ -820,8 +920,42 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                         try {
                           await racesApi.competeInRace(raceDetails.id)
                           setRaceParticipating(true)
+                          // Refresh scoreboard after joining to show self
+                          const scoreboardResponse = await racesApi.getScoreboard(raceDetails.id, { period: '7d' })
+                          if (scoreboardResponse.data) {
+                            const scoreboard = scoreboardResponse.data.map((entry) => {
+                              const isPartyEntry = !entry.user && entry.party
+                              const entityId = isPartyEntry ? entry.party?.id : entry.user?.id || entry.id
+                              const entityName = isPartyEntry
+                                ? entry.party?.name
+                                : (entry.user?.displayName || entry.user?.username || 'Unknown')
+                              const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
+                              const entityAvatar = isPartyEntry
+                                ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
+                                : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                              return {
+                                id: entityId,
+                                username: entityHandle || 'unknown',
+                                name: entityName,
+                                avatar: entityAvatar,
+                                data: entry.sparkline?.map(s => s.points) || [0],
+                                totalPoints: entry.totalPoints || 0,
+                                rank: entry.rank,
+                                tier: entry.tier,
+                                sparkline: entry.sparkline?.map(s => s.points) || [0],
+                                change: entry.change || 0,
+                                isPartyEntry,
+                                partyName: isPartyEntry ? entry.party?.name : null,
+                              }
+                            })
+                            setRaceScoreboard(scoreboard)
+                            const counts = {}
+                            scoreboard.forEach(c => { counts[c.id] = c.totalPoints })
+                            setNominationCounts(counts)
+                          }
                         } catch (error) {
                           console.log('Compete in race error:', error.message)
+                          alert('Could not join race: ' + error.message)
                         }
                       }}
                     >
@@ -859,10 +993,19 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               {raceScoreboard.length > 0 ? (
                 raceScoreboard.map((candidate, idx) => {
                   const isNominated = nominatedCandidates.has(candidate.id)
+                  // Hide nominate button for current user OR for user's own party
+                  const isCurrentUser = candidate.id === currentUserId
+                  const isCurrentUserParty = candidate.isPartyEntry && candidate.id === userPartyId
+                  const hideNominateBtn = isCurrentUser || isCurrentUserParty
+                  const recentBoost = recentBoosts[candidate.id]
+                  const isRecentlyBoosted = recentBoost && (Date.now() - recentBoost.timestamp < 2000)
+                  // Use candidate data directly since raceScoreboard is updated in real-time
+                  const displayPoints = candidate.totalPoints
+                  const displaySparkline = candidate.sparkline
                   return (
                     <div
                       key={candidate.id}
-                      className="race-contestant-row"
+                      className={`race-contestant-row ${isRecentlyBoosted ? 'just-boosted' : ''}`}
                       onClick={() => {
                         pauseVideo()
                         if (candidate.isPartyEntry) {
@@ -883,60 +1026,111 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       <img src={candidate.avatar} alt={candidate.name} className="race-contestant-avatar" />
                       <div className="race-contestant-info">
                         <span className="race-contestant-name">{candidate.name}</span>
-                        <span className="race-contestant-nominations">{formatPoints(nominationCounts[candidate.id] || candidate.totalPoints)} pts</span>
+                        <span className={`race-contestant-nominations ${isRecentlyBoosted ? 'points-updated' : ''}`}>
+                          {formatPoints(displayPoints)} pts
+                        </span>
                       </div>
                       <div className="race-contestant-stats">
                         <div className="race-contestant-change">
-                          <span className={`change-value ${candidate.change >= 0 ? 'positive' : 'negative'}`}>
-                            {candidate.change >= 0 ? '+' : ''}{candidate.change}
-                          </span>
+                          {isRecentlyBoosted && recentBoost.points > 0 ? (
+                            <span className="change-value positive boost-animation" key={recentBoost.timestamp}>
+                              +{recentBoost.points}
+                            </span>
+                          ) : (
+                            <span className={`change-value ${candidate.change >= 0 ? 'positive' : 'negative'}`}>
+                              {candidate.change >= 0 ? '+' : ''}{candidate.change}
+                            </span>
+                          )}
                         </div>
-                        {candidate.sparkline?.length > 1 && <MiniSparkline data={candidate.sparkline} />}
+                        {displaySparkline?.length > 1 && <MiniSparkline data={displaySparkline} key={displaySparkline.join(',')} />}
                       </div>
-                      <button
-                        className={`race-nominate-btn ${isNominated ? 'nominated' : ''}`}
-                        onClick={async (e) => {
-                          e.stopPropagation()
+                      {hideNominateBtn ? (
+                        <div className="race-you-badge">You</div>
+                      ) : (
+                        <button
+                          key={recentBoost?.timestamp || 'default'}
+                          className={`race-nominate-btn ${isNominated ? 'nominated' : ''} ${isRecentlyBoosted ? 'pop-animation' : ''}`}
+                          onClick={async (e) => {
+                            e.stopPropagation()
 
-                          try {
-                            // Build boost data based on whether this is a party or user entry
-                            const boostData = candidate.isPartyEntry
-                              ? { targetPartyId: candidate.id }
-                              : { targetUserId: candidate.id }
+                            try {
+                              // Build boost data based on whether this is a party or user entry
+                              const boostData = candidate.isPartyEntry
+                                ? { targetPartyId: candidate.id }
+                                : { targetUserId: candidate.id }
 
-                            const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
+                              const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
 
-                            // Update local state based on result (toggled)
-                            setNominatedCandidates(prev => {
-                              const next = new Set(prev)
-                              if (result.boosted) {
-                                next.add(candidate.id)
-                              } else {
-                                next.delete(candidate.id)
+                              // Calculate points change for animation
+                              const oldPoints = nominationCounts[candidate.id] || candidate.totalPoints || 0
+                              const pointsChange = result.newPoints - oldPoints
+
+                              // IMMEDIATE UI updates - all at once
+                              setNominatedCandidates(prev => {
+                                const next = new Set(prev)
+                                if (result.boosted) {
+                                  next.add(candidate.id)
+                                } else {
+                                  next.delete(candidate.id)
+                                }
+                                return next
+                              })
+
+                              setNominationCounts(prev => ({
+                                ...prev,
+                                [candidate.id]: result.newPoints
+                              }))
+
+                              // IMMEDIATE scoreboard update - directly modify raceScoreboard
+                              setRaceScoreboard(prev => prev.map(c => {
+                                if (c.id === candidate.id) {
+                                  const newSparkline = [...(c.sparkline || []).slice(-8), result.newPoints]
+                                  return {
+                                    ...c,
+                                    totalPoints: result.newPoints,
+                                    sparkline: newSparkline,
+                                    data: newSparkline,
+                                    change: (c.change || 0) + pointsChange
+                                  }
+                                }
+                                return c
+                              }))
+
+                              // Trigger boost animation
+                              if (result.boosted && pointsChange > 0) {
+                                setRecentBoosts(prev => ({
+                                  ...prev,
+                                  [candidate.id]: { points: pointsChange, timestamp: Date.now() }
+                                }))
+                                // Clear animation after 2 seconds
+                                setTimeout(() => {
+                                  setRecentBoosts(prev => {
+                                    const next = { ...prev }
+                                    delete next[candidate.id]
+                                    return next
+                                  })
+                                }, 2000)
                               }
-                              return next
-                            })
-                            setNominationCounts(prev => ({
-                              ...prev,
-                              [candidate.id]: result.newPoints
-                            }))
 
-                            // Sync with main Nominate button if this is the poster
-                            const posterId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
-                            if (candidate.id === posterId) {
-                              setHasNominatedPoster(result.boosted)
-                            }
+                              // Sync with main Nominate button if this is the poster
+                              const posterId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
+                              if (candidate.id === posterId) {
+                                setHasNominatedPoster(result.boosted)
+                              }
 
-                            if (result.boosted) {
-                              playNominateSound()
+                              if (result.boosted) {
+                                playNominateSound()
+                              }
+                              // Trigger global scoreboard refresh
+                              onScoreboardRefresh?.()
+                            } catch (error) {
+                              console.log('Boost error:', error.message)
                             }
-                          } catch (error) {
-                            console.log('Boost error:', error.message)
-                          }
-                        }}
-                      >
-                        {isNominated ? '✓' : '+'}
-                      </button>
+                          }}
+                        >
+                          {isNominated ? '✓' : '+'}
+                        </button>
+                      )}
                     </div>
                   )
                 })

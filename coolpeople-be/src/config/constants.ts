@@ -71,6 +71,25 @@ export const POINT_DECAY_WINDOW_DAYS = 90;  // Actions older than this phase out
 export const BASE_STARTER_POINTS = 5;  // Minimum points every new candidate starts with
 
 // -----------------------------------------------------------------------------
+// Hybrid Point Attribution
+// How points flow across races based on post targeting
+// -----------------------------------------------------------------------------
+
+export const POINT_ATTRIBUTION = {
+  // When joining a new race, start with this % of global race points
+  BASELINE_FROM_GLOBAL: 0.27,  // 27% (midpoint of 25-30%)
+
+  // Race-targeted post attribution
+  TARGET_RACE_FULL: 1.0,       // 100% to explicitly tagged race
+  OTHER_ACTIVE_RACE_TRICKLE: 0.20,  // 20% (midpoint of 15-25%) to other active races
+
+  // Untargeted post attribution (no race pill)
+  UNTARGETED_TO_ACTIVE_RACE: 0.27,  // 27% to each active race
+
+  // Global races always get 100% - handled by default CoolPeople/BestParty logic
+} as const;
+
+// -----------------------------------------------------------------------------
 // Video Constraints
 // -----------------------------------------------------------------------------
 

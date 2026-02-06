@@ -5,7 +5,8 @@
 
 import { prisma } from '../../lib/prisma.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
-import { POINT_WEIGHTS } from '../../config/constants.js';
+import { POINT_WEIGHTS, POINT_ATTRIBUTION } from '../../config/constants.js';
+import { getTierFromPoints } from '../../config/constants.js';
 import { recordPointEvent } from '../points/points.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import type {
@@ -21,7 +22,7 @@ import type {
 // Helpers
 // -----------------------------------------------------------------------------
 
-const formatRace = (race: any, viewerId?: string): RaceResponse => ({
+const formatRace = (race: any, viewerId?: string, viewerPartyId?: string): RaceResponse => ({
   id: race.id,
   title: race.title,
   description: race.description,
@@ -38,18 +39,22 @@ const formatRace = (race: any, viewerId?: string): RaceResponse => ({
     ? race.followers?.some((f: any) => f.userId === viewerId)
     : undefined,
   isCompeting: viewerId
-    ? race.competitors?.some((c: any) => c.userId === viewerId)
+    ? race.raceType === 'PARTY_VS_PARTY'
+      ? race.competitors?.some((c: any) => c.partyId === viewerPartyId)
+      : race.competitors?.some((c: any) => c.userId === viewerId)
     : undefined,
   createdAt: race.createdAt,
 });
 
-const raceIncludes = (viewerId?: string) => ({
+const raceIncludes = (viewerId?: string, viewerPartyId?: string) => ({
   _count: {
     select: { competitors: true, followers: true },
   },
   ...(viewerId && {
     followers: { where: { userId: viewerId }, take: 1 },
-    competitors: { where: { userId: viewerId }, take: 1 },
+    competitors: viewerPartyId
+      ? { where: { OR: [{ userId: viewerId }, { partyId: viewerPartyId }] }, take: 1 }
+      : { where: { userId: viewerId }, take: 1 },
   }),
 });
 
@@ -91,16 +96,26 @@ export const getRace = async (
   raceId: string,
   viewerId?: string
 ): Promise<RaceResponse> => {
+  // Get viewer's party ID for party race competition checks
+  let viewerPartyId: string | undefined;
+  if (viewerId) {
+    const viewer = await prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { partyId: true },
+    });
+    viewerPartyId = viewer?.partyId || undefined;
+  }
+
   const race = await prisma.race.findUnique({
     where: { id: raceId },
-    include: raceIncludes(viewerId),
+    include: raceIncludes(viewerId, viewerPartyId),
   });
 
   if (!race) {
     throw new NotFoundError('Race');
   }
 
-  return formatRace(race, viewerId);
+  return formatRace(race, viewerId, viewerPartyId);
 };
 
 // -----------------------------------------------------------------------------
@@ -152,12 +167,22 @@ export const listRaces = async (
     where.title = { contains: filters.search, mode: 'insensitive' };
   }
 
+  // Get viewer's party ID for party race competition checks
+  let viewerPartyId: string | undefined;
+  if (viewerId) {
+    const viewer = await prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { partyId: true },
+    });
+    viewerPartyId = viewer?.partyId || undefined;
+  }
+
   const races = await prisma.race.findMany({
     where,
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     orderBy: { createdAt: 'desc' },
-    include: raceIncludes(viewerId),
+    include: raceIncludes(viewerId, viewerPartyId),
   });
 
   const hasMore = races.length > limit;
@@ -165,7 +190,7 @@ export const listRaces = async (
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
   return {
-    races: results.map((r) => formatRace(r, viewerId)),
+    races: results.map((r) => formatRace(r, viewerId, viewerPartyId)),
     nextCursor,
   };
 };
@@ -223,14 +248,50 @@ export const competeInRace = async (
     }
   }
 
+  // Calculate baseline points from global race (CoolPeople)
+  // New competitors start with 25-30% of their global race points
+  let baselinePoints = 0;
+  if (!race.isSystemRace) {
+    // Find CoolPeople system race
+    const globalRace = await prisma.race.findFirst({
+      where: { isSystemRace: true, raceType: 'CANDIDATE_VS_CANDIDATE' },
+      select: { id: true },
+    });
+
+    if (globalRace) {
+      // Get user's points in CoolPeople race
+      const globalLedger = await prisma.pointLedger.findUnique({
+        where: { userId_raceId: { userId, raceId: globalRace.id } },
+        select: { totalPoints: true },
+      });
+
+      if (globalLedger && globalLedger.totalPoints > 0) {
+        baselinePoints = Math.round(globalLedger.totalPoints * POINT_ATTRIBUTION.BASELINE_FROM_GLOBAL);
+      }
+    }
+  }
+
+  const tier = getTierFromPoints(baselinePoints);
+
   try {
     await prisma.$transaction([
       prisma.raceCompetitor.create({ data: { raceId, userId } }),
-      // Create point ledger for this race
+      // Create point ledger for this race with baseline points
       prisma.pointLedger.create({
-        data: { userId, raceId, totalPoints: 0, tier: 'BRONZE' },
+        data: { userId, raceId, totalPoints: baselinePoints, tier },
       }),
     ]);
+
+    // If there are baseline points, seed the sparkline so it shows from day one
+    if (baselinePoints > 0) {
+      const ledger = await prisma.pointLedger.findUnique({
+        where: { userId_raceId: { userId, raceId } },
+      });
+      if (ledger) {
+        const { seedInitialSparkline } = await import('../points/points.service.js');
+        await seedInitialSparkline(ledger.id);
+      }
+    }
   } catch (err: any) {
     if (err?.code === 'P2002') throw new ConflictError('Already competing in this race');
     throw err;
@@ -258,6 +319,98 @@ export const leaveRace = async (
     prisma.raceCompetitor.delete({ where: { id: competitor.id } }),
     prisma.pointLedger.deleteMany({ where: { userId, raceId } }),
   ]);
+};
+
+// -----------------------------------------------------------------------------
+// Enter Party into Race
+// -----------------------------------------------------------------------------
+
+export const enterPartyInRace = async (
+  userId: string,
+  partyId: string,
+  raceId: string
+): Promise<{ competing: boolean }> => {
+  const race = await prisma.race.findUnique({ where: { id: raceId } });
+  if (!race) throw new NotFoundError('Race');
+
+  // Only party races allow party competitors
+  if (race.raceType !== 'PARTY_VS_PARTY') {
+    throw new ForbiddenError('This race is for individual candidates, not parties');
+  }
+
+  // Check user has permission on the party (leader or admin)
+  const membership = await prisma.partyMembership.findUnique({
+    where: { userId_partyId: { userId, partyId } },
+  });
+
+  if (!membership) {
+    throw new ForbiddenError('You are not a member of this party');
+  }
+
+  if (!membership.permissions.includes('leader') && !membership.permissions.includes('admin')) {
+    throw new ForbiddenError('Only party leaders and admins can enter the party into races');
+  }
+
+  // Calculate baseline points from global party race (Best Party)
+  let baselinePoints = 0;
+  if (!race.isSystemRace) {
+    const globalPartyRace = await prisma.race.findFirst({
+      where: { isSystemRace: true, raceType: 'PARTY_VS_PARTY' },
+      select: { id: true },
+    });
+
+    if (globalPartyRace) {
+      const globalLedger = await prisma.pointLedger.findUnique({
+        where: { partyId_raceId: { partyId, raceId: globalPartyRace.id } },
+        select: { totalPoints: true },
+      });
+
+      if (globalLedger && globalLedger.totalPoints > 0) {
+        baselinePoints = Math.round(globalLedger.totalPoints * POINT_ATTRIBUTION.BASELINE_FROM_GLOBAL);
+      }
+    }
+  }
+
+  const tier = getTierFromPoints(baselinePoints);
+
+  try {
+    await prisma.$transaction([
+      prisma.raceCompetitor.create({ data: { raceId, partyId } }),
+      prisma.pointLedger.create({
+        data: { partyId, raceId, totalPoints: baselinePoints, tier },
+      }),
+    ]);
+
+    // Seed sparkline if there are baseline points
+    if (baselinePoints > 0) {
+      const ledger = await prisma.pointLedger.findUnique({
+        where: { partyId_raceId: { partyId, raceId } },
+      });
+      if (ledger) {
+        const { seedInitialSparkline } = await import('../points/points.service.js');
+        await seedInitialSparkline(ledger.id);
+      }
+    }
+
+    return { competing: true };
+  } catch (err: any) {
+    if (err?.code === 'P2002') throw new ConflictError('Party is already competing in this race');
+    throw err;
+  }
+};
+
+// Check if user can enter a party into a race
+export const canEnterPartyInRace = async (
+  userId: string,
+  partyId: string
+): Promise<boolean> => {
+  const membership = await prisma.partyMembership.findUnique({
+    where: { userId_partyId: { userId, partyId } },
+  });
+
+  if (!membership) return false;
+
+  return membership.permissions.includes('leader') || membership.permissions.includes('admin');
 };
 
 // -----------------------------------------------------------------------------
@@ -289,21 +442,22 @@ export const getCompetitors = async (
   const race = await prisma.race.findUnique({ where: { id: raceId } });
   if (!race) throw new NotFoundError('Race');
 
-  // For CANDIDATE_VS_CANDIDATE races, only show candidates
-  // For PARTY_VS_PARTY races, only show parties
+  // Query RaceCompetitor as source of truth for enrollment
+  // For CANDIDATE_VS_CANDIDATE races, filter by user
+  // For PARTY_VS_PARTY races, filter by party
   const whereClause: any = { raceId };
   if (race.raceType === 'CANDIDATE_VS_CANDIDATE') {
-    whereClause.user = { userType: 'CANDIDATE' };
     whereClause.userId = { not: null };
   } else if (race.raceType === 'PARTY_VS_PARTY') {
     whereClause.partyId = { not: null };
   }
 
-  const ledgers = await prisma.pointLedger.findMany({
+  // Get enrolled competitors from RaceCompetitor
+  const raceCompetitors = await prisma.raceCompetitor.findMany({
     where: whereClause,
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
-    orderBy: { totalPoints: 'desc' },
+    orderBy: { enrolledAt: 'asc' },
     include: {
       user: {
         select: {
@@ -327,28 +481,70 @@ export const getCompetitors = async (
     },
   });
 
-  const hasMore = ledgers.length > limit;
-  const results = hasMore ? ledgers.slice(0, -1) : ledgers;
+  const hasMore = raceCompetitors.length > limit;
+  const results = hasMore ? raceCompetitors.slice(0, -1) : raceCompetitors;
   const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  // Get PointLedger data for these competitors to get their points
+  const userIds = results.map(c => c.userId).filter((id): id is string => !!id);
+  const partyIds = results.map(c => c.partyId).filter((id): id is string => !!id);
+
+  // Build OR conditions for ledger lookup
+  const orConditions: any[] = [];
+  if (userIds.length > 0) orConditions.push({ userId: { in: userIds } });
+  if (partyIds.length > 0) orConditions.push({ partyId: { in: partyIds } });
+
+  const ledgers = orConditions.length > 0
+    ? await prisma.pointLedger.findMany({
+        where: {
+          raceId,
+          OR: orConditions,
+        },
+      })
+    : [];
+
+  // Create lookup map for points
+  const ledgerMap = new Map<string, { id: string; totalPoints: number; tier: string }>();
+  for (const l of ledgers) {
+    const key = l.userId ?? l.partyId;
+    if (key) {
+      ledgerMap.set(key, { id: l.id, totalPoints: l.totalPoints, tier: l.tier });
+    }
+  }
+
+  // Build competitors array with points, sorted by points descending
+  const competitorsWithPoints = results.map((c) => {
+    const entityId = c.userId ?? c.partyId;
+    const ledgerData = entityId ? ledgerMap.get(entityId) : null;
+    return {
+      ...c,
+      ledgerId: ledgerData?.id ?? c.id,
+      totalPoints: ledgerData?.totalPoints ?? 0,
+      tier: (ledgerData?.tier ?? 'BRONZE') as any,
+    };
+  });
+
+  // Sort by totalPoints descending
+  competitorsWithPoints.sort((a, b) => b.totalPoints - a.totalPoints);
 
   // Calculate rank based on offset
   const startRank = cursor ? -1 : 1; // If paginating, rank is approximate
-  const competitors: CompetitorResponse[] = results.map((l, idx) => ({
-    id: l.id,
+  const competitors: CompetitorResponse[] = competitorsWithPoints.map((c, idx) => ({
+    id: c.ledgerId,
     rank: startRank === -1 ? 0 : startRank + idx,
-    totalPoints: l.totalPoints,
-    tier: l.tier,
-    user: l.user
+    totalPoints: c.totalPoints,
+    tier: c.tier,
+    user: c.user
       ? {
-          id: l.user.id,
-          username: l.user.username,
-          displayName: l.user.displayName,
-          avatarUrl: l.user.avatarUrl,
-          party: l.user.party ? { id: l.user.party.id, name: l.user.party.name } : undefined,
+          id: c.user.id,
+          username: c.user.username,
+          displayName: c.user.displayName,
+          avatarUrl: c.user.avatarUrl,
+          party: c.user.party ? { id: c.user.party.id, name: c.user.party.name } : undefined,
         }
       : undefined,
-    party: l.party
-      ? { id: l.party.id, name: l.party.name, handle: l.party.handle, avatarUrl: l.party.avatarUrl, memberCount: (l.party as any)._count?.memberships ?? 0 }
+    party: c.party
+      ? { id: c.party.id, name: c.party.name, handle: c.party.handle, avatarUrl: c.party.avatarUrl, memberCount: (c.party as any)._count?.memberships ?? 0 }
       : undefined,
   }));
 

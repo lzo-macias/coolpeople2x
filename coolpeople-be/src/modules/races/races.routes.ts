@@ -17,6 +17,8 @@ import {
   nominateSchema,
   userNominationsParamSchema,
   boostSchema,
+  enterPartySchema,
+  canEnterPartyQuerySchema,
 } from './races.schemas.js';
 import { ballotParamSchema, submitBallotSchema } from './ballot.schemas.js';
 
@@ -118,6 +120,22 @@ router.delete(
   requireAuth,
   validate(raceIdParamSchema),
   racesController.leaveRace
+);
+
+// POST /api/races/:id/compete/party - Enter a party into a race
+router.post(
+  '/:id/compete/party',
+  requireAuth,
+  validate(enterPartySchema),
+  racesController.enterPartyInRace
+);
+
+// GET /api/races/:id/compete/party/can-enter - Check if user can enter party
+router.get(
+  '/:id/compete/party/can-enter',
+  requireAuth,
+  validate(canEnterPartyQuerySchema),
+  racesController.canEnterPartyInRace
 );
 
 // -----------------------------------------------------------------------------

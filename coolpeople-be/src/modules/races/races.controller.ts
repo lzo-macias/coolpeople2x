@@ -113,6 +113,27 @@ export const leaveRace = async (req: Request, res: Response): Promise<void> => {
 };
 
 // -----------------------------------------------------------------------------
+// POST /api/races/:id/compete/party
+// -----------------------------------------------------------------------------
+
+export const enterPartyInRace = async (req: Request, res: Response): Promise<void> => {
+  const raceId = req.params.id as string;
+  const { partyId } = req.body as { partyId: string };
+  const result = await racesService.enterPartyInRace(req.user!.userId, partyId, raceId);
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/races/:id/compete/party/can-enter
+// -----------------------------------------------------------------------------
+
+export const canEnterPartyInRace = async (req: Request, res: Response): Promise<void> => {
+  const { partyId } = req.query as { partyId: string };
+  const canEnter = await racesService.canEnterPartyInRace(req.user!.userId, partyId);
+  sendSuccess(res, { canEnter });
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/races/:id/competitors
 // -----------------------------------------------------------------------------
 

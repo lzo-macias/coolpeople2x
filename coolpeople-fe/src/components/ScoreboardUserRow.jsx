@@ -14,7 +14,9 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, onPart
   const change = user.change ?? 0
   const isPositive = change >= 0
   const sparklineColor = isPositive ? '#10b981' : '#ef4444'
-  const partyColor = getPartyColor(user.party)
+  // Handle party as either object or string
+  const partyName = typeof user.party === 'object' ? user.party?.name : user.party
+  const partyColor = getPartyColor(partyName)
 
   // Get tier from score (using score as CP points)
   const tier = getTierFromPoints(score)
@@ -46,10 +48,13 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, onPart
             className="user-party clickable"
             onClick={(e) => {
               e.stopPropagation()
-              onPartyClick?.({ id: user.partyId, name: user.party })
+              // Handle party as either object or string
+              const partyName = typeof user.party === 'object' ? user.party.name : user.party
+              const partyId = typeof user.party === 'object' ? user.party.id : user.partyId
+              onPartyClick?.({ id: partyId, name: partyName })
             }}
           >
-            {user.party}
+            {typeof user.party === 'object' ? user.party.name : user.party}
           </span>
         ) : (
           <span className="user-party">Independent</span>

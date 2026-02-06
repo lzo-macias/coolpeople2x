@@ -217,10 +217,24 @@ export function selectEngagementForReel(reel, allScoreboards, userContext) {
     })
   })
 
+  // Deduplicate: same user/party may appear in multiple races
+  // Keep the highest-scored entry per unique entity
+  const deduped = []
+  const seenIds = new Set()
+  // Sort by relevance score descending so we keep the best entry
+  scoredCandidates.sort((a, b) => (b._relevanceScore || 0) - (a._relevanceScore || 0))
+  for (const c of scoredCandidates) {
+    const entityId = c.odId || c.userId || c.partyId || c.id
+    if (!seenIds.has(entityId)) {
+      seenIds.add(entityId)
+      deduped.push(c)
+    }
+  }
+
   // Weighted random sampling — this is what makes each reel different.
   // Higher-scored candidates are more likely to be picked, but the
   // seeded RNG ensures different reels draw different candidates.
-  const selected = weightedSample(scoredCandidates, 3, rng)
+  const selected = weightedSample(deduped, 3, rng)
 
   // Determine display race name
   let displayRaceName = reel?.targetRace
@@ -240,11 +254,11 @@ export function selectEngagementForReel(reel, allScoreboards, userContext) {
   if (partyItems.length > 0 && userItems.length > 0) {
     // Mixed selection — keep the dominant type and fill from same-type candidates
     if (partyItems.length >= userItems.length) {
-      const remainingParty = scoredCandidates.filter(c => c.isParty && !partyItems.some(p => p.id === c.id))
+      const remainingParty = deduped.filter(c => c.isParty && !partyItems.some(p => p.id === c.id))
       const extra = weightedSample(remainingParty, 3 - partyItems.length, rng)
       finalSelected = [...partyItems, ...extra]
     } else {
-      const remainingUser = scoredCandidates.filter(c => !c.isParty && !userItems.some(u => u.id === c.id))
+      const remainingUser = deduped.filter(c => !c.isParty && !userItems.some(u => u.id === c.id))
       const extra = weightedSample(remainingUser, 3 - userItems.length, rng)
       finalSelected = [...userItems, ...extra]
     }
