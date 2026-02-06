@@ -715,10 +715,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     const candidateInScoreboard = raceScoreboard.find(c => c.id === targetId)
                     const oldPoints = nominationCounts[targetId] || candidateInScoreboard?.totalPoints || 0
 
-                    const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
+                    const response = await racesApi.boostCompetitor(raceDetails.id, boostData)
+                    // API wraps response in { success, data }, extract the actual data
+                    const result = response.data || response
 
-                    // Verify the result matches our optimistic update, revert if needed
-                    if (result.boosted !== !wasNominated) {
+                    // Update state based on API response
+                    if (typeof result.boosted === 'boolean') {
                       setHasNominatedPoster(result.boosted)
                     }
 
@@ -1147,10 +1149,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                                 ? { targetPartyId: candidate.id }
                                 : { targetUserId: candidate.id }
 
-                              const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
+                              const response = await racesApi.boostCompetitor(raceDetails.id, boostData)
+                              // API wraps response in { success, data }, extract the actual data
+                              const result = response.data || response
 
                               // Verify result matches optimistic update, revert if needed
-                              if (result.boosted === wasNominated) {
+                              if (typeof result.boosted === 'boolean' && result.boosted === wasNominated) {
                                 setNominatedCandidates(prev => {
                                   const next = new Set(prev)
                                   if (result.boosted) {
@@ -1210,7 +1214,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
                               // Sync with main Nominate button if this is the poster
                               const posterId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
-                              if (candidate.id === posterId) {
+                              if (candidate.id === posterId && typeof result.boosted === 'boolean') {
                                 setHasNominatedPoster(result.boosted)
                               }
 
