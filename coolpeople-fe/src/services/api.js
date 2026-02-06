@@ -330,6 +330,15 @@ export const racesApi = {
   }),
 
   getBallotResults: (raceId) => apiFetch(`/api/races/${raceId}/ballot/results`),
+
+  // Boost a competitor (user or party) directly in a race (toggles on/off)
+  boostCompetitor: (raceId, data) => apiFetch(`/api/races/${raceId}/boost`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  // Get user's boost status in a race (what they've nominated)
+  getBoostStatus: (raceId) => apiFetch(`/api/races/${raceId}/boosts`),
 };
 
 // =============================================================================

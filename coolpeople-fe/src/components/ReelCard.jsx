@@ -155,7 +155,7 @@ const formatNominations = (num) => num.toLocaleString()
 // Default race for nominations
 const DEFAULT_RACE = { id: 'coolpeople', name: 'CoolPeople', icon: '/coolpeople-icon.png' }
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [] }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [], hasOptedIn = false, onOptIn }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -210,6 +210,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [raceParticipating, setRaceParticipating] = useState(false)
   const [raceScoreboard, setRaceScoreboard] = useState([])
   const [raceDetails, setRaceDetails] = useState(null)
+  const [showOptInConfirm, setShowOptInConfirm] = useState(false)
 
   // Record view when reel becomes visible (only for valid UUIDs, not temp IDs)
   useEffect(() => {
@@ -226,7 +227,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     }
   }, [isVisible, reel?.id])
 
-  // Fetch race details and scoreboard when race modal opens
+  // Fetch race details, scoreboard, and boost status when race modal opens
   useEffect(() => {
     const fetchRaceData = async () => {
       if (!showRaceModal || !reel?.targetRace) return
@@ -240,20 +241,40 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           setRaceFollowed(race.isFollowing || false)
           setRaceParticipating(race.isCompeting || false)
 
-          // Fetch scoreboard
-          const scoreboardResponse = await racesApi.getScoreboard(race.id, { period: '7d' })
+          // Fetch scoreboard and boost status in parallel
+          const [scoreboardResponse, boostStatusResponse] = await Promise.all([
+            racesApi.getScoreboard(race.id, { period: '7d' }),
+            racesApi.getBoostStatus(race.id).catch(() => ({ data: { boostedUserIds: [], boostedPartyIds: [] } }))
+          ])
+
           if (scoreboardResponse.data) {
-            const scoreboard = scoreboardResponse.data.map((entry) => ({
-              id: entry.user?.id || entry.id,
-              name: entry.user?.displayName || entry.user?.username || 'Unknown',
-              avatar: entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`,
-              data: entry.sparkline?.map(s => s.points) || [0],
-              totalPoints: entry.totalPoints || 0,
-              rank: entry.rank,
-              tier: entry.tier,
-              sparkline: entry.sparkline?.map(s => s.points) || [0],
-              change: entry.change || 0,
-            }))
+            const scoreboard = scoreboardResponse.data.map((entry) => {
+              // Handle both user races and party races
+              const isPartyEntry = !entry.user && entry.party
+              const entityId = isPartyEntry ? entry.party?.id : entry.user?.id || entry.id
+              const entityName = isPartyEntry
+                ? entry.party?.name
+                : (entry.user?.displayName || entry.user?.username || 'Unknown')
+              const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
+              const entityAvatar = isPartyEntry
+                ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
+                : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+
+              return {
+                id: entityId,
+                username: entityHandle || 'unknown',
+                name: entityName,
+                avatar: entityAvatar,
+                data: entry.sparkline?.map(s => s.points) || [0],
+                totalPoints: entry.totalPoints || 0,
+                rank: entry.rank,
+                tier: entry.tier,
+                sparkline: entry.sparkline?.map(s => s.points) || [0],
+                change: entry.change || 0,
+                isPartyEntry, // Track whether this is a party entry for navigation
+                partyName: isPartyEntry ? entry.party?.name : null,
+              }
+            })
             setRaceScoreboard(scoreboard)
             // Initialize nomination counts from totalPoints
             const counts = {}
@@ -261,6 +282,20 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               counts[c.id] = c.totalPoints
             })
             setNominationCounts(counts)
+
+            // Pre-populate nominatedCandidates from boost status
+            const boostData = boostStatusResponse.data || boostStatusResponse
+            const boostedIds = new Set([
+              ...(boostData.boostedUserIds || []),
+              ...(boostData.boostedPartyIds || [])
+            ])
+            setNominatedCandidates(boostedIds)
+
+            // Check if the reel's poster (user or party) is in the boosted list
+            const posterId = data.isPartyPost ? data.partyId : data.user?.id
+            if (posterId && boostedIds.has(posterId)) {
+              setHasNominatedPoster(true)
+            }
           }
         }
       } catch (error) {
@@ -269,6 +304,35 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     }
     fetchRaceData()
   }, [showRaceModal, reel?.targetRace])
+
+  // Fetch boost status on mount for the main Nominate button (if reel has targetRace)
+  useEffect(() => {
+    const fetchInitialBoostStatus = async () => {
+      if (!reel?.targetRace) return
+      try {
+        // Find race by name
+        const racesResponse = await racesApi.listRaces()
+        const race = racesResponse.data?.find(r => r.title === reel.targetRace)
+        if (race) {
+          setRaceDetails(race)
+          const boostStatusResponse = await racesApi.getBoostStatus(race.id).catch(() => ({ data: { boostedUserIds: [], boostedPartyIds: [] } }))
+          const boostData = boostStatusResponse.data || boostStatusResponse
+
+          // Check if the reel's poster (user or party) is already boosted
+          const posterId = data.isPartyPost ? data.partyId : data.user?.id
+          if (posterId) {
+            const boostedIds = [...(boostData.boostedUserIds || []), ...(boostData.boostedPartyIds || [])]
+            if (boostedIds.includes(posterId)) {
+              setHasNominatedPoster(true)
+            }
+          }
+        }
+      } catch (error) {
+        // Silent fail - don't block the UI
+      }
+    }
+    fetchInitialBoostStatus()
+  }, [reel?.id, reel?.targetRace])
 
   // Race deadline from real data or fallback
   const raceDeadline = raceDetails?.endDate ? new Date(raceDetails.endDate) : null
@@ -583,17 +647,48 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           {/* Nominate button */}
           <button
               className={`nominate-btn ${hasNominatedPoster ? 'nominated' : ''}`}
-              onClick={() => {
-                if (hasNominatedPoster) return // Already nominated
+              onClick={async () => {
+                if (data.targetRace && raceDetails?.id) {
+                  // Has target race - call API to toggle nomination
+                  try {
+                    // Determine target: party for party posts, user otherwise
+                    const boostData = data.isPartyPost
+                      ? { targetPartyId: data.partyId || data.party?.id }
+                      : { targetUserId: data.user?.id }
 
-                if (data.targetRace) {
-                  // Has target race - auto-nominate with checkmark and sound
-                  setHasNominatedPoster(true)
-                  playNominateSound()
-                  if (onTrackActivity) {
-                    onTrackActivity('nominate', data)
+                    const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
+
+                    // Update UI based on result
+                    setHasNominatedPoster(result.boosted)
+
+                    // Update nomination counts in modal if it's open
+                    const targetId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
+                    if (targetId) {
+                      setNominatedCandidates(prev => {
+                        const next = new Set(prev)
+                        if (result.boosted) {
+                          next.add(targetId)
+                        } else {
+                          next.delete(targetId)
+                        }
+                        return next
+                      })
+                      setNominationCounts(prev => ({
+                        ...prev,
+                        [targetId]: result.newPoints
+                      }))
+                    }
+
+                    if (result.boosted) {
+                      playNominateSound()
+                      if (onTrackActivity) {
+                        onTrackActivity('nominate', data)
+                      }
+                    }
+                  } catch (error) {
+                    console.log('Nominate error:', error.message)
                   }
-                } else {
+                } else if (!data.targetRace) {
                   // No target race - show race selection with default + user's followed races
                   setShowNominateRaceSelect(true)
                 }
@@ -681,39 +776,58 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               <div className="race-modal-title-row">
                 <h2 className="race-modal-title">{data.targetRace}</h2>
                 <div className="race-modal-actions">
-                  <button
-                    className={`race-modal-btn follow ${raceFollowed ? 'checked' : ''}`}
-                    onClick={async () => {
-                      if (!raceDetails?.id) return
-                      try {
-                        if (raceFollowed) {
-                          await racesApi.unfollowRace(raceDetails.id)
-                          setRaceFollowed(false)
-                        } else {
-                          await racesApi.followRace(raceDetails.id)
-                          setRaceFollowed(true)
+                  {/* Hide follow button for system races - everyone auto-follows */}
+                  {!raceDetails?.isSystemRace && (
+                    <button
+                      className={`race-modal-btn follow ${raceFollowed ? 'checked' : ''}`}
+                      onClick={async () => {
+                        if (!raceDetails?.id) return
+                        try {
+                          if (raceFollowed) {
+                            await racesApi.unfollowRace(raceDetails.id)
+                            setRaceFollowed(false)
+                          } else {
+                            await racesApi.followRace(raceDetails.id)
+                            setRaceFollowed(true)
+                          }
+                        } catch (error) {
+                          console.log('Follow race error:', error.message)
                         }
-                      } catch (error) {
-                        console.log('Follow race error:', error.message)
-                      }
-                    }}
-                  >
-                    {raceFollowed ? '✓ Following' : 'Follow'}
-                  </button>
-                  <button
-                    className={`race-modal-btn participate ${raceParticipating ? 'checked' : ''}`}
-                    onClick={async () => {
-                      if (!raceDetails?.id) return
-                      try {
-                        await racesApi.competeInRace(raceDetails.id)
-                        setRaceParticipating(true)
-                      } catch (error) {
-                        console.log('Compete in race error:', error.message)
-                      }
-                    }}
-                  >
-                    {raceParticipating ? '✓ Racing' : 'Join Race'}
-                  </button>
+                      }}
+                    >
+                      {raceFollowed ? '✓ Following' : 'Follow'}
+                    </button>
+                  )}
+                  {/* System races: candidates show "Racing" (auto-enrolled), participants show "Race" with opt-in flow */}
+                  {raceDetails?.isSystemRace ? (
+                    hasOptedIn ? (
+                      <button className="race-modal-btn participate checked" disabled>
+                        ✓ Racing
+                      </button>
+                    ) : (
+                      <button
+                        className="race-modal-btn participate"
+                        onClick={() => setShowOptInConfirm(true)}
+                      >
+                        Race
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      className={`race-modal-btn participate ${raceParticipating ? 'checked' : ''}`}
+                      onClick={async () => {
+                        if (!raceDetails?.id) return
+                        try {
+                          await racesApi.competeInRace(raceDetails.id)
+                          setRaceParticipating(true)
+                        } catch (error) {
+                          console.log('Compete in race error:', error.message)
+                        }
+                      }}
+                    >
+                      {raceParticipating ? '✓ Racing' : 'Join Race'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -721,11 +835,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               {raceScoreboard.length > 0 ? (
                 <RaceChart
                   candidates={raceScoreboard}
-                  onCandidateClick={(candidate) => { pauseVideo(); onUsernameClick?.({
-                    username: candidate.name,
-                    avatar: candidate.avatar,
-                    party: null
-                  }) }}
+                  onCandidateClick={(candidate) => {
+                    pauseVideo()
+                    if (candidate.isPartyEntry) {
+                      // Navigate to party profile for party races
+                      onPartyClick?.(candidate.partyName)
+                    } else {
+                      // Navigate to user profile for user races
+                      onUsernameClick?.({
+                        id: candidate.id,
+                        username: candidate.username,
+                        avatar: candidate.avatar,
+                        party: null
+                      })
+                    }
+                  }}
                 />
               ) : (
                 <div className="race-chart-empty">No competitors yet</div>
@@ -739,11 +863,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     <div
                       key={candidate.id}
                       className="race-contestant-row"
-                      onClick={() => { pauseVideo(); onUsernameClick?.({
-                        username: candidate.name,
-                        avatar: candidate.avatar,
-                        party: null
-                      }) }}
+                      onClick={() => {
+                        pauseVideo()
+                        if (candidate.isPartyEntry) {
+                          // Navigate to party profile for party races
+                          onPartyClick?.(candidate.partyName)
+                        } else {
+                          // Navigate to user profile for user races
+                          onUsernameClick?.({
+                            id: candidate.id,
+                            username: candidate.username,
+                            avatar: candidate.avatar,
+                            party: null
+                          })
+                        }
+                      }}
                     >
                       <span className="race-contestant-rank">{candidate.rank || idx + 1}</span>
                       <img src={candidate.avatar} alt={candidate.name} className="race-contestant-avatar" />
@@ -761,22 +895,44 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       </div>
                       <button
                         className={`race-nominate-btn ${isNominated ? 'nominated' : ''}`}
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation()
-                          const wasNominated = nominatedCandidates.has(candidate.id)
-                          setNominatedCandidates(prev => {
-                            const next = new Set(prev)
-                            if (next.has(candidate.id)) {
-                              next.delete(candidate.id)
-                            } else {
-                              next.add(candidate.id)
+
+                          try {
+                            // Build boost data based on whether this is a party or user entry
+                            const boostData = candidate.isPartyEntry
+                              ? { targetPartyId: candidate.id }
+                              : { targetUserId: candidate.id }
+
+                            const result = await racesApi.boostCompetitor(raceDetails.id, boostData)
+
+                            // Update local state based on result (toggled)
+                            setNominatedCandidates(prev => {
+                              const next = new Set(prev)
+                              if (result.boosted) {
+                                next.add(candidate.id)
+                              } else {
+                                next.delete(candidate.id)
+                              }
+                              return next
+                            })
+                            setNominationCounts(prev => ({
+                              ...prev,
+                              [candidate.id]: result.newPoints
+                            }))
+
+                            // Sync with main Nominate button if this is the poster
+                            const posterId = data.isPartyPost ? (data.partyId || data.party?.id) : data.user?.id
+                            if (candidate.id === posterId) {
+                              setHasNominatedPoster(result.boosted)
                             }
-                            return next
-                          })
-                          setNominationCounts(prev => ({
-                            ...prev,
-                            [candidate.id]: (prev[candidate.id] || candidate.totalPoints) + (wasNominated ? -1 : 1)
-                          }))
+
+                            if (result.boosted) {
+                              playNominateSound()
+                            }
+                          } catch (error) {
+                            console.log('Boost error:', error.message)
+                          }
                         }}
                       >
                         {isNominated ? '✓' : '+'}
@@ -787,6 +943,38 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               ) : (
                 <div className="race-contestants-empty">No competitors yet. Be the first to join!</div>
               )}
+            </div>
+          </div>
+        </>,
+        document.getElementById('modal-root') || document.body
+      )}
+
+      {/* Opt-in Confirmation Modal for System Races */}
+      {showOptInConfirm && createPortal(
+        <>
+          <div className="race-modal-backdrop" onClick={() => setShowOptInConfirm(false)} />
+          <div className="opt-in-confirm-modal">
+            <div className="opt-in-confirm-icon">⚠️</div>
+            <h3 className="opt-in-confirm-title">Become a Candidate?</h3>
+            <p className="opt-in-confirm-message">
+              You'll be able to run in races and gain access to reviews and start winning cool people points.
+            </p>
+            <div className="opt-in-confirm-actions">
+              <button
+                className="opt-in-confirm-btn cancel"
+                onClick={() => setShowOptInConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="opt-in-confirm-btn confirm"
+                onClick={() => {
+                  onOptIn?.()
+                  setShowOptInConfirm(false)
+                }}
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </>,

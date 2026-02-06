@@ -266,12 +266,15 @@ export const leaveRace = async (
 
 export const removeUserFromAllRaces = async (userId: string): Promise<void> => {
   // Delete all race competitor entries for this user
+  // This removes them from scoreboards but preserves their point ledgers
   await prisma.raceCompetitor.deleteMany({ where: { userId } });
 
-  // Delete all point ledger entries for this user
-  await prisma.pointLedger.deleteMany({ where: { userId } });
+  // NOTE: We intentionally do NOT delete pointLedgers here.
+  // Per spec: "Reverting to Participant: Points are frozen (decay still active)"
+  // Points are preserved so if the user becomes a candidate again, they keep their points
+  // (minus any decay that occurred while they were a participant).
 
-  console.log(`Removed user ${userId} from all races`);
+  console.log(`Removed user ${userId} from all races (points preserved)`);
 };
 
 // -----------------------------------------------------------------------------
@@ -593,4 +596,135 @@ const getSparklineDateFilter = (period: string): Date | null => {
     default:
       return null;
   }
+};
+
+// -----------------------------------------------------------------------------
+// Boost Competitor (direct points without reel context)
+// One boost per user per target per race (permanent, can be toggled)
+// -----------------------------------------------------------------------------
+
+export const boostCompetitor = async (
+  boosterId: string,
+  raceId: string,
+  targetUserId?: string,
+  targetPartyId?: string
+): Promise<{ success: boolean; newPoints: number; boosted: boolean }> => {
+  // Verify race exists
+  const race = await prisma.race.findUnique({ where: { id: raceId } });
+  if (!race) throw new NotFoundError('Race');
+
+  // Prevent self-boost for users
+  if (targetUserId && boosterId === targetUserId) {
+    throw new ForbiddenError('Cannot boost yourself');
+  }
+
+  if (!targetUserId && !targetPartyId) {
+    throw new ForbiddenError('Must specify either targetUserId or targetPartyId');
+  }
+
+  // Check for existing boost (one per user per target per race - permanent)
+  const existingBoost = await prisma.raceBoost.findFirst({
+    where: {
+      boosterId,
+      raceId,
+      ...(targetUserId ? { targetUserId } : { targetPartyId }),
+    },
+  });
+
+  let newPoints = 0;
+  let boosted = false;
+
+  if (existingBoost) {
+    // Already boosted - remove the boost (un-nominate)
+    await prisma.raceBoost.delete({ where: { id: existingBoost.id } });
+
+    // Deduct points
+    await recordPointEvent({
+      targetUserId,
+      targetPartyId,
+      raceId,
+      action: 'NOMINATE',
+      points: -POINT_WEIGHTS.NOMINATE, // Negative to deduct
+      sourceUserId: boosterId,
+    });
+
+    boosted = false;
+  } else {
+    // Not boosted yet - create boost
+    await prisma.raceBoost.create({
+      data: {
+        boosterId,
+        raceId,
+        targetUserId,
+        targetPartyId,
+      },
+    });
+
+    // Award points
+    await recordPointEvent({
+      targetUserId,
+      targetPartyId,
+      raceId,
+      action: 'NOMINATE',
+      points: POINT_WEIGHTS.NOMINATE,
+      sourceUserId: boosterId,
+    });
+
+    boosted = true;
+
+    // Send notification (only for user targets, only on boost not unboost)
+    if (targetUserId) {
+      const booster = await prisma.user.findUnique({
+        where: { id: boosterId },
+        select: { username: true, avatarUrl: true },
+      });
+
+      createNotification({
+        userId: targetUserId,
+        type: 'NOMINATION',
+        title: 'Someone nominated you!',
+        body: `${booster?.username ?? 'Someone'} nominated you in ${race.title}`,
+        data: {
+          raceId,
+          boosterId,
+          actorUsername: booster?.username,
+          actorAvatarUrl: booster?.avatarUrl,
+        },
+      }).catch(() => {});
+    }
+  }
+
+  // Get updated points
+  if (targetUserId) {
+    const ledger = await prisma.pointLedger.findUnique({
+      where: { userId_raceId: { userId: targetUserId, raceId } },
+    });
+    newPoints = ledger?.totalPoints ?? 0;
+  } else if (targetPartyId) {
+    const ledger = await prisma.pointLedger.findUnique({
+      where: { partyId_raceId: { partyId: targetPartyId, raceId } },
+    });
+    newPoints = ledger?.totalPoints ?? 0;
+  }
+
+  return { success: true, newPoints, boosted };
+};
+
+// -----------------------------------------------------------------------------
+// Get Boost Status - Check what the user has boosted in a race
+// -----------------------------------------------------------------------------
+
+export const getBoostStatus = async (
+  userId: string,
+  raceId: string
+): Promise<{ boostedUserIds: string[]; boostedPartyIds: string[] }> => {
+  const boosts = await prisma.raceBoost.findMany({
+    where: { boosterId: userId, raceId },
+    select: { targetUserId: true, targetPartyId: true },
+  });
+
+  return {
+    boostedUserIds: boosts.filter(b => b.targetUserId).map(b => b.targetUserId!),
+    boostedPartyIds: boosts.filter(b => b.targetPartyId).map(b => b.targetPartyId!),
+  };
 };

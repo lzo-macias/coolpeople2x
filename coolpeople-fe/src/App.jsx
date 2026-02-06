@@ -1657,6 +1657,8 @@ function AppContent() {
                   }}
                   onHide={handleHideReel}
                   userRacesFollowing={userRacesFollowing}
+                  hasOptedIn={hasOptedIn}
+                  onOptIn={handleOptIn}
                 />
               )
             })}

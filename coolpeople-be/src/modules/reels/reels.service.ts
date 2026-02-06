@@ -669,6 +669,12 @@ export const hideReel = async (
     await prisma.hide.create({
       data: { userId, hiddenReelId: reelId },
     });
+
+    // Deduct HIDE points from reel creator (and party if applicable)
+    // Only if hider is not the creator
+    if (reel.userId !== userId) {
+      recordReelEngagementPoints(reelId, reel.userId, userId, 'HIDE').catch(() => {});
+    }
   } catch (err: any) {
     if (err?.code === 'P2002') throw new ConflictError('Already hidden');
     throw err;
@@ -706,6 +712,7 @@ export const getFollowingFeed = async (
 
   // Raw SQL for weighted feed scoring
   // Shows ALL reels (global feed), prioritized by engagement signals
+  // Own posts are excluded - users see their posts on their profile, not in feed
   // Hidden/blocked users are filtered out
   const feedReels: any[] = await prisma.$queryRaw`
     SELECT r.id,
@@ -713,14 +720,12 @@ export const getFollowingFeed = async (
       CASE WHEN fav.id IS NOT NULL THEN 50 ELSE 0 END as favorite_boost,
       COALESCE(a.score, 0) * 20 as affinity_score,
       (r."likeCount" + r."commentCount" + r."shareCount") * 0.5 as popularity_score,
-      CASE WHEN r."userId" = ${userId} THEN 25 ELSE 0 END as own_post_boost,
       CASE WHEN fo.id IS NOT NULL THEN 10 ELSE 0 END as following_boost,
       (
         GREATEST(0, 100 - EXTRACT(EPOCH FROM (NOW() - r."createdAt")) / 3600 * 2) +
         CASE WHEN fav.id IS NOT NULL THEN 50 ELSE 0 END +
         COALESCE(a.score, 0) * 20 +
         (r."likeCount" + r."commentCount" + r."shareCount") * 0.5 +
-        CASE WHEN r."userId" = ${userId} THEN 25 ELSE 0 END +
         CASE WHEN fo.id IS NOT NULL THEN 10 ELSE 0 END
       ) as total_score
     FROM "Reel" r
@@ -734,6 +739,7 @@ export const getFollowingFeed = async (
     )
     LEFT JOIN "Block" b ON r."userId" = b."blockedId" AND b."blockerId" = ${userId}
     WHERE r."deletedAt" IS NULL
+      AND r."userId" != ${userId}
       AND h.id IS NULL
       AND b.id IS NULL
     ORDER BY total_score DESC, r."createdAt" DESC
@@ -773,7 +779,7 @@ export const getFollowingFeed = async (
   const userReposts = await prisma.repost.findMany({
     where: {
       userId: { in: repostUserIds },
-      reel: { deletedAt: null },
+      reel: { deletedAt: null, userId: { not: userId } }, // Exclude reposts of my own posts
     },
     orderBy: { createdAt: 'desc' },
     take: 20,

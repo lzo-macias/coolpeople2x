@@ -247,6 +247,10 @@ model User {
   // Direct message reactions
   dmReactions     DirectMessageReaction[]
 
+  // Race boosts
+  boostsGiven     RaceBoost[] @relation("BoostsGiven")
+  boostsReceived  RaceBoost[] @relation("BoostsReceived")
+
   @@index([email])
   @@index([username])
   @@index([userType])
@@ -312,6 +316,9 @@ model Party {
 
   // Banned members
   bans            PartyBan[]
+
+  // Race boosts received
+  boostsReceived  RaceBoost[]
 
   @@index([name])
   @@index([handle])
@@ -415,6 +422,9 @@ model Race {
   // Ballots
   ballots         Ballot[]
 
+  // Boosts
+  boosts          RaceBoost[]
+
   @@index([raceType])
   @@index([isSystemRace])
 }
@@ -453,6 +463,28 @@ model RaceCompetitor {
   @@unique([raceId, userId])
   @@unique([raceId, partyId])
   @@index([raceId])
+}
+
+// User can boost a competitor (user or party) once per day per race
+model RaceBoost {
+  id              String   @id @default(uuid())
+  boosterId       String   // User giving the boost
+  raceId          String
+
+  // Polymorphic target - one will be null
+  targetUserId    String?
+  targetPartyId   String?
+
+  createdAt       DateTime @default(now())
+
+  booster         User     @relation("BoostsGiven", fields: [boosterId], references: [id], onDelete: Cascade)
+  race            Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  targetUser      User?    @relation("BoostsReceived", fields: [targetUserId], references: [id], onDelete: Cascade)
+  targetParty     Party?   @relation(fields: [targetPartyId], references: [id], onDelete: Cascade)
+
+  @@index([boosterId, raceId, createdAt])
+  @@index([targetUserId, raceId])
+  @@index([targetPartyId, raceId])
 }
 
 // =============================================================================

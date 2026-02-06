@@ -98,3 +98,20 @@ export const userNominationsParamSchema = z.object({
     userId: z.string().uuid('Invalid user ID'),
   }),
 });
+
+// -----------------------------------------------------------------------------
+// Boost Competitor
+// -----------------------------------------------------------------------------
+
+export const boostSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid race ID'),
+  }),
+  body: z.object({
+    targetUserId: z.string().uuid('Invalid user ID').optional(),
+    targetPartyId: z.string().uuid('Invalid party ID').optional(),
+  }).refine(
+    (data) => data.targetUserId || data.targetPartyId,
+    { message: 'Must provide either targetUserId or targetPartyId' }
+  ),
+});

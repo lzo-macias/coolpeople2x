@@ -219,3 +219,28 @@ export const getBallotResults = async (req: Request, res: Response): Promise<voi
   const results = await ballotService.getBallotResults(id);
   sendSuccess(res, results);
 };
+
+// -----------------------------------------------------------------------------
+// POST /api/races/:id/boost - Boost a competitor (toggle)
+// -----------------------------------------------------------------------------
+
+export const boostCompetitor = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const result = await racesService.boostCompetitor(
+    req.user!.userId,
+    id,
+    req.body.targetUserId,
+    req.body.targetPartyId
+  );
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/races/:id/boosts - Get user's boost status in a race
+// -----------------------------------------------------------------------------
+
+export const getBoostStatus = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const result = await racesService.getBoostStatus(req.user!.userId, id);
+  sendSuccess(res, result);
+};

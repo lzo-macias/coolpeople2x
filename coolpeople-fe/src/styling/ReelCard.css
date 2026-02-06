@@ -597,6 +597,78 @@
   border-color: #E8A855;
 }
 
+.race-modal-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Opt-in Confirmation Modal */
+.opt-in-confirm-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1A1A1A;
+  border-radius: 16px;
+  padding: 24px;
+  width: 300px;
+  z-index: 10001;
+  text-align: center;
+}
+
+.opt-in-confirm-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.opt-in-confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+
+.opt-in-confirm-message {
+  font-size: 14px;
+  color: #999;
+  margin: 0 0 20px 0;
+  line-height: 1.4;
+}
+
+.opt-in-confirm-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.opt-in-confirm-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.opt-in-confirm-btn.cancel {
+  background: #333;
+  color: #fff;
+}
+
+.opt-in-confirm-btn.cancel:hover {
+  background: #444;
+}
+
+.opt-in-confirm-btn.confirm {
+  background: #E8A855;
+  color: #2A1F0F;
+}
+
+.opt-in-confirm-btn.confirm:hover {
+  background: #D4954A;
+}
+
 .race-modal-chart {
   display: flex;
   justify-content: center;

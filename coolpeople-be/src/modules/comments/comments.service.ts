@@ -6,6 +6,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { recordReelEngagementPoints } from '../points/points.service.js';
 import type { CommentResponse, CreateCommentRequest } from './comments.types.js';
 
 // -----------------------------------------------------------------------------
@@ -138,7 +139,7 @@ export const createComment = async (
     select: { username: true, avatarUrl: true },
   });
 
-  // Update affinity (comment = +3)
+  // Update affinity (comment = +3) and award points
   if (reel.userId !== userId) {
     prisma.userAffinity
       .upsert({
@@ -147,6 +148,9 @@ export const createComment = async (
         create: { userId, targetUserId: reel.userId, score: 3 },
       })
       .catch(() => {});
+
+    // Award COMMENT points to reel creator (and party if applicable)
+    recordReelEngagementPoints(reelId, reel.userId, userId, 'COMMENT').catch(() => {});
 
     // Notification for reel creator
     createNotification({

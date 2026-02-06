@@ -16,6 +16,7 @@ import {
   scoreboardQuerySchema,
   nominateSchema,
   userNominationsParamSchema,
+  boostSchema,
 } from './races.schemas.js';
 import { ballotParamSchema, submitBallotSchema } from './ballot.schemas.js';
 
@@ -149,6 +150,26 @@ router.post(
   requireAuth,
   validate(nominateSchema),
   racesController.nominateCandidate
+);
+
+// -----------------------------------------------------------------------------
+// Boost
+// -----------------------------------------------------------------------------
+
+// GET /api/races/:id/boosts - Get user's boost status in a race
+router.get(
+  '/:id/boosts',
+  requireAuth,
+  validate(raceIdParamSchema),
+  racesController.getBoostStatus
+);
+
+// POST /api/races/:id/boost - Boost a competitor directly (toggle on/off)
+router.post(
+  '/:id/boost',
+  requireAuth,
+  validate(boostSchema),
+  racesController.boostCompetitor
 );
 
 // -----------------------------------------------------------------------------

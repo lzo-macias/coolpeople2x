@@ -831,22 +831,27 @@ export const becomeCandidate = async (userId: string): Promise<PrivateProfile> =
       },
     }),
 
-    // Enroll in CoolPeople race
-    prisma.raceCompetitor.create({
-      data: {
+    // Enroll in CoolPeople race (upsert in case they were enrolled before)
+    prisma.raceCompetitor.upsert({
+      where: { raceId_userId: { raceId: coolPeopleRace.id, userId: userId } },
+      create: {
         raceId: coolPeopleRace.id,
         userId: userId,
       },
+      update: {}, // No changes if already exists
     }),
 
-    // Create point ledger for this race
-    prisma.pointLedger.create({
-      data: {
+    // Create or preserve point ledger for this race
+    // If user was a candidate before and reverted, their points are preserved
+    prisma.pointLedger.upsert({
+      where: { userId_raceId: { userId: userId, raceId: coolPeopleRace.id } },
+      create: {
         userId: userId,
         raceId: coolPeopleRace.id,
         totalPoints: 0,
         tier: 'BRONZE',
       },
+      update: {}, // Preserve existing points if ledger exists
     }),
 
     // Auto-approve all pending follow requests
