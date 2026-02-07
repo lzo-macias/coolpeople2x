@@ -4,7 +4,7 @@ import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/CreateScreen.css'
-import { messagesApi, usersApi } from '../services/api'
+import { messagesApi, usersApi, partiesApi, searchApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 
 // Mock phone contacts
@@ -23,6 +23,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
   const [platformUsers, setPlatformUsers] = useState([])
   const [loadingPlatformUsers, setLoadingPlatformUsers] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const searchTimeoutRef = useRef(null)
   const [showAddSound, setShowAddSound] = useState(false)
   const [selectedSound, setSelectedSound] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -116,7 +119,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     saveDraftsToStorage(drafts)
   }, [drafts])
 
-  // Fetch real platform users (DM contacts + following) for tagging
+  // Fetch real platform users (DM contacts + ALL following) and parties for tagging
   const fetchPlatformUsers = useCallback(async () => {
     if (!authUser?.id) return
     setLoadingPlatformUsers(true)
@@ -138,6 +141,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 name: otherUser.name || otherUser.displayName || otherUser.handle || 'User',
                 avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/100?u=${otherUser.id}`,
                 isOnPlatform: true,
+                type: 'user',
               })
             }
           })
@@ -146,26 +150,57 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         console.warn('Failed to fetch conversations for tagging:', e)
       }
 
-      // 2. Fetch following
+      // 2. Fetch ALL following (paginate through every page)
       try {
-        const followingRes = await usersApi.getFollowing(authUser.id)
-        if (followingRes.data) {
-          followingRes.data.slice(0, 20).forEach(f => {
-            const followedUser = f.following || f
-            if (followedUser && !seenIds.has(followedUser.id)) {
-              seenIds.add(followedUser.id)
+        let cursor = undefined
+        let hasMore = true
+        while (hasMore) {
+          const followingRes = await usersApi.getFollowing(authUser.id, cursor)
+          if (followingRes.data && followingRes.data.length > 0) {
+            followingRes.data.forEach(f => {
+              const followedUser = f.following || f
+              if (followedUser && !seenIds.has(followedUser.id)) {
+                seenIds.add(followedUser.id)
+                users.push({
+                  id: followedUser.id,
+                  username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
+                  name: followedUser.name || followedUser.displayName || followedUser.handle || 'User',
+                  avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/100?u=${followedUser.id}`,
+                  isOnPlatform: true,
+                  type: 'user',
+                })
+              }
+            })
+            cursor = followingRes.pagination?.cursor || followingRes.nextCursor
+            hasMore = !!(cursor && followingRes.pagination?.hasMore !== false)
+          } else {
+            hasMore = false
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch following for tagging:', e)
+      }
+
+      // 3. Fetch parties (available on the platform)
+      try {
+        const partiesRes = await partiesApi.listParties()
+        if (partiesRes.data) {
+          partiesRes.data.forEach(party => {
+            if (!seenIds.has(`party-${party.id}`)) {
+              seenIds.add(`party-${party.id}`)
               users.push({
-                id: followedUser.id,
-                username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
-                name: followedUser.name || followedUser.displayName || followedUser.handle || 'User',
-                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/100?u=${followedUser.id}`,
+                id: party.id,
+                username: party.handle || party.name,
+                name: party.name,
+                avatar: party.avatarUrl || `https://i.pravatar.cc/100?u=${party.id}`,
                 isOnPlatform: true,
+                type: 'party',
               })
             }
           })
         }
       } catch (e) {
-        console.warn('Failed to fetch following for tagging:', e)
+        console.warn('Failed to fetch parties for tagging:', e)
       }
 
       setPlatformUsers(users)
@@ -182,6 +217,75 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       fetchPlatformUsers()
     }
   }, [showTagFlow, tagSource, platformUsers.length, fetchPlatformUsers])
+
+  // Debounced live search for ANY user or party on the platform
+  useEffect(() => {
+    if (tagSource !== 'platform' || !tagQuery.trim()) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = []
+        const seenIds = new Set()
+
+        // Search users
+        const usersRes = await searchApi.search(tagQuery.trim(), { type: 'users', limit: 20 })
+        if (usersRes.data?.users) {
+          usersRes.data.users.forEach(user => {
+            if (!seenIds.has(user.id)) {
+              seenIds.add(user.id)
+              results.push({
+                id: user.id,
+                username: user.username || user.displayName || 'user',
+                name: user.displayName || user.username || 'User',
+                avatar: user.avatarUrl || `https://i.pravatar.cc/100?u=${user.id}`,
+                isOnPlatform: true,
+                type: 'user',
+              })
+            }
+          })
+        }
+
+        // Search parties
+        const partiesRes = await searchApi.search(tagQuery.trim(), { type: 'parties', limit: 20 })
+        if (partiesRes.data?.parties) {
+          partiesRes.data.parties.forEach(party => {
+            if (!seenIds.has(`party-${party.id}`)) {
+              seenIds.add(`party-${party.id}`)
+              results.push({
+                id: party.id,
+                username: party.handle || party.name,
+                name: party.name,
+                avatar: party.avatarUrl || `https://i.pravatar.cc/100?u=${party.id}`,
+                isOnPlatform: true,
+                type: 'party',
+              })
+            }
+          })
+        }
+
+        setSearchResults(results)
+      } catch (e) {
+        console.warn('Tag search failed:', e)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [tagQuery, tagSource])
 
   // Clear all drafts - call window.clearDrafts() in browser console
   useEffect(() => {
@@ -673,10 +777,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const getFilteredUsers = () => {
     const query = tagQuery.toLowerCase()
     if (tagSource === 'platform') {
-      return platformUsers.filter(user =>
-        user.username.toLowerCase().includes(query) ||
-        user.name.toLowerCase().includes(query)
-      )
+      // When searching, use live API search results
+      if (query.trim()) {
+        return searchResults
+      }
+      // When not searching, show all pre-fetched users & parties
+      return platformUsers
     } else if (tagSource === 'contacts') {
       return mockContacts.filter(contact => {
         const displayName = customContactNames[contact.id] || contact.name || contact.phone
@@ -1071,17 +1177,35 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             {/* Users/Contacts List */}
             {tagSource !== 'phone' && (
               <div className="tag-users-list">
+                {isSearching && tagQuery.trim() && (
+                  <div className="tag-searching-indicator">Searching...</div>
+                )}
                 {filteredUsers.map(user => (
                   <div
-                    key={user.id}
+                    key={`${user.type || 'user'}-${user.id}`}
                     className={`tag-user-item ${selectedTag?.id === user.id ? 'selected' : ''}`}
                     onClick={() => handleSelectTag(user)}
                   >
                     {tagSource === 'platform' ? (
                       <>
-                        <img src={user.avatar} alt={user.name} className="tag-user-avatar" />
+                        <div className="tag-avatar-wrapper">
+                          <img src={user.avatar} alt={user.name} className="tag-user-avatar" />
+                          {user.type === 'party' && (
+                            <span className="tag-party-badge">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
                         <div className="tag-user-info">
-                          <span className="tag-user-name">{user.name}</span>
+                          <span className="tag-user-name">
+                            {user.name}
+                            {user.type === 'party' && <span className="tag-party-label">Party</span>}
+                          </span>
                           <span className="tag-user-handle">@{user.username}</span>
                         </div>
                       </>
@@ -1101,6 +1225,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                     )}
                   </div>
                 ))}
+                {!isSearching && tagQuery.trim() && filteredUsers.length === 0 && (
+                  <div className="tag-no-results">No users or parties found</div>
+                )}
               </div>
             )}
 

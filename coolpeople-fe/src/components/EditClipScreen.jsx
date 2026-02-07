@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
-import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi } from '../services/api'
+import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, favoritesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 
@@ -115,23 +115,31 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         console.warn('Failed to fetch conversations for panel:', e)
       }
 
-      // 2. Fetch following
+      // 2. Fetch ALL following (paginate through every page)
       try {
-        const followingRes = await usersApi.getFollowing(authUser.id)
-        const followingList = Array.isArray(followingRes.data) ? followingRes.data : followingRes.data?.following
-        if (followingList) {
-          followingList.slice(0, 20).forEach(f => {
-            const followedUser = f.following || f
-            if (followedUser && !seenIds.has(followedUser.id)) {
-              seenIds.add(followedUser.id)
-              users.push({
-                id: followedUser.id,
-                username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
-                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/40?u=${followedUser.id}`,
-                type: 'user',
-              })
-            }
-          })
+        let cursor = undefined
+        let hasMore = true
+        while (hasMore) {
+          const followingRes = await usersApi.getFollowing(authUser.id, cursor)
+          const followingList = Array.isArray(followingRes.data) ? followingRes.data : followingRes.data?.following
+          if (followingList && followingList.length > 0) {
+            followingList.forEach(f => {
+              const followedUser = f.following || f
+              if (followedUser && !seenIds.has(followedUser.id)) {
+                seenIds.add(followedUser.id)
+                users.push({
+                  id: followedUser.id,
+                  username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
+                  avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/40?u=${followedUser.id}`,
+                  type: 'user',
+                })
+              }
+            })
+            cursor = followingRes.pagination?.cursor || followingRes.nextCursor
+            hasMore = !!(cursor && followingRes.pagination?.hasMore !== false)
+          } else {
+            hasMore = false
+          }
         }
       } catch (e) {
         console.warn('Failed to fetch following for panel:', e)
@@ -207,6 +215,26 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         }
       } catch (e) {
         console.warn('Failed to fetch parties for panel:', e)
+      }
+
+      // 5. Fetch favorited users
+      try {
+        const favRes = await favoritesApi.getFavorites()
+        const favList = favRes.favorites || favRes.data?.favorites || []
+        favList.forEach(fav => {
+          const favUser = fav.favoritedUser || fav
+          if (favUser && !seenIds.has(favUser.id)) {
+            seenIds.add(favUser.id)
+            users.push({
+              id: favUser.id,
+              username: favUser.handle || favUser.username || favUser.displayName || 'user',
+              avatar: favUser.avatarUrl || favUser.avatar || `https://i.pravatar.cc/40?u=${favUser.id}`,
+              type: 'user',
+            })
+          }
+        })
+      } catch (e) {
+        console.warn('Failed to fetch favorites for panel:', e)
       }
 
       setFetchedPlatformUsers(users)
@@ -503,16 +531,96 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const [showMentionPicker, setShowMentionPicker] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionSource, setMentionSource] = useState('platform')
+  const [mentionSearchResults, setMentionSearchResults] = useState([])
+  const [isMentionSearching, setIsMentionSearching] = useState(false)
+  const [selectedMentionUser, setSelectedMentionUser] = useState(null)
+  const [mentionMeta, setMentionMeta] = useState([]) // tracks {username, type: 'tag'|'nominate', userId}
+  const mentionSearchTimeoutRef = useRef(null)
 
-  // Reuse fetched platform users for mentions
+  // Reuse fetched platform users for mentions (users + parties)
   const mentionPlatformUsers = fetchedPlatformUsers.map(u => ({
     id: u.id,
     username: u.username,
     name: u.username,
     avatar: u.avatar,
+    type: u.type || 'user',
   }))
 
   const mentionContactUsers = []
+
+  // Fetch users when mention picker opens
+  useEffect(() => {
+    if (showMentionPicker && fetchedPlatformUsers.length === 0) {
+      fetchPanelUsers()
+    }
+  }, [showMentionPicker, fetchedPlatformUsers.length, fetchPanelUsers])
+
+  // Debounced live search for mention picker - finds ANY user or party on the platform
+  useEffect(() => {
+    if (!showMentionPicker || mentionSource !== 'platform' || !mentionQuery.trim()) {
+      setMentionSearchResults([])
+      setIsMentionSearching(false)
+      return
+    }
+
+    setIsMentionSearching(true)
+    if (mentionSearchTimeoutRef.current) {
+      clearTimeout(mentionSearchTimeoutRef.current)
+    }
+
+    mentionSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = []
+        const seenIds = new Set()
+
+        // Search users
+        const usersRes = await searchApi.search(mentionQuery.trim(), { type: 'users', limit: 20 })
+        if (usersRes.data?.users) {
+          usersRes.data.users.forEach(u => {
+            if (!seenIds.has(u.id)) {
+              seenIds.add(u.id)
+              results.push({
+                id: u.id,
+                username: u.username || u.displayName || 'user',
+                name: u.displayName || u.username || 'User',
+                avatar: u.avatarUrl || `https://i.pravatar.cc/40?u=${u.id}`,
+                type: 'user',
+              })
+            }
+          })
+        }
+
+        // Search parties
+        const partiesRes = await searchApi.search(mentionQuery.trim(), { type: 'parties', limit: 20 })
+        if (partiesRes.data?.parties) {
+          partiesRes.data.parties.forEach(p => {
+            if (!seenIds.has(`party-${p.id}`)) {
+              seenIds.add(`party-${p.id}`)
+              results.push({
+                id: p.id,
+                username: p.handle || p.name,
+                name: p.name,
+                avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=${p.id}`,
+                type: 'party',
+              })
+            }
+          })
+        }
+
+        setMentionSearchResults(results)
+      } catch (e) {
+        console.warn('Mention search failed:', e)
+      } finally {
+        setIsMentionSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      if (mentionSearchTimeoutRef.current) {
+        clearTimeout(mentionSearchTimeoutRef.current)
+      }
+    }
+  }, [mentionQuery, mentionSource, showMentionPicker])
 
   // Existing races from backend
   const [existingRaces, setExistingRaces] = useState([])
@@ -720,19 +828,41 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
   const getFilteredMentionUsers = () => {
     const query = mentionQuery.toLowerCase()
-    const users = mentionSource === 'platform' ? mentionPlatformUsers : mentionContactUsers
-    return users.filter(user => {
+    if (mentionSource === 'platform') {
+      // When searching, use live API search results
+      if (query.trim()) {
+        return mentionSearchResults
+      }
+      // When not searching, show all pre-fetched users & parties
+      return mentionPlatformUsers
+    }
+    // Contacts
+    return mentionContactUsers.filter(user => {
       const searchStr = (user.username || user.name || user.phone || '').toLowerCase()
       return searchStr.includes(query)
     })
   }
 
   const handleSelectMention = (user) => {
-    // Replace the @ at the end with @username
-    const newText = currentText.slice(0, -1) + '@' + (user.username || user.name || user.phone) + ' '
+    // Step 1: Select the user, show tag/nominate options
+    setSelectedMentionUser(user)
+  }
+
+  const handleMentionType = (mentionType) => {
+    // mentionType: 'tag' (bold white) or 'nominate' (gradient)
+    const username = selectedMentionUser.username || selectedMentionUser.name || selectedMentionUser.phone
+    // Replace the trailing @ with the mention marker
+    const mentionMarker = `@${username}`
+    const newText = currentText.replace(/@$/, '') + mentionMarker + ' '
     setCurrentText(newText)
+
+    // Store mention metadata in text overlays so we can render styled mentions
+    // We track mentions as part of the text overlay data
+    setMentionMeta(prev => [...prev, { username, type: mentionType, userId: selectedMentionUser.id }])
+
     setShowMentionPicker(false)
     setMentionQuery('')
+    setSelectedMentionUser(null)
   }
 
   // Auto-focus input when editing
@@ -885,14 +1015,15 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     if (currentText.trim()) {
       if (editingTextId) {
         setTextOverlays(prev => prev.map(t =>
-          t.id === editingTextId ? { ...t, text: currentText } : t
+          t.id === editingTextId ? { ...t, text: currentText, mentions: mentionMeta.length > 0 ? [...mentionMeta] : (t.mentions || []) } : t
         ))
       } else {
         const newText = {
           id: Date.now(),
           text: currentText,
           x: 100,
-          y: 300
+          y: 300,
+          mentions: [...mentionMeta],
         }
         setTextOverlays(prev => [...prev, newText])
       }
@@ -900,6 +1031,37 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     setShowTextEditor(false)
     setCurrentText('')
     setEditingTextId(null)
+    setMentionMeta([])
+  }
+
+  // Render text with styled mentions
+  const renderTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    // Build regex to match all @username mentions
+    const parts = []
+    let remaining = text
+    // Sort mentions by position in text (find each @username)
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      // Push text before mention
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain' })
+      // Push the mention
+      parts.push({ text: marker, type: mention.type, username: mention.username })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    // Push any remaining text
+    if (remaining) parts.push({ text: remaining, type: 'plain' })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') {
+        return <span key={i} className="mention-nominate">{part.text}</span>
+      } else if (part.type === 'tag') {
+        return <span key={i} className="mention-tag">{part.text}</span>
+      }
+      return <span key={i}>{part.text}</span>
+    })
   }
 
   // Text drag handlers
@@ -1197,10 +1359,11 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           onDoubleClick={() => {
             setCurrentText(textItem.text)
             setEditingTextId(textItem.id)
+            setMentionMeta(textItem.mentions || [])
             setShowTextEditor(true)
           }}
         >
-          <span className="edit-clip-text-content">{textItem.text}</span>
+          <span className="edit-clip-text-content">{renderTextWithMentions(textItem.text, textItem.mentions)}</span>
         </div>
       ))}
 
@@ -1228,55 +1391,103 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           {/* Mention Picker - shows when @ is typed */}
           {showMentionPicker && (
             <div className="text-editor-mention-picker" onClick={(e) => e.stopPropagation()}>
-              <div className="mention-picker-header">
-                <span className="mention-picker-at">@</span>
-                <input
-                  type="text"
-                  className="mention-picker-search"
-                  placeholder="search to tag someone"
-                  value={mentionQuery}
-                  onChange={(e) => setMentionQuery(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="mention-picker-toggle">
-                <button
-                  className={`mention-toggle-btn ${mentionSource === 'platform' ? 'active' : ''}`}
-                  onClick={() => setMentionSource('platform')}
-                >
-                  On Platform
-                </button>
-                <button
-                  className={`mention-toggle-btn ${mentionSource === 'contacts' ? 'active' : ''}`}
-                  onClick={() => setMentionSource('contacts')}
-                >
-                  Contacts
-                </button>
-              </div>
-              <div className="mention-picker-list">
-                {getFilteredMentionUsers().map(user => (
-                  <div
-                    key={user.id}
-                    className="mention-picker-item"
-                    onClick={() => handleSelectMention(user)}
-                  >
-                    {user.avatar ? (
-                      <img src={user.avatar} alt={user.name} className="mention-item-avatar" />
-                    ) : (
-                      <div className="mention-item-avatar-placeholder">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                      </div>
-                    )}
-                    <span className="mention-item-name">{user.username || user.name || user.phone}</span>
+              {!selectedMentionUser ? (
+                <>
+                  <div className="mention-picker-header">
+                    <span className="mention-picker-at">@</span>
+                    <input
+                      type="text"
+                      className="mention-picker-search"
+                      placeholder="search to tag someone"
+                      value={mentionQuery}
+                      onChange={(e) => setMentionQuery(e.target.value)}
+                      autoFocus
+                    />
                   </div>
-                ))}
-              </div>
-              <button className="mention-picker-close" onClick={() => setShowMentionPicker(false)}>
-                Cancel
-              </button>
+                  <div className="mention-picker-toggle">
+                    <button
+                      className={`mention-toggle-btn ${mentionSource === 'platform' ? 'active' : ''}`}
+                      onClick={() => setMentionSource('platform')}
+                    >
+                      On Platform
+                    </button>
+                    <button
+                      className={`mention-toggle-btn ${mentionSource === 'contacts' ? 'active' : ''}`}
+                      onClick={() => setMentionSource('contacts')}
+                    >
+                      Contacts
+                    </button>
+                  </div>
+                  <div className="mention-picker-list">
+                    {isMentionSearching && mentionQuery.trim() && (
+                      <div className="mention-searching-indicator">Searching...</div>
+                    )}
+                    {getFilteredMentionUsers().map(user => (
+                      <div
+                        key={`${user.type || 'user'}-${user.id}`}
+                        className="mention-picker-item"
+                        onClick={() => handleSelectMention(user)}
+                      >
+                        <div className="mention-avatar-wrapper">
+                          {user.avatar ? (
+                            <img src={user.avatar} alt={user.name} className="mention-item-avatar" />
+                          ) : (
+                            <div className="mention-item-avatar-placeholder">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
+                            </div>
+                          )}
+                          {user.type === 'party' && (
+                            <span className="mention-party-badge">
+                              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
+                        <div className="mention-item-info">
+                          <span className="mention-item-name">
+                            {user.username || user.name || user.phone}
+                            {user.type === 'party' && <span className="mention-party-label">Party</span>}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {!isMentionSearching && mentionQuery.trim() && getFilteredMentionUsers().length === 0 && (
+                      <div className="mention-no-results">No users or parties found</div>
+                    )}
+                  </div>
+                  <button className="mention-picker-close" onClick={() => { setShowMentionPicker(false); setSelectedMentionUser(null) }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <div
+                  className="mention-type-screen"
+                  onTouchStart={(e) => { e.currentTarget._swipeX = e.touches[0].clientX }}
+                  onTouchEnd={(e) => {
+                    const diff = e.changedTouches[0].clientX - (e.currentTarget._swipeX || 0)
+                    if (diff > 60) setSelectedMentionUser(null)
+                  }}
+                  onWheel={(e) => { if (e.deltaX < -30) setSelectedMentionUser(null) }}
+                >
+                  <div className="mention-type-actions">
+                    <button className="mention-type-btn mention-type-tag" onClick={() => handleMentionType('tag')}>
+                      <span className="mention-type-preview mention-type-preview-tag">@{selectedMentionUser.username || selectedMentionUser.name}</span>
+                      <span className="mention-type-label">tag</span>
+                    </button>
+                    <button className="mention-type-btn mention-type-nominate" onClick={() => handleMentionType('nominate')}>
+                      <span className="mention-type-preview mention-type-preview-nominate">@{selectedMentionUser.username || selectedMentionUser.name}</span>
+                      <span className="mention-type-label">nominate</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

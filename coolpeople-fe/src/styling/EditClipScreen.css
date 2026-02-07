@@ -763,10 +763,135 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+.mention-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mention-party-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #7C3AED;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.9);
+}
+
+.mention-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .mention-item-name {
   font-size: 15px;
   font-weight: 500;
   color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mention-party-label {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 600;
+}
+
+.mention-searching-indicator {
+  text-align: center;
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+.mention-no-results {
+  text-align: center;
+  padding: 24px 16px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+}
+
+/* Mention type selection (tag vs nominate) */
+.mention-type-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mention-type-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.mention-type-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mention-type-btn:active {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mention-type-preview {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.mention-type-preview-tag {
+  color: #fff;
+}
+
+.mention-type-preview-nominate {
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mention-type-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.mention-type-tag:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.mention-type-nominate:hover {
+  border-color: rgba(0, 242, 234, 0.3);
+}
+
+/* Styled mentions in text overlays */
+.mention-tag {
+  font-weight: 800;
+  color: #fff;
+}
+
+.mention-nominate {
+  font-weight: 800;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .mention-picker-close {
