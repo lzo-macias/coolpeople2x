@@ -1032,6 +1032,9 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     setCurrentText('')
     setEditingTextId(null)
     setMentionMeta([])
+    setShowMentionPicker(false)
+    setMentionQuery('')
+    setSelectedMentionUser(null)
   }
 
   // Render text with styled mentions
@@ -1360,6 +1363,9 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             setCurrentText(textItem.text)
             setEditingTextId(textItem.id)
             setMentionMeta(textItem.mentions || [])
+            setShowMentionPicker(false)
+            setMentionQuery('')
+            setSelectedMentionUser(null)
             setShowTextEditor(true)
           }}
         >
@@ -1373,20 +1379,25 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           <button className="text-editor-conclude" onClick={handleSaveText}>
             conclude
           </button>
-          <textarea
-            className="text-editor-input"
-            value={currentText}
-            onChange={(e) => {
-              const value = e.target.value
-              setCurrentText(value)
-              // Check if @ was just typed
-              if (value.endsWith('@')) {
-                setShowMentionPicker(true)
-              }
-            }}
-            onClick={(e) => e.stopPropagation()}
-            autoFocus
-          />
+          <div className={`text-editor-input-wrapper ${showMentionPicker ? 'hidden' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <div className="text-editor-styled-overlay" aria-hidden="true">
+              {renderTextWithMentions(currentText, mentionMeta)}
+            </div>
+            <textarea
+              className="text-editor-input"
+              value={currentText}
+              onChange={(e) => {
+                const value = e.target.value
+                const cursorPos = e.target.selectionStart
+                setCurrentText(value)
+                // Check if @ was just typed (character before cursor is @)
+                if (value.length > currentText.length && cursorPos > 0 && value[cursorPos - 1] === '@') {
+                  setShowMentionPicker(true)
+                }
+              }}
+              autoFocus
+            />
+          </div>
 
           {/* Mention Picker - shows when @ is typed */}
           {showMentionPicker && (
@@ -1476,6 +1487,39 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                   }}
                   onWheel={(e) => { if (e.deltaX < -30) setSelectedMentionUser(null) }}
                 >
+                  {/* Selected user display */}
+                  <div className="mention-picker-selected-header">How do you want to @?</div>
+                  <div className="mention-picker-list">
+                    <div className="mention-picker-item selected">
+                      <div className="mention-avatar-wrapper">
+                        {selectedMentionUser.avatar ? (
+                          <img src={selectedMentionUser.avatar} alt={selectedMentionUser.name} className="mention-item-avatar" />
+                        ) : (
+                          <div className="mention-item-avatar-placeholder">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                          </div>
+                        )}
+                        {selectedMentionUser.type === 'party' && (
+                          <span className="mention-party-badge">
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                      <div className="mention-item-info">
+                        <span className="mention-item-name">
+                          {selectedMentionUser.username || selectedMentionUser.name || selectedMentionUser.phone}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="mention-type-actions">
                     <button className="mention-type-btn mention-type-tag" onClick={() => handleMentionType('tag')}>
                       <span className="mention-type-preview mention-type-preview-tag">@{selectedMentionUser.username || selectedMentionUser.name}</span>

@@ -627,19 +627,50 @@
   padding: 8px 16px;
 }
 
-.text-editor-input {
+.text-editor-input-wrapper {
+  position: relative;
   width: 100%;
   max-width: 350px;
+  min-height: 100px;
+}
+
+.text-editor-input-wrapper.hidden {
+  visibility: hidden;
+}
+
+.text-editor-styled-overlay {
+  position: absolute;
+  inset: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.text-editor-input {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100px;
   background: transparent;
   border: none;
   outline: none;
   font-size: 28px;
   font-weight: 700;
-  color: #fff;
+  color: transparent;
   text-align: center;
   resize: none;
-  min-height: 100px;
   caret-color: #fff;
+  z-index: 2;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Mention Picker */
@@ -821,14 +852,27 @@
 .mention-type-screen {
   flex: 1;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
+}
+
+.mention-picker-selected-header {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.mention-picker-item.selected {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
 }
 
 .mention-type-actions {
   display: flex;
   gap: 12px;
-  width: 100%;
+  margin-top: 20px;
 }
 
 .mention-type-btn {
@@ -837,21 +881,20 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 28px 16px;
+  padding: 20px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .mention-type-btn:active {
-  transform: scale(0.96);
-  background: rgba(255, 255, 255, 0.1);
+  transform: scale(0.97);
 }
 
 .mention-type-preview {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -869,15 +912,16 @@
 .mention-type-label {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: lowercase;
 }
 
 .mention-type-tag:hover {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .mention-type-nominate:hover {
-  border-color: rgba(0, 242, 234, 0.3);
+  border-color: rgba(0, 242, 234, 0.4);
 }
 
 /* Styled mentions in text overlays */
