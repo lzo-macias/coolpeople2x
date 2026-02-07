@@ -24,6 +24,9 @@ router.post('/find-by-members', controller.findByMembers);
 // GET /api/groupchats/suggested-users - Get suggested users to add (followers, previously messaged)
 router.get('/suggested-users', controller.getSuggestedUsers);
 
+// PATCH /api/groupchats/:groupChatId - Update groupchat settings (name, avatar)
+router.patch('/:groupChatId', controller.updateGroupChat);
+
 // GET /api/groupchats/:groupChatId - Get a specific groupchat
 router.get('/:groupChatId', controller.getGroupChat);
 

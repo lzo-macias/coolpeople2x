@@ -1345,7 +1345,8 @@ export const getChatMessages = async (
 export const sendChatMessage = async (
   partyId: string,
   userId: string,
-  content: string
+  content: string,
+  metadata?: Record<string, unknown>
 ): Promise<ChatMessageResponse> => {
   const party = await getPartyOrThrow(partyId);
   const membership = await getMembershipOrThrow(userId, partyId);
@@ -1379,6 +1380,7 @@ export const sendChatMessage = async (
       groupChatId: groupChat.id,
       userId,
       content,
+      ...(metadata && { metadata }),
     },
     include: {
       user: {
@@ -1395,6 +1397,7 @@ export const sendChatMessage = async (
       senderId: userId,
       senderUsername: message.user.username || message.user.displayName || 'Member',
       content: message.content,
+      metadata: message.metadata ?? null,
       createdAt: message.createdAt,
     });
   } catch {
@@ -1867,6 +1870,7 @@ const formatChatMessage = (message: any, viewerId: string): ChatMessageResponse 
   return {
     id: message.id,
     content: message.content,
+    metadata: message.metadata ?? null,
     user: message.user,
     reactions: Array.from(reactionMap.entries()).map(([emoji, data]) => ({
       emoji,

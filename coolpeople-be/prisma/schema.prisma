@@ -1046,6 +1046,7 @@ model ChatMessage {
   groupChatId String
   userId      String
   content     String
+  metadata    Json?
 
   createdAt   DateTime      @default(now())
 
@@ -1078,6 +1079,7 @@ model ChatReaction {
 model UserGroupChat {
   id          String   @id @default(uuid())
   name        String?  // Optional name for the groupchat
+  avatarUrl   String?  // Optional group avatar
   createdById String   // User who created the groupchat
   partyId     String?  @unique // If set, this groupchat has been converted to a party chat
 

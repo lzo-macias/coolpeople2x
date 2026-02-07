@@ -14,6 +14,7 @@ import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
 export interface GroupChatResponse {
   id: string;
   name: string | null;
+  avatarUrl: string | null;
   createdById: string;
   createdAt: string;
   members: {
@@ -144,6 +145,7 @@ export const createGroupChat = async (
   return {
     id: groupChat.id,
     name: groupChat.name,
+    avatarUrl: groupChat.avatarUrl,
     createdById: groupChat.createdById,
     createdAt: groupChat.createdAt.toISOString(),
     members: groupChat.members.map(m => ({
@@ -217,6 +219,7 @@ export const getGroupChat = async (
   return {
     id: groupChat.id,
     name: groupChat.party?.name || groupChat.name, // Use party name if converted
+    avatarUrl: groupChat.party?.avatarUrl || groupChat.avatarUrl,
     createdById: groupChat.createdById,
     createdAt: groupChat.createdAt.toISOString(),
     members: groupChat.members.map(m => ({
@@ -354,6 +357,7 @@ export const getUserGroupChats = async (userId: string): Promise<GroupChatRespon
     results.push({
       id: groupChat.id,
       name: groupChat.party?.name || groupChat.name, // Use party name if converted
+      avatarUrl: groupChat.party?.avatarUrl || groupChat.avatarUrl,
       createdById: groupChat.createdById,
       createdAt: groupChat.createdAt.toISOString(),
       members: groupChat.members.map(member => ({
@@ -548,6 +552,84 @@ export const sendGroupChatMessage = async (
       displayName: message.user.displayName,
       avatarUrl: message.user.avatarUrl,
     },
+  };
+};
+
+// -----------------------------------------------------------------------------
+// Update groupchat settings (name, avatarUrl) - creator only
+// -----------------------------------------------------------------------------
+
+export const updateGroupChat = async (
+  groupChatId: string,
+  userId: string,
+  updates: { name?: string | null; avatarUrl?: string | null }
+): Promise<GroupChatResponse> => {
+  const groupChat = await prisma.userGroupChat.findUnique({
+    where: { id: groupChatId },
+    include: {
+      members: {
+        where: { leftAt: null },
+        include: {
+          user: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!groupChat) {
+    throw new NotFoundError('Groupchat not found');
+  }
+
+  // Any active member can update group name/avatar
+  const isMember = groupChat.members.some(m => m.user.id === userId);
+  if (!isMember) {
+    throw new ForbiddenError('Only group members can update settings');
+  }
+
+  const updated = await prisma.userGroupChat.update({
+    where: { id: groupChatId },
+    data: {
+      ...(updates.name !== undefined && { name: updates.name || null }),
+      ...(updates.avatarUrl !== undefined && { avatarUrl: updates.avatarUrl || null }),
+    },
+    include: {
+      members: {
+        where: { leftAt: null },
+        include: {
+          user: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
+          },
+        },
+      },
+    },
+  });
+
+  // Notify all members via socket
+  const io = getIO();
+  if (io) {
+    updated.members.forEach(member => {
+      io.to(`user:${member.userId}`).emit('groupchat:updated', {
+        groupChatId,
+        name: updated.name,
+        avatarUrl: updated.avatarUrl,
+      });
+    });
+  }
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    avatarUrl: updated.avatarUrl,
+    createdById: updated.createdById,
+    createdAt: updated.createdAt.toISOString(),
+    members: updated.members.map(m => ({
+      id: m.user.id,
+      username: m.user.username,
+      displayName: m.user.displayName,
+      avatarUrl: m.user.avatarUrl,
+    })),
   };
 };
 

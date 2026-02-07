@@ -45,6 +45,24 @@ export const getUserGroupChats = async (req: Request, res: Response, next: NextF
   }
 };
 
+// Update a groupchat (name, avatar)
+export const updateGroupChat = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const groupChatId = req.params.groupChatId as string;
+    const { name, avatarUrl } = req.body;
+
+    const groupChat = await groupchatsService.updateGroupChat(groupChatId, userId, { name, avatarUrl });
+
+    res.json({
+      success: true,
+      data: groupChat,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Get a specific groupchat
 export const getGroupChat = async (req: Request, res: Response, next: NextFunction) => {
   try {

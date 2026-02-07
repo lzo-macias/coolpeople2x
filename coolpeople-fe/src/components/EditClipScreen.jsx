@@ -92,11 +92,13 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       const users = []
       const seenIds = new Set()
 
-      // 1. Fetch recent DM conversations
+      // 1. Fetch recent DM conversations (skip party chats - they're fetched separately)
       try {
         const conversationsRes = await messagesApi.getConversations()
         if (conversationsRes.data) {
           conversationsRes.data.forEach(conv => {
+            // Skip party chat conversations - parties are added in step 4
+            if (conv.isPartyChat || conv.partyId) return
             const otherUser = conv.otherUser
             if (otherUser && !seenIds.has(otherUser.id)) {
               seenIds.add(otherUser.id)
@@ -116,8 +118,9 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       // 2. Fetch following
       try {
         const followingRes = await usersApi.getFollowing(authUser.id)
-        if (followingRes.data) {
-          followingRes.data.slice(0, 20).forEach(f => {
+        const followingList = Array.isArray(followingRes.data) ? followingRes.data : followingRes.data?.following
+        if (followingList) {
+          followingList.slice(0, 20).forEach(f => {
             const followedUser = f.following || f
             if (followedUser && !seenIds.has(followedUser.id)) {
               seenIds.add(followedUser.id)
@@ -139,22 +142,71 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         const gcRes = await groupchatsApi.getAll()
         if (gcRes.data) {
           gcRes.data.forEach(gc => {
-            const gcId = `group-${gc.id}`
-            if (!seenIds.has(gcId)) {
-              seenIds.add(gcId)
-              users.push({
-                id: gcId,
-                groupChatId: gc.id,
-                username: gc.name || `Group (${gc.members?.length || 0})`,
-                avatar: gc.avatarUrl || gc.members?.[0]?.avatarUrl || `https://i.pravatar.cc/40?u=group-${gc.id}`,
-                type: 'group',
-                members: gc.members || [],
-              })
+            // Party-linked groupchats: add as party type so they route to party chat endpoint
+            if (gc.partyId || gc.party) {
+              const pid = `party-${gc.partyId || gc.party?.id}`
+              if (!seenIds.has(pid)) {
+                seenIds.add(pid)
+                users.push({
+                  id: pid,
+                  partyId: gc.partyId || gc.party?.id,
+                  groupChatId: gc.id,
+                  username: gc.party?.name || gc.name || 'Party',
+                  avatar: gc.party?.avatarUrl || gc.avatarUrl || `https://i.pravatar.cc/40?u=${pid}`,
+                  type: 'party',
+                  members: gc.members || [],
+                })
+              }
+            } else {
+              // Regular groupchats (not party-linked)
+              const gcId = `group-${gc.id}`
+              if (!seenIds.has(gcId)) {
+                seenIds.add(gcId)
+                // Use custom name if set, otherwise list member names
+                const otherMembers = (gc.members || []).filter(m => m.id !== authUser?.id)
+                const memberNames = otherMembers.map(m => m.username || m.displayName || 'user').join(', ')
+                users.push({
+                  id: gcId,
+                  groupChatId: gc.id,
+                  username: gc.name || memberNames || 'Group chat',
+                  avatar: gc.avatarUrl || gc.members?.[0]?.avatarUrl || `https://i.pravatar.cc/40?u=group-${gc.id}`,
+                  type: 'group',
+                  members: gc.members || [],
+                })
+              }
             }
           })
         }
       } catch (e) {
         console.warn('Failed to fetch groupchats for panel:', e)
+      }
+
+      // 4. Fetch user's parties (only ones with chat permission)
+      try {
+        const partiesRes = await partiesApi.listParties()
+        const partiesList = Array.isArray(partiesRes.data) ? partiesRes.data : partiesRes.data?.parties || []
+        if (partiesList.length > 0) {
+          partiesList.forEach(p => {
+            if (!p.isMember) return
+            const perms = p.myPermissions || []
+            const canChat = perms.includes('chat') || perms.includes('admin') || perms.includes('leader')
+            if (!canChat) return
+
+            const pid = `party-${p.id}`
+            if (!seenIds.has(pid)) {
+              seenIds.add(pid)
+              users.push({
+                id: pid,
+                partyId: p.id,
+                username: p.name || p.handle || 'Party',
+                avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=party-${p.id}`,
+                type: 'party',
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to fetch parties for panel:', e)
       }
 
       setFetchedPlatformUsers(users)
@@ -205,25 +257,32 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               }
             })
           }
-          if (res.data.parties) {
-            res.data.parties.forEach(p => {
-              // Only show parties where user has chat permission
-              const perms = p.myPermissions || []
-              const canChat = perms.includes('chat') || perms.includes('admin') || perms.includes('leader')
-              if (!canChat) return
+          // Fetch parties with permissions via listParties (search API doesn't include myPermissions)
+          try {
+            const partiesRes = await partiesApi.listParties(userSearchQuery)
+            const partiesList = Array.isArray(partiesRes.data) ? partiesRes.data : partiesRes.data?.parties || []
+            if (partiesList.length > 0) {
+              partiesList.forEach(p => {
+                if (!p.isMember) return
+                const perms = p.myPermissions || []
+                const canChat = perms.includes('chat') || perms.includes('admin') || perms.includes('leader')
+                if (!canChat) return
 
-              const pid = `party-${p.id}`
-              if (!seenIds.has(pid)) {
-                seenIds.add(pid)
-                results.push({
-                  id: pid,
-                  partyId: p.id,
-                  username: p.name || p.handle || 'Party',
-                  avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/40?u=party-${p.id}`,
-                  type: 'party',
-                })
-              }
-            })
+                const pid = `party-${p.id}`
+                if (!seenIds.has(pid)) {
+                  seenIds.add(pid)
+                  results.push({
+                    id: pid,
+                    partyId: p.id,
+                    username: p.name || p.handle || 'Party',
+                    avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=party-${p.id}`,
+                    type: 'party',
+                  })
+                }
+              })
+            }
+          } catch (e) {
+            console.warn('Failed to search parties:', e)
           }
         }
 
@@ -335,13 +394,19 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
       if (sendTogether) {
         // Parties get sent separately (party chat), everything else grouped into one groupchat
-        const partyRecipients = recipients.filter(u => u.type === 'party')
-        const nonPartyRecipients = recipients.filter(u => u.type !== 'party')
+        // Also check partyId as fallback in case type wasn't set properly
+        const partyRecipients = recipients.filter(u => u.type === 'party' || u.partyId)
+        const nonPartyRecipients = recipients.filter(u => u.type !== 'party' && !u.partyId)
 
         // Send to each party individually via party chat
         for (const party of partyRecipients) {
           try {
-            await partiesApi.sendChatMessage(party.partyId, 'Sent a video')
+            if (party.groupChatId) {
+              // Party converted from groupchat - send via groupchat API (same table the conversation reads from)
+              await groupchatsApi.sendMessage(party.groupChatId, 'Sent a video', videoMetadata)
+            } else {
+              await partiesApi.sendChatMessage(party.partyId, 'Sent a video', videoMetadata)
+            }
             console.log('Sent video to party chat:', party.username)
           } catch (e) {
             console.error('Failed to send to party:', party.username, e)
@@ -365,14 +430,20 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         }
       } else {
         // Send separately to each recipient
-        const partyRecipients = recipients.filter(u => u.type === 'party')
-        const groupRecipients = recipients.filter(u => u.type === 'group')
-        const userRecipients = recipients.filter(u => u.type === 'user' || (!u.type))
+        // Also check partyId/groupChatId as fallback in case type wasn't set properly
+        const partyRecipients = recipients.filter(u => u.type === 'party' || u.partyId)
+        const groupRecipients = recipients.filter(u => (u.type === 'group' || u.groupChatId) && !u.partyId)
+        const userRecipients = recipients.filter(u => (u.type === 'user' || (!u.type)) && !u.partyId && !u.groupChatId)
 
         // Send to parties via party chat
         for (const party of partyRecipients) {
           try {
-            await partiesApi.sendChatMessage(party.partyId, 'Sent a video')
+            if (party.groupChatId) {
+              // Party converted from groupchat - send via groupchat API (same table the conversation reads from)
+              await groupchatsApi.sendMessage(party.groupChatId, 'Sent a video', videoMetadata)
+            } else {
+              await partiesApi.sendChatMessage(party.partyId, 'Sent a video', videoMetadata)
+            }
             console.log('Sent video to party chat:', party.username)
           } catch (e) {
             console.error('Failed to send to party:', party.username, e)

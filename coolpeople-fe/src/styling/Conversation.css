@@ -32,6 +32,8 @@
   align-items: center;
   gap: 12px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .conversation-avatar {
@@ -40,6 +42,7 @@
   border-radius: 50%;
   border: 2px solid var(--accent-pink);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .conversation-avatar img {
@@ -52,6 +55,7 @@
 .conversation-avatar-group {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .conversation-avatar-stacked {
@@ -87,6 +91,11 @@
   font-size: 16px;
   font-weight: 600;
   color: #fff;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .conversation-menu-btn {
@@ -99,6 +108,7 @@
   border: none;
   color: #fff;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Messages Area */

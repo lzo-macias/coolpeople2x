@@ -60,6 +60,7 @@ export interface JoinRequestResponse {
 export interface ChatMessageResponse {
   id: string;
   content: string;
+  metadata: Record<string, unknown> | null;
   user: {
     id: string;
     username: string;

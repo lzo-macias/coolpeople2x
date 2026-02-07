@@ -89,7 +89,7 @@ function AudioMessage({ src, duration }) {
   )
 }
 
-function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity, onCreateGroupChat, onPartyCreatedFromGroupchat, onOpenProfile, onOpenPartyProfile }) {
+function Conversation({ conversation, onBack, sharedConversations, setSharedConversations, onMessageSent, currentUserId, currentUserAvatar, onTrackActivity, onCreateGroupChat, onGroupChatUpdated, onPartyCreatedFromGroupchat, onOpenProfile, onOpenPartyProfile }) {
   console.log('=== Conversation component rendered ===')
   console.log('conversation:', conversation)
   console.log('conversation.user:', conversation?.user)
@@ -273,6 +273,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           // Fetch user groupchat messages
           const response = await groupchatsApi.getMessages(groupChatId)
           const messages = response.data
+          console.log('=== GROUPCHAT MESSAGES RAW ===', JSON.stringify(messages?.slice?.(0, 3)?.map(m => ({ id: m.id, content: m.content?.substring(0, 30), metadata: m.metadata }))))
           if (messages && Array.isArray(messages)) {
             // Transform groupchat messages to match expected format
             // API returns messages sorted desc, so reverse for chronological order
@@ -323,13 +324,14 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           const response = await partiesApi.getChatMessages(partyId)
           // API returns { success: true, data: [...messages...] }
           const messages = response.data
+          console.log('=== PARTY MESSAGES RAW ===', JSON.stringify(messages?.slice?.(0, 3)?.map(m => ({ id: m.id, content: m.content?.substring(0, 30), metadata: m.metadata }))))
           if (messages && Array.isArray(messages)) {
             // Transform party chat messages to match expected format
             // API returns messages sorted desc, so reverse for chronological order
             const transformed = messages.map(msg => ({
               id: msg.id,
               text: msg.content,
-              metadata: null,
+              metadata: msg.metadata || null,
               isOwn: msg.user?.id === currentUserId,
               timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               createdAt: msg.createdAt,
@@ -501,7 +503,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           const newMsg = {
             id: message.id,
             text: message.content,
-            metadata: null,
+            metadata: message.metadata || null,
             isOwn: false,
             timestamp: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             createdAt: message.createdAt,
@@ -1051,11 +1053,6 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                     <img src={recipient.avatarUrl || recipient.avatar} alt={recipient.username} />
                   </div>
                 ))}
-                {recipients.length > 3 && (
-                  <div className="conversation-avatar-more" style={{ marginLeft: -12 }}>
-                    +{recipients.length - 3}
-                  </div>
-                )}
               </div>
               <span
                 className="conversation-username"
@@ -1067,7 +1064,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 }}
                 style={{ cursor: (convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName) ? 'pointer' : 'default' }}
               >
-                {convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName || user?.displayName || (recipients.length > 0 ? `${recipients.length + 1} people` : user?.username)}
+                {convertedToParty?.partyName || partyName || conversation.party?.name || conversation.partyName || user?.displayName || (recipients.length > 0 ? recipients.map(r => r.username || r.displayName).join(', ') : user?.username)}
               </span>
             </>
           ) : (
@@ -1151,6 +1148,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         ) : messages.map((msg) => {
           const reactions = messageReactions[msg.id] || []
           const isActive = activeMessageId === msg.id
+
+          // DEBUG: trace video message rendering
+          if (msg.text === 'Sent a video' || msg.metadata?.type === 'video' || msg.metadata?.videoUrl) {
+            console.log('=== VIDEO MSG DEBUG ===', { id: msg.id, text: msg.text, metadata: msg.metadata, isSharedReel: !!(msg.metadata?.type === 'reel' || msg.metadata?.videoUrl), hasVideoUrl: !!msg.metadata?.videoUrl })
+          }
 
           return (
             <div
@@ -1436,7 +1438,11 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
           <CreateScreen
             onClose={() => setShowCreateScreen(false)}
             isConversationMode={true}
-            conversationUser={user}
+            conversationUser={
+              isPartyChat ? { ...user, type: 'party', partyId: partyId || conversation.partyId || conversation.party?.id }
+              : isGroupChat ? { ...user, type: 'group', groupChatId: conversation.groupChatId, ...(conversation.partyId || conversation.party?.id ? { partyId: conversation.partyId || conversation.party?.id } : {}) }
+              : user
+            }
             onSendToConversation={(mediaUrl, isMirrored) => {
               // Add the sent clip as a message
               const mediaNow = new Date()
@@ -1498,9 +1504,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
         ) : (
           <ChatSettings
             chat={{
-              name: isGroupChat ? `${(conversation.allMembers || recipients).length} people` : user.username,
+              name: isGroupChat ? (conversation.user?.displayName || recipients.map(r => r.username).join(', ')) : user.username,
               username: isGroupChat ? recipients.map(r => r.username).join(', ') : user.username,
-              avatar: isGroupChat ? recipients[0]?.avatarUrl || recipients[0]?.avatar : user.avatar,
+              avatar: isGroupChat ? (conversation.user?.avatar || recipients[0]?.avatarUrl || recipients[0]?.avatar) : user.avatar,
               party: isGroupChat ? null : user.party,
             }}
             isGroupChat={isGroupChat}
@@ -1517,14 +1523,26 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 // Refresh groupchat data to get updated members
                 groupchatsApi.get(conversation.groupChatId).then(res => {
                   if (res.data) {
-                    // Update the conversation in the shared list
-                    setSharedConversations(prev => prev.map(c =>
-                      c.id === conversation.id
-                        ? { ...c, allMembers: res.data.members, recipients: res.data.members.filter(m => m.id !== currentUser?.id) }
-                        : c
-                    ))
+                    // Update the conversation in the shared list (only when prev is an array)
+                    setSharedConversations(prev => {
+                      if (!Array.isArray(prev)) return prev
+                      return prev.map(c =>
+                        c.id === conversation.id
+                          ? { ...c, allMembers: res.data.members, recipients: res.data.members.filter(m => m.id !== currentUser?.id) }
+                          : c
+                      )
+                    })
                   }
                 }).catch(err => console.error('Failed to refresh members:', err))
+              }
+              if (changes.groupChatUpdated && isGroupChat) {
+                // Update name and avatar in messages list via dedicated handler
+                if (onGroupChatUpdated && conversation.groupChatId) {
+                  onGroupChatUpdated(conversation.groupChatId, {
+                    name: changes.name,
+                    avatarUrl: changes.avatarUrl,
+                  })
+                }
               }
             }}
             currentUserId={currentUser?.id}

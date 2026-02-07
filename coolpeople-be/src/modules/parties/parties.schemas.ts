@@ -164,6 +164,7 @@ export const sendMessageSchema = z.object({
   }),
   body: z.object({
     content: z.string().min(1).max(2000, 'Message must be at most 2000 characters'),
+    metadata: z.record(z.unknown()).optional(),
   }),
 });
 

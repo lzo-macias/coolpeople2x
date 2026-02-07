@@ -444,9 +444,9 @@ export const partiesApi = {
   // Party Group Chat
   getChatMessages: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/chat/messages${cursor ? `?cursor=${cursor}` : ''}`),
 
-  sendChatMessage: (partyId, content) => apiFetch(`/api/parties/${partyId}/chat/messages`, {
+  sendChatMessage: (partyId, content, metadata) => apiFetch(`/api/parties/${partyId}/chat/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(metadata && { metadata }) }),
   }),
 
   deleteChatMessage: (partyId, messageId) => apiFetch(`/api/parties/${partyId}/chat/messages/${messageId}`, {
@@ -698,6 +698,12 @@ export const groupchatsApi = {
       : '/api/groupchats/suggested-users';
     return apiFetch(`${path}${query ? `?${query}` : ''}`);
   },
+
+  // Update groupchat settings (name, avatar)
+  update: (groupChatId, data) => apiFetch(`/api/groupchats/${groupChatId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
 };
 
 // =============================================================================

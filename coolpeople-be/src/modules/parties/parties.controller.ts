@@ -261,7 +261,8 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
   const message = await partiesService.sendChatMessage(
     id,
     req.user!.userId,
-    req.body.content
+    req.body.content,
+    req.body.metadata
   );
   sendCreated(res, { message });
 };

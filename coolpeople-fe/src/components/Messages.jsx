@@ -453,8 +453,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             user: {
               id: gc.id,
               username: recipients.map(m => m.username).join(', '),
-              avatar: gc.party?.avatarUrl || recipients[0]?.avatarUrl,
-              displayName: gc.name || gc.party?.name || `${gc.members.length} people`,
+              avatar: gc.party?.avatarUrl || gc.avatarUrl || recipients[0]?.avatarUrl,
+              displayName: gc.name || gc.party?.name || null,
             },
             lastMessage: message.content,
             lastMessageAt: message.createdAt,
@@ -579,8 +579,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               user: {
                 id: gc.id,
                 username: recipients.map(m => m.username).join(', '),
-                avatar: gc.party?.avatarUrl || recipients[0]?.avatarUrl,
-                displayName: gc.name || gc.party?.name || `${gc.members.length} people`,
+                avatar: gc.party?.avatarUrl || gc.avatarUrl || recipients[0]?.avatarUrl,
+                displayName: gc.name || gc.party?.name || null,
               },
               lastMessage: gc.lastMessage?.content || '',
               lastMessageAt: gc.lastMessage?.createdAt,
@@ -1483,6 +1483,35 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
   }
 
+  // Handle groupchat settings updated (name, avatar)
+  const handleGroupChatUpdated = (groupChatId, changes) => {
+    setMessages(prev => prev.map(m =>
+      m.groupChatId === groupChatId
+        ? {
+            ...m,
+            user: {
+              ...m.user,
+              ...(changes.name && { displayName: changes.name }),
+              ...(changes.name && { username: changes.name }),
+              ...(changes.avatarUrl && { avatar: changes.avatarUrl }),
+            },
+          }
+        : m
+    ))
+    // Also update the active conversation so it reflects immediately
+    if (activeConversation?.groupChatId === groupChatId) {
+      setActiveConversation(prev => ({
+        ...prev,
+        user: {
+          ...prev.user,
+          ...(changes.name && { displayName: changes.name }),
+          ...(changes.name && { username: changes.name }),
+          ...(changes.avatarUrl && { avatar: changes.avatarUrl }),
+        },
+      }))
+    }
+  }
+
   // Debug log every render
   console.log('=== MESSAGES COMPONENT RENDER ===', {
     hasActiveConversation: !!activeConversation,
@@ -1566,6 +1595,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         currentUserId={currentUser?.id}
         currentUserAvatar={currentUser?.avatar}
         onCreateGroupChat={handleCreateGroupChat}
+        onGroupChatUpdated={handleGroupChatUpdated}
         onPartyCreatedFromGroupchat={handlePartyCreatedFromGroupchat}
         onOpenProfile={onOpenProfile}
         onOpenPartyProfile={onOpenPartyProfile}

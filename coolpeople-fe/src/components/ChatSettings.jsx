@@ -33,6 +33,13 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
   // Party creation flow state (for converting groupchat to party)
   const [showPartyCreationFlow, setShowPartyCreationFlow] = useState(false)
 
+  // Edit group state — use the actual saved name (displayName from gc.name), not the "X people" fallback
+  const savedGroupName = conversation?.user?.displayName || ''
+  const [editName, setEditName] = useState(savedGroupName)
+  const [editAvatarPreview, setEditAvatarPreview] = useState(chat?.avatar || '')
+  const [editAvatarFile, setEditAvatarFile] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+
   // Fetch suggested users when panel opens or search changes
   useEffect(() => {
     if (showAddMemberPanel && isGroupChat) {
@@ -784,8 +791,70 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
     </div>
   )
 
-  // Render placeholder sections
-  const renderPlaceholder = (title) => (
+  // Handle photo selection
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEditAvatarFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setEditAvatarPreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  // Handle save edit group
+  const handleSaveEditGroup = async () => {
+    if (!groupChatId) return
+    setSavingEdit(true)
+    try {
+      let avatarUrl = undefined
+
+      // If a new photo was selected, upload it as a data URL for now
+      // (In production you'd upload to storage and get a URL back)
+      if (editAvatarFile) {
+        avatarUrl = editAvatarPreview
+      }
+
+      const updateData = {}
+      if (editName !== (chat?.name || '')) {
+        updateData.name = editName.trim() || null
+      }
+      if (avatarUrl !== undefined) {
+        updateData.avatarUrl = avatarUrl
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        setActiveSection(null)
+        return
+      }
+
+      const response = await groupchatsApi.update(groupChatId, updateData)
+
+      // Update local state
+      setChatData(prev => ({
+        ...prev,
+        name: editName.trim() || prev.name,
+        avatar: avatarUrl || prev.avatar,
+      }))
+
+      // Notify parent to refresh conversation data
+      if (onSettingsChange) {
+        onSettingsChange({
+          groupChatUpdated: true,
+          name: response.data?.name || editName.trim() || null,
+          avatarUrl: response.data?.avatarUrl || avatarUrl || null,
+        })
+      }
+
+      setActiveSection(null)
+    } catch (error) {
+      console.error('Failed to update group:', error)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  // Render Edit Group section
+  const renderEditGroupSection = () => (
     <div className="chat-settings-page">
       <div className="chat-settings-header">
         <button className="chat-settings-back" onClick={() => setActiveSection(null)}>
@@ -793,11 +862,57 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="chat-settings-title">{title}</h1>
+        <h1 className="chat-settings-title">Edit Group</h1>
         <div style={{ width: 36 }} />
       </div>
-      <div className="chat-settings-placeholder">
-        <p>Coming soon...</p>
+
+      <div className="chat-settings-edit-group">
+        {/* Avatar edit */}
+        <div className="edit-group-avatar-section">
+          <div className="edit-group-avatar-wrapper" onClick={() => document.getElementById('edit-group-avatar-input')?.click()}>
+            {editAvatarPreview ? (
+              <img src={editAvatarPreview} alt="Group" className="edit-group-avatar-img" />
+            ) : (
+              <div className="edit-group-avatar-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="36" height="36">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+            )}
+          </div>
+          <input
+            id="edit-group-avatar-input"
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handlePhotoSelect}
+          />
+          <span className="edit-group-avatar-label">Change Photo</span>
+        </div>
+
+        {/* Name edit */}
+        <div className="edit-group-name-section">
+          <label className="edit-group-label">Group Name</label>
+          <input
+            type="text"
+            className="edit-group-name-input"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Enter group name..."
+            maxLength={50}
+          />
+          <span className="edit-group-char-count">{editName.length}/50</span>
+        </div>
+
+        {/* Save button */}
+        <button
+          className={`edit-group-save-btn ${savingEdit ? 'saving' : ''}`}
+          onClick={handleSaveEditGroup}
+          disabled={savingEdit}
+        >
+          {savingEdit ? 'Saving...' : 'Save'}
+        </button>
       </div>
     </div>
   )
@@ -848,7 +963,7 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
       {activeSection === null && renderMainSettings()}
       {activeSection === 'theme' && renderThemeSection()}
       {activeSection === 'members' && renderMembersSection()}
-      {activeSection === 'edit-profile' && renderPlaceholder('Edit Group')}
+      {activeSection === 'edit-profile' && renderEditGroupSection()}
       {activeSection === 'add-members' && renderAddMembersSection()}
       {activeSection === 'send-to-users' && renderSendToUsersSection()}
 
