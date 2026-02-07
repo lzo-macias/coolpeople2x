@@ -735,6 +735,7 @@ function AppContent() {
       try {
         await storiesApi.createStory({
           videoUrl: postData.videoUrl,
+          duration: postData.duration || 10,
           isMirrored: postData.isMirrored,
           taggedUser: postData.taggedUser,
         })

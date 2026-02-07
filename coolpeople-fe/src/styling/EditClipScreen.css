@@ -48,16 +48,23 @@
 /* Selfie overlay in nominate/quote mode */
 .edit-clip-selfie-overlay {
   position: absolute;
-  top: 80px;
-  left: 16px;
-  width: 120px;
-  height: 160px;
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
   border: 3px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   z-index: 15;
   background: #1a1a1a;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.edit-clip-selfie-overlay.dragging {
+  cursor: grabbing;
+}
+
+.edit-clip-selfie-overlay .edit-clip-selfie-video {
+  border-radius: 13px;
 }
 
 .edit-clip-selfie-video {
@@ -88,6 +95,30 @@
 
 .selfie-overlay-delete:active {
   transform: scale(0.9);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Resize handle on selfie overlay */
+.selfie-overlay-resize {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: nwse-resize;
+  z-index: 10;
+  touch-action: none;
+  transition: background 0.2s ease;
+}
+
+.selfie-overlay-resize:active {
   background: rgba(0, 0, 0, 0.8);
 }
 
@@ -552,7 +583,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  z-index: 10;
+  z-index: 20;
   cursor: grab;
   user-select: none;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
@@ -583,7 +614,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 20;
   cursor: grab;
   user-select: none;
 }

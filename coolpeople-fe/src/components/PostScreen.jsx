@@ -4,7 +4,7 @@ import { usersApi, searchApi, favoritesApi } from '../services/api'
 import '../styling/PostScreen.css'
 import '../styling/PartyCreationFlow.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
@@ -38,6 +38,15 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
   const [wantToCompete, setWantToCompete] = useState(false) // Default to just following (not competing)
+
+  // Scale selfie overlay from edit screen (440px wide) to post preview (180px wide)
+  const previewScale = 180 / 440
+  const scaledSelfie = selfieSize ? {
+    w: selfieSize.w * previewScale,
+    h: selfieSize.h * previewScale,
+    x: (selfiePosition?.x || 16) * previewScale,
+    y: (selfiePosition?.y || 80) * previewScale,
+  } : null
 
   // Build target races from user's followed/competing races
   // If in race mode, use the raceName; otherwise show races user follows/competes in
@@ -327,7 +336,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay })
   }
 
   const handleSaveDraft = () => {
@@ -361,6 +370,9 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
         isQuoteNomination: isQuoteNomination || false,
         quotedReel: quotedReel || null,
         hasSelfieOverlay: isQuoteNomination || isNominateMode,
+        selfieSize: selfieSize || { w: 120, h: 160 },
+        selfiePosition: selfiePosition || { x: 16, y: 80 },
+        showSelfieOverlay: showSelfieOverlay !== false,
         // Text overlays
         textOverlays: textOverlays ? [...textOverlays] : [],
         // Post details
@@ -428,8 +440,16 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               ) : quotedReel.thumbnail ? (
                 <img src={quotedReel.thumbnail} alt="Quoted reel" />
               ) : null}
-              {recordedVideoUrl && (
-                <div className="post-selfie-cam">
+              {recordedVideoUrl && showSelfieOverlay !== false && (
+                <div
+                  className="post-selfie-cam"
+                  style={scaledSelfie ? {
+                    width: scaledSelfie.w,
+                    height: scaledSelfie.h,
+                    left: scaledSelfie.x,
+                    top: scaledSelfie.y,
+                  } : undefined}
+                >
                   <video
                     src={recordedVideoUrl}
                     className={isMirrored ? 'mirrored' : ''}
@@ -458,8 +478,16 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           )}
 
           {/* Selfie Cam inside preview - for nominate mode (non-quote) */}
-          {isNominateMode && !isQuoteNomination && showSelfieCam && recordedVideoUrl && (
-            <div className="post-selfie-cam">
+          {isNominateMode && !isQuoteNomination && showSelfieCam && showSelfieOverlay !== false && recordedVideoUrl && (
+            <div
+              className="post-selfie-cam"
+              style={scaledSelfie ? {
+                width: scaledSelfie.w,
+                height: scaledSelfie.h,
+                left: scaledSelfie.x,
+                top: scaledSelfie.y,
+              } : undefined}
+            >
               <video
                 src={recordedVideoUrl}
                 className={isMirrored ? 'mirrored' : ''}
@@ -482,9 +510,9 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           )}
 
           {/* Text Overlays inside preview */}
-          {textOverlays && textOverlays.map(textItem => (
+          {textOverlays && textOverlays.map((textItem, idx) => (
             <div
-              key={textItem.id}
+              key={`post-text-${textItem.id}-${idx}`}
               className="post-text-overlay"
               style={{
                 left: `${(textItem.x / 400) * 100}%`,

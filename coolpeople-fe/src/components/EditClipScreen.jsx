@@ -4,7 +4,7 @@ import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, 
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
@@ -15,12 +15,13 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const [isSending, setIsSending] = useState(false)
   const searchTimeoutRef = useRef(null)
 
-  // Selfie overlay visibility (for drafts - can be deleted/restored)
-  const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
+  // Selfie overlay local UI state (size/position/visibility come from props)
+  const [isSelfieDragging, setIsSelfieDragging] = useState(false)
+  const selfieResizeRef = useRef(null)
+  const selfieDragRef = useRef(null)
 
-  // Reset selfie overlay visibility when video URL changes (new draft loaded)
+  // Reset undo stack when video URL changes (new draft loaded)
   useEffect(() => {
-    setShowSelfieOverlay(true)
     setUndoStack([])
   }, [recordedVideoUrl])
 
@@ -49,6 +50,84 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     pushUndo({ type: 'deleteSelfie' })
     setShowSelfieOverlay(false)
   }
+
+  // Selfie resize handlers
+  const handleSelfieResize = (clientX, clientY) => {
+    if (!selfieResizeRef.current) return
+    const { startX, startY, startW, startH } = selfieResizeRef.current
+    const dx = clientX - startX
+    const dy = clientY - startY
+    // Use the larger delta to maintain aspect ratio (3:4)
+    const delta = Math.max(dx, dy)
+    const newW = Math.max(30, startW + delta)
+    const newH = newW * (4 / 3)
+    setSelfieSize({ w: newW, h: newH })
+  }
+
+  const handleSelfieResizeStart = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    selfieResizeRef.current = { startX: e.clientX, startY: e.clientY, startW: selfieSize.w, startH: selfieSize.h }
+    const onMove = (ev) => handleSelfieResize(ev.clientX, ev.clientY)
+    const onUp = () => { selfieResizeRef.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const handleSelfieResizeTouchStart = (e) => {
+    e.stopPropagation()
+    const touch = e.touches[0]
+    selfieResizeRef.current = { startX: touch.clientX, startY: touch.clientY, startW: selfieSize.w, startH: selfieSize.h }
+    const onMove = (ev) => { const t = ev.touches[0]; handleSelfieResize(t.clientX, t.clientY) }
+    const onEnd = () => { selfieResizeRef.current = null; window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onEnd) }
+    window.addEventListener('touchmove', onMove, { passive: true })
+    window.addEventListener('touchend', onEnd)
+  }
+
+  // Selfie drag handlers
+  const handleSelfieDragStart = (clientX, clientY) => {
+    setIsSelfieDragging(true)
+    selfieDragRef.current = { startX: clientX, startY: clientY, posX: selfiePosition.x, posY: selfiePosition.y }
+  }
+
+  const handleSelfieDragMove = (clientX, clientY) => {
+    if (!selfieDragRef.current) return
+    const dx = clientX - selfieDragRef.current.startX
+    const dy = clientY - selfieDragRef.current.startY
+    setSelfiePosition({ x: selfieDragRef.current.posX + dx, y: selfieDragRef.current.posY + dy })
+  }
+
+  const handleSelfieDragEnd = () => {
+    setIsSelfieDragging(false)
+    selfieDragRef.current = null
+  }
+
+  const handleSelfieMouseDown = (e) => {
+    e.preventDefault()
+    handleSelfieDragStart(e.clientX, e.clientY)
+  }
+
+  const handleSelfieTouchStart = (e) => {
+    const touch = e.touches[0]
+    handleSelfieDragStart(touch.clientX, touch.clientY)
+  }
+
+  const handleSelfieTouchMove = (e) => {
+    const touch = e.touches[0]
+    handleSelfieDragMove(touch.clientX, touch.clientY)
+  }
+
+  useEffect(() => {
+    if (!isSelfieDragging) return
+    const onMove = (e) => handleSelfieDragMove(e.clientX, e.clientY)
+    const onUp = () => handleSelfieDragEnd()
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [isSelfieDragging])
 
   // Restart video from beginning when screen mounts or video URL changes
   useEffect(() => {
@@ -521,6 +600,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const tagDragStartRef = useRef({ x: 0, y: 0, tagX: 0, tagY: 0 })
 
   // Text overlay state (textOverlays and setTextOverlays come from props)
+  const textEditorRef = useRef(null)
   const [showTextEditor, setShowTextEditor] = useState(false)
   const [currentText, setCurrentText] = useState('')
   const [editingTextId, setEditingTextId] = useState(null)
@@ -1013,9 +1093,11 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
   const handleSaveText = () => {
     if (currentText.trim()) {
+      // Only keep mentions whose markers still exist in the text
+      const validMentions = mentionMeta.filter(m => currentText.includes(`@${m.username}`))
       if (editingTextId) {
         setTextOverlays(prev => prev.map(t =>
-          t.id === editingTextId ? { ...t, text: currentText, mentions: mentionMeta.length > 0 ? [...mentionMeta] : (t.mentions || []) } : t
+          t.id === editingTextId ? { ...t, text: currentText, mentions: validMentions } : t
         ))
       } else {
         const newText = {
@@ -1023,7 +1105,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           text: currentText,
           x: 100,
           y: 300,
-          mentions: [...mentionMeta],
+          mentions: validMentions,
         }
         setTextOverlays(prev => [...prev, newText])
       }
@@ -1171,14 +1253,28 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
 
         {/* Selfie Overlay - shows in nominate mode or when there's a quoted reel */}
         {(isNominateMode || quotedReel) && recordedVideoUrl && showSelfieOverlay && (
-          <div className="edit-clip-selfie-overlay">
-            {isFromDraft && (
-              <button className="selfie-overlay-delete" onClick={handleDeleteSelfie}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+          <div
+            className={`edit-clip-selfie-overlay ${isSelfieDragging ? 'dragging' : ''}`}
+            style={{ width: selfieSize.w, height: selfieSize.h, left: selfiePosition.x, top: selfiePosition.y }}
+            onMouseDown={handleSelfieMouseDown}
+            onTouchStart={handleSelfieTouchStart}
+            onTouchMove={handleSelfieTouchMove}
+            onTouchEnd={handleSelfieDragEnd}
+          >
+            <button className="selfie-overlay-delete" onClick={handleDeleteSelfie}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <div
+              className="selfie-overlay-resize"
+              onMouseDown={handleSelfieResizeStart}
+              onTouchStart={handleSelfieResizeTouchStart}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </div>
             <video
               src={recordedVideoUrl}
               className="edit-clip-selfie-video"
@@ -1376,7 +1472,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       {/* Text Editor Modal */}
       {showTextEditor && (
         <div className="text-editor-overlay" onClick={handleSaveText}>
-          <button className="text-editor-conclude" onClick={handleSaveText}>
+          <button className="text-editor-conclude" onClick={(e) => { e.stopPropagation(); handleSaveText(); }}>
             conclude
           </button>
           <div className={`text-editor-input-wrapper ${showMentionPicker ? 'hidden' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -1384,11 +1480,40 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               {renderTextWithMentions(currentText, mentionMeta)}
             </div>
             <textarea
+              ref={textEditorRef}
               className="text-editor-input"
               value={currentText}
               onChange={(e) => {
                 const value = e.target.value
                 const cursorPos = e.target.selectionStart
+                const isDeleting = value.length < currentText.length
+
+                if (isDeleting && mentionMeta.length > 0) {
+                  // Check if deletion broke into any mention marker
+                  const deletedFrom = cursorPos
+                  for (const mention of mentionMeta) {
+                    const marker = `@${mention.username}`
+                    const markerStart = currentText.indexOf(marker)
+                    if (markerStart === -1) continue
+                    const markerEnd = markerStart + marker.length
+                    // If the cursor landed inside or just removed part of this marker
+                    if (deletedFrom >= markerStart && deletedFrom < markerEnd) {
+                      // Remove the entire marker from text
+                      const newText = currentText.slice(0, markerStart) + currentText.slice(markerEnd)
+                      setCurrentText(newText)
+                      setMentionMeta(prev => prev.filter(m => m.username !== mention.username))
+                      // Set cursor to where the marker was
+                      requestAnimationFrame(() => {
+                        if (textEditorRef.current) {
+                          textEditorRef.current.selectionStart = markerStart
+                          textEditorRef.current.selectionEnd = markerStart
+                        }
+                      })
+                      return
+                    }
+                  }
+                }
+
                 setCurrentText(value)
                 // Check if @ was just typed (character before cursor is @)
                 if (value.length > currentText.length && cursorPos > 0 && value[cursorPos - 1] === '@') {

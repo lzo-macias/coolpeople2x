@@ -56,6 +56,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [textOverlays, setTextOverlays] = useState([])
   const [showSentConfirmation, setShowSentConfirmation] = useState(false)
 
+  // Selfie overlay state (shared between EditClipScreen and PostScreen)
+  const [selfieSize, setSelfieSize] = useState({ w: 120, h: 160 })
+  const [selfiePosition, setSelfiePosition] = useState({ x: 16, y: 80 })
+  const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
+
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
   const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
@@ -432,9 +437,18 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const streamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
+  const recordingStartTimeRef = useRef(null)
+  const [recordedDuration, setRecordedDuration] = useState(null)
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null)
   const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // Store base64 for drafts
   const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
+
+  // Reset selfie overlay when video changes
+  useEffect(() => {
+    setSelfieSize({ w: 120, h: 160 })
+    setSelfiePosition({ x: 16, y: 80 })
+    setShowSelfieOverlay(true)
+  }, [recordedVideoUrl])
 
   // Sync selfie video with main video
   const syncSelfieVideo = () => {
@@ -521,6 +535,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
     setIsRecording(true)
     recordedChunksRef.current = []
+    recordingStartTimeRef.current = Date.now()
     setRecordedWithFrontCamera(facingMode === 'user')
 
     // Determine supported mime type
@@ -547,6 +562,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           setShowClipConfirm(true)
           return
         }
+        // Compute recording duration in seconds
+        const elapsed = recordingStartTimeRef.current
+          ? Math.round((Date.now() - recordingStartTimeRef.current) / 1000)
+          : 10
+        setRecordedDuration(Math.max(1, elapsed))
         const blob = new Blob(recordedChunksRef.current, { type: mimeType })
         console.log('Recorded blob size:', blob.size)
         const url = URL.createObjectURL(blob)
@@ -620,7 +640,6 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   }
 
   const handleNextFromEditClip = () => {
-    setShowEditClipScreen(false)
     setShowPostScreen(true)
   }
 
@@ -647,6 +666,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowPostScreen(false)
     // Reload drafts in case PostScreen saved any
     reloadDraftsFromStorage()
+    // EditClipScreen stays mounted, so all edits (text overlays, race pill, etc.) are preserved
   }
 
   // Called when draft is saved from PostScreen - resets to camera mode
@@ -692,11 +712,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       onPostCreated({
         ...postData,
         videoUrl: recordedVideoBase64 || recordedVideoUrl, // Prefer base64 for persistence
+        duration: recordedDuration || 10,
         isMirrored: recordedWithFrontCamera,
         targetRace: finalTargetRace,
         isNomination: selectedMode === 'nominate',
         taggedUser: selectedTag,
         textOverlays: textOverlays,
+        // Selfie overlay data
+        selfieSize,
+        selfiePosition,
+        showSelfieOverlay,
         // Race creation data
         isCreatingNewRace,
         selectedExistingRace,
@@ -1499,6 +1524,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onModeChange={setSelectedMode}
           quotedReel={loadedQuotedReel}
           isFromDraft={isLoadedFromDraft}
+          selfieSize={selfieSize}
+          setSelfieSize={setSelfieSize}
+          selfiePosition={selfiePosition}
+          setSelfiePosition={setSelfiePosition}
+          showSelfieOverlay={showSelfieOverlay}
+          setShowSelfieOverlay={setShowSelfieOverlay}
         />
       )}
 
@@ -1525,6 +1556,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           conversations={conversations}
           isQuoteNomination={!!loadedQuotedReel}
           quotedReel={loadedQuotedReel}
+          selfieSize={selfieSize}
+          selfiePosition={selfiePosition}
+          showSelfieOverlay={showSelfieOverlay}
         />
       )}
 
