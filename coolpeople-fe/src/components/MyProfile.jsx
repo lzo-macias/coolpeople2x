@@ -4,7 +4,7 @@ import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 import CandidateProfile from './CandidateProfile'
 import { getPartyColor } from '../data/mockData'
-import { usersApi } from '../services/api'
+import { usersApi, reelsApi } from '../services/api'
 import '../styling/MyProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
 
@@ -217,6 +217,8 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [singlePostSource, setSinglePostSource] = useState('posts')
+  const [taggedReels, setTaggedReels] = useState([])
+  const [taggedReelsLoaded, setTaggedReelsLoaded] = useState(false)
   const [starterPoints] = useState(() => calculateStarterPoints(userPosts))
   const [showShareModal, setShowShareModal] = useState(false)
   const [showCopiedToast, setShowCopiedToast] = useState(false)
@@ -289,6 +291,25 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       setIsLoadingFollowing(false)
     }
   }
+
+  // Fetch tagged reels when tab is selected
+  useEffect(() => {
+    if (activeTab !== 'tagged' || taggedReelsLoaded) return
+    const userId = currentUser?.id || currentUser?.userId
+    if (!userId) return
+    const fetchTagged = async () => {
+      try {
+        const res = await reelsApi.getUserTaggedReels(userId)
+        const data = res.data || res || []
+        setTaggedReels(Array.isArray(data) ? data : [])
+      } catch (e) {
+        console.log('Failed to fetch tagged reels:', e.message)
+        setTaggedReels([])
+      }
+      setTaggedReelsLoaded(true)
+    }
+    fetchTagged()
+  }, [activeTab, taggedReelsLoaded, currentUser?.id, currentUser?.userId])
 
   // Sync bioText with currentUser.bio when it changes externally (e.g., from parent state)
   useEffect(() => {
@@ -547,6 +568,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Tags', id: 'tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
+    { name: 'Tagged', id: 'tagged', label: '@' },
     { name: 'Details', id: 'details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
@@ -715,7 +737,11 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
               onClick={() => setActiveTab(tab.id)}
               title={tab.name}
             >
-              <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              {tab.icon ? (
+                <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              ) : (
+                <span className="tab-label">{tab.label}</span>
+              )}
             </button>
           ))}
         </div>
@@ -792,6 +818,38 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
           </div>
         )}
 
+        {activeTab === 'tagged' && (
+          <div className="posts-grid">
+            {taggedReels.length === 0 ? (
+              <div className="posts-empty">
+                <p>No tagged posts yet</p>
+              </div>
+            ) : (
+              taggedReels.map((post, index) => (
+                <div
+                  key={post.id || index}
+                  className="post-item"
+                  onClick={() => handlePostClick(index, 'tagged')}
+                >
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {activeTab === 'details' && (
           <div className="activity-feed">
             {userActivity.length === 0 ? (
@@ -848,7 +906,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       {/* Single Post View - rendered via portal to escape transformed parent */}
       {showSinglePost && createPortal(
         <SinglePostView
-          posts={singlePostSource === 'reposts' ? userReposts : singlePostSource === 'activity' ? activityReels : allPosts}
+          posts={singlePostSource === 'reposts' ? userReposts : singlePostSource === 'tagged' ? taggedReels : singlePostSource === 'activity' ? activityReels : allPosts}
           initialIndex={selectedPostIndex}
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}

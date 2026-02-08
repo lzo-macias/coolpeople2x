@@ -85,6 +85,7 @@
 /* Selfie Cam inside preview */
 .post-selfie-cam {
   position: absolute;
+  z-index: 2;
   top: 8px;
   left: 8px;
   width: 45px;
@@ -131,6 +132,7 @@
 /* Text overlays inside preview */
 .post-text-overlay {
   position: absolute;
+  z-index: 2;
   pointer-events: none;
 }
 
@@ -140,6 +142,19 @@
   color: #fff;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   white-space: pre-wrap;
+}
+
+.post-text-content .mention-tag {
+  font-weight: 800;
+  color: #fff;
+}
+
+.post-text-content .mention-nominate {
+  font-weight: 800;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* Text Inputs */

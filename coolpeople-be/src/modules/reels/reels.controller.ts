@@ -105,6 +105,25 @@ export const getUserActivity = async (req: Request, res: Response): Promise<void
 };
 
 // -----------------------------------------------------------------------------
+// GET /api/reels/user/:userId/tagged
+// -----------------------------------------------------------------------------
+
+export const getUserTaggedReels = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.params.userId as string;
+  const { cursor, limit } = req.query as { cursor?: string; limit: string };
+  const result = await reelsService.getUserTaggedReels(
+    userId,
+    req.user?.userId,
+    cursor,
+    parseInt(limit) || 20
+  );
+  sendPaginated(res, result.reels, {
+    cursor: result.nextCursor ?? undefined,
+    hasMore: !!result.nextCursor,
+  });
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/reels/feed
 // -----------------------------------------------------------------------------
 

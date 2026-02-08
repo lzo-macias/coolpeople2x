@@ -69,6 +69,7 @@ const formatReel = (
     description: reel.description,
     caption: reel.description, // Frontend uses 'caption'
     isMirrored: reel.isMirrored ?? false,
+    metadata: reel.metadata ?? null,
     likeCount: reel.likeCount,
     commentCount: reel.commentCount,
     shareCount: reel.shareCount,
@@ -173,13 +174,45 @@ export const createReel = async (
   const hashtagNames = data.description ? parseHashtags(data.description) : [];
   const mentionUsernames = data.description ? parseMentions(data.description) : [];
 
+  // Also extract mentions from text overlay metadata (these already have userId)
+  const textOverlayMentionUserIds: string[] = [];
+  const textOverlayMentionUsernames: string[] = [];
+  if (data.metadata && typeof data.metadata === 'object' && 'textOverlays' in (data.metadata as any)) {
+    const textOverlays = (data.metadata as any).textOverlays;
+    if (Array.isArray(textOverlays)) {
+      for (const overlay of textOverlays) {
+        if (Array.isArray(overlay.mentions)) {
+          for (const m of overlay.mentions) {
+            if (m.userId && !textOverlayMentionUserIds.includes(m.userId)) {
+              textOverlayMentionUserIds.push(m.userId);
+            } else if (m.username && !textOverlayMentionUsernames.includes(m.username)) {
+              textOverlayMentionUsernames.push(m.username);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Combine description mentions with text overlay mention usernames
+  const allMentionUsernames = [...new Set([...mentionUsernames, ...textOverlayMentionUsernames])];
+
   // Resolve mention usernames to user IDs
-  const mentionedUsers = mentionUsernames.length > 0
+  const mentionedUsers = allMentionUsernames.length > 0
     ? await prisma.user.findMany({
-        where: { username: { in: mentionUsernames } },
+        where: { username: { in: allMentionUsernames } },
         select: { id: true, username: true },
       })
     : [];
+
+  // Merge in text overlay mentions that already have userId (deduplicate)
+  const allMentionedUserIds = new Set(mentionedUsers.map((u) => u.id));
+  for (const uid of textOverlayMentionUserIds) {
+    if (!allMentionedUserIds.has(uid)) {
+      allMentionedUserIds.add(uid);
+      mentionedUsers.push({ id: uid, username: '' });
+    }
+  }
 
   // Upsert hashtags
   const hashtags = await Promise.all(
@@ -204,6 +237,7 @@ export const createReel = async (
       isMirrored: data.isMirrored ?? false,
       title: data.title,
       description: data.description,
+      metadata: data.metadata ?? undefined,
       quoteParentId: data.quoteParentId,
       soundId: data.soundId,
       locationId: data.locationId,
@@ -825,6 +859,39 @@ export const getFollowingFeed = async (
   });
 
   return { reels: mergedFeed, nextCursor };
+};
+
+// -----------------------------------------------------------------------------
+// Get User Tagged Reels (reels where user is mentioned)
+// -----------------------------------------------------------------------------
+
+export const getUserTaggedReels = async (
+  userId: string,
+  viewerId?: string,
+  cursor?: string,
+  limit: number = 20
+): Promise<{ reels: ReelResponse[]; nextCursor: string | null }> => {
+  const mentions = await prisma.userMention.findMany({
+    where: { userId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { id: 'desc' },
+    include: {
+      reel: {
+        include: reelIncludes(viewerId),
+      },
+    },
+  });
+
+  const hasMore = mentions.length > limit;
+  const results = hasMore ? mentions.slice(0, -1) : mentions;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  const reels = results
+    .filter((m) => m.reel && !m.reel.deletedAt)
+    .map((m) => formatReel(m.reel, viewerId));
+
+  return { reels, nextCursor };
 };
 
 // -----------------------------------------------------------------------------

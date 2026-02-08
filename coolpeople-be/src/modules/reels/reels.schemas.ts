@@ -73,6 +73,7 @@ export const createReelSchema = z.object({
     soundId: z.string().uuid('Invalid sound ID').optional(),
     locationId: z.string().uuid('Invalid location ID').optional(),
     raceIds: z.array(z.string().uuid('Invalid race ID')).max(5).optional(),
+    metadata: z.record(z.any()).optional(),
   }),
 });
 

@@ -64,6 +64,7 @@ function ParticipantProfile({
   const [fetchedPosts, setFetchedPosts] = useState([])
   const [fetchedReposts, setFetchedReposts] = useState([])
   const [fetchedActivity, setFetchedActivity] = useState([])
+  const [fetchedTaggedReels, setFetchedTaggedReels] = useState([])
   const [showSinglePost, setShowSinglePost] = useState(false)
   const [selectedPostIndex, setSelectedPostIndex] = useState(0)
   const [singlePostSource, setSinglePostSource] = useState('posts')
@@ -136,6 +137,16 @@ function ParticipantProfile({
         } catch (e) {
           console.log('[ParticipantProfile] Failed to fetch activity:', e.message)
           setFetchedActivity([])
+        }
+
+        // Fetch user's tagged reels
+        try {
+          const taggedRes = await reelsApi.getUserTaggedReels(userId)
+          const taggedData = taggedRes.data || taggedRes || []
+          setFetchedTaggedReels(Array.isArray(taggedData) ? taggedData : [])
+        } catch (e) {
+          console.log('[ParticipantProfile] Failed to fetch tagged reels:', e.message)
+          setFetchedTaggedReels([])
         }
       } catch (error) {
         console.log('Failed to fetch profile:', error.message)
@@ -332,6 +343,7 @@ function ParticipantProfile({
   const tabs = [
     { name: 'Posts', id: 'posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Tags', id: 'tags', icon: '/icons/profile/userprofile/tags-icons.svg' },
+    { name: 'Tagged', id: 'tagged', label: '@' },
     { name: 'Details', id: 'details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
@@ -533,7 +545,11 @@ function ParticipantProfile({
               onClick={() => setActiveTab(tab.id)}
               title={tab.name}
             >
-              <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              {tab.icon ? (
+                <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              ) : (
+                <span className="tab-label">{tab.label}</span>
+              )}
             </button>
           ))}
         </div>
@@ -606,6 +622,34 @@ function ParticipantProfile({
               <div className="empty-reposts">
                 <p>No reposts yet</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'tagged' && (
+          <div className="posts-grid">
+            {fetchedTaggedReels.length === 0 ? (
+              <div className="posts-empty">
+                <p>No tagged posts yet</p>
+              </div>
+            ) : (
+              fetchedTaggedReels.map((post, index) => (
+                <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'tagged')}>
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}
@@ -692,7 +736,7 @@ function ParticipantProfile({
       {/* Single Post View - rendered via portal */}
       {showSinglePost && createPortal(
         <SinglePostView
-          posts={singlePostSource === 'reposts' ? fetchedReposts : singlePostSource === 'activity' ? activityReels : fetchedPosts}
+          posts={singlePostSource === 'reposts' ? fetchedReposts : singlePostSource === 'tagged' ? fetchedTaggedReels : singlePostSource === 'activity' ? activityReels : fetchedPosts}
           initialIndex={selectedPostIndex}
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}

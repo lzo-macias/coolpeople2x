@@ -272,6 +272,22 @@
   filter: brightness(0) invert(1);
 }
 
+.participant-profile .participant-tab .tab-label {
+  font-size: 20px;
+  font-weight: 700;
+  opacity: 0.5;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+.participant-profile .participant-tab:hover .tab-label {
+  opacity: 0.7;
+}
+
+.participant-profile .participant-tab.active .tab-label {
+  opacity: 1;
+}
+
 /* Content */
 .participant-profile .participant-content {
   padding: 0;

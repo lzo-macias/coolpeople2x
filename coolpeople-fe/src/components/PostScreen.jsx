@@ -8,6 +8,31 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
 
+  // Render text with styled mentions (matches EditClipScreen)
+  const renderTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain' })
+      parts.push({ text: marker, type: mention.type, username: mention.username })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, type: 'plain' })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') {
+        return <span key={i} className="mention-nominate">{part.text}</span>
+      } else if (part.type === 'tag') {
+        return <span key={i} className="mention-tag">{part.text}</span>
+      }
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
   // Restart video from beginning when screen mounts
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
@@ -499,17 +524,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
             </div>
           )}
 
-          {/* Tagged User inside preview */}
-          {isNominateMode && taggedUser && (
-            <div className="post-tag-display">
-              <span className="post-tag-at">@</span>
-              <span className="post-tag-name">
-                {taggedUser.username || (getContactDisplayName ? getContactDisplayName(taggedUser) : taggedUser.phone)}
-              </span>
-            </div>
-          )}
-
-          {/* Text Overlays inside preview */}
+          {/* Text Overlays inside preview (includes converted tags) */}
           {textOverlays && textOverlays.map((textItem, idx) => (
             <div
               key={`post-text-${textItem.id}-${idx}`}
@@ -519,7 +534,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                 top: `${(textItem.y / 700) * 100}%`
               }}
             >
-              <span className="post-text-content">{textItem.text}</span>
+              <span className="post-text-content">{renderTextWithMentions(textItem.text, textItem.mentions)}</span>
             </div>
           ))}
 

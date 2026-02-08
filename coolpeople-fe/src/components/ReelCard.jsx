@@ -485,6 +485,66 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     targetRace: 'Mayor Race',
   }
 
+  const renderTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain', mention: null })
+      parts.push({ text: marker, type: mention.type, mention })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, type: 'plain', mention: null })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') return (
+        <span key={i} className="mention-nominate clickable" onClick={(e) => {
+          e.stopPropagation()
+          pauseVideo()
+          onUsernameClick?.({ id: part.mention?.userId, username: part.mention?.username })
+        }}>{part.text}</span>
+      )
+      if (part.type === 'tag') return (
+        <span key={i} className="mention-tag clickable" onClick={(e) => {
+          e.stopPropagation()
+          pauseVideo()
+          onUsernameClick?.({ id: part.mention?.userId, username: part.mention?.username })
+        }}>{part.text}</span>
+      )
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
+  // Render caption text with clickable @mentions from API data
+  const renderCaptionWithMentions = (text, mentions) => {
+    if (!text || !mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), mention: null })
+      parts.push({ text: marker, mention })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, mention: null })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.mention) return (
+        <span key={i} className="mention-tag clickable" onClick={(e) => {
+          e.stopPropagation()
+          pauseVideo()
+          onUsernameClick?.({ id: part.mention.id, username: part.mention.username })
+        }}>{part.text}</span>
+      )
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
   const data = reel || defaultReel
   // Party-only post: isPartyPost flag is explicitly true
   const isPartyPost = data.isPartyPost === true
@@ -545,6 +605,42 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           style={{ backgroundImage: `url(${data.thumbnail})` }}
         />
       )}
+
+      {/* Selfie overlay for nominations */}
+      {(data.showSelfieOverlay || data.metadata?.showSelfieOverlay) &&
+       (data.selfieSize || data.metadata?.selfieSize) && data.videoUrl && (
+        <div
+          className="reel-selfie-overlay"
+          style={{
+            width: (data.selfieSize || data.metadata?.selfieSize)?.w,
+            height: (data.selfieSize || data.metadata?.selfieSize)?.h,
+            left: (data.selfiePosition || data.metadata?.selfiePosition)?.x || 16,
+            top: (data.selfiePosition || data.metadata?.selfiePosition)?.y || 80,
+          }}
+        >
+          <video
+            src={data.videoUrl}
+            className={data.isMirrored ? 'mirrored' : ''}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        </div>
+      )}
+
+      {/* Text overlays from edit screen */}
+      {(data.textOverlays || data.metadata?.textOverlays)?.map((textItem, idx) => (
+        <div
+          key={`reel-text-${textItem.id || idx}-${idx}`}
+          className="reel-text-overlay"
+          style={{ left: textItem.x, top: textItem.y }}
+        >
+          <span className="reel-text-content">
+            {renderTextWithMentions(textItem.text, textItem.mentions)}
+          </span>
+        </div>
+      ))}
 
       <div className="reel-overlay">
         {/* Top engagement sparkline charts */}
@@ -689,7 +785,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               )}
             </div>
             <p className="reel-title">{data.title}</p>
-            <p className="reel-caption">{data.caption}</p>
+            <p className="reel-caption">{renderCaptionWithMentions(data.caption, data.mentions)}</p>
           </div>
           {/* Nominate button */}
           <button

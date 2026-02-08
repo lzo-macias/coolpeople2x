@@ -713,37 +713,8 @@ function AppContent() {
     const effectiveParty = forParty || userParty
     let savedReelId = null // Track the backend reel ID for sharing
 
-    // Check if this is a nomination (should go to stories)
-    if (postData.isNomination) {
-      const newStory = {
-        id: `story-user-${timestamp}`,
-        userId: 'current-user',
-        name: currentUser.displayName,
-        image: currentUser.avatar,
-        hasNew: true,
-        party: currentUser.party,
-        videoUrl: postData.videoUrl,
-        isMirrored: postData.isMirrored || false,
-        taggedUser: postData.taggedUser || null,
-        createdAt: new Date().toISOString(),
-      }
-
-      // Add to user stories
-      setUserStories(prev => [newStory, ...prev])
-
-      // Save story to backend
-      try {
-        await storiesApi.createStory({
-          videoUrl: postData.videoUrl,
-          duration: postData.duration || 10,
-          isMirrored: postData.isMirrored,
-          taggedUser: postData.taggedUser,
-        })
-      } catch (error) {
-        console.error('Failed to save story to backend:', error)
-      }
-    } else {
-      // Regular post goes to feed
+    // All posts (including nominations) go to the reel feed
+    {
       // Generate engagement scores for the sparklines at top
       const defaultEngagementScores = [
         {
@@ -808,6 +779,11 @@ function AppContent() {
         createdAt: new Date().toISOString(),
         isMirrored: postData.isMirrored || false,
         textOverlays: postData.textOverlays || [],
+        selfieSize: postData.selfieSize || null,
+        selfiePosition: postData.selfiePosition || null,
+        showSelfieOverlay: postData.showSelfieOverlay ?? false,
+        taggedUser: postData.taggedUser || null,
+        isNomination: postData.isNomination || false,
         isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style (only when party-only)
         partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (including both feeds)
       }
@@ -888,8 +864,16 @@ function AppContent() {
           description: postData.caption || '', // Backend expects 'description' not 'caption'
           partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (both feeds or party-only)
           isPartyPost: isPartyOnlyPost, // True = party-only (shows only in party feed), False = user post (may also show in party feed)
-          duration: 30, // Default duration
+          duration: postData.duration || 30,
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
+          metadata: {
+            textOverlays: postData.textOverlays || [],
+            selfieSize: postData.selfieSize || null,
+            selfiePosition: postData.selfiePosition || null,
+            showSelfieOverlay: postData.showSelfieOverlay ?? false,
+            taggedUser: postData.taggedUser || null,
+            isNomination: postData.isNomination || false,
+          },
         }
         // Add raceIds if we have a race (new or existing)
         if (raceId) {

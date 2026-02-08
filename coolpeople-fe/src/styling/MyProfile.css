@@ -472,6 +472,22 @@ button.my-profile-bio.empty {
   filter: brightness(0) invert(1);
 }
 
+.my-profile-tab .tab-label {
+  font-size: 20px;
+  font-weight: 700;
+  opacity: 0.5;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+.my-profile-tab:hover .tab-label {
+  opacity: 0.7;
+}
+
+.my-profile-tab.active .tab-label {
+  opacity: 1;
+}
+
 /* Content */
 .my-profile-content {
   /* margin-top: 26px; */

@@ -509,6 +509,7 @@ model Reel {
   // Metadata
   title           String?
   description     String?
+  metadata        Json?     // Stores text overlays, selfie overlay data, etc.
 
   // Quote/Response
   quoteParentId   String?   // If this is a quote response to another reel

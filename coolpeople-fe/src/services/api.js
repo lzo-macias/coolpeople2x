@@ -149,6 +149,8 @@ export const reelsApi = {
 
   getUserActivity: (userId) => apiFetch(`/api/reels/user/${userId}/activity`),
 
+  getUserTaggedReels: (userId, cursor) => apiFetch(`/api/reels/user/${userId}/tagged${cursor ? `?cursor=${cursor}` : ''}`),
+
   getPartyReels: (partyId, cursor) => apiFetch(`/api/reels/party/${partyId}${cursor ? `?cursor=${cursor}` : ''}`),
 
   createReel: (data) => apiFetch('/api/reels', {

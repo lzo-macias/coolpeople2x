@@ -593,14 +593,23 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const pillRef = useRef(null)
   const dragStartRef = useRef({ x: 0, y: 0, pillX: 0, pillY: 0 })
 
-  // Tag dragging state
-  const [tagPosition, setTagPosition] = useState({ x: 20, y: null })
-  const [isTagDragging, setIsTagDragging] = useState(false)
-  const tagRef = useRef(null)
-  const tagDragStartRef = useRef({ x: 0, y: 0, tagX: 0, tagY: 0 })
+  // Convert taggedUser into a text overlay on mount so it uses the same system
+  const tagConvertedRef = useRef(false)
+  useEffect(() => {
+    if (taggedUser && !tagConvertedRef.current) {
+      tagConvertedRef.current = true
+      const username = taggedUser.username || (getContactDisplayName ? getContactDisplayName(taggedUser) : taggedUser.phone)
+      setTextOverlays(prev => [...prev, {
+        id: `tag-${Date.now()}`,
+        text: `@${username}`,
+        x: 20,
+        y: 580,
+        mentions: [{ username, type: 'nominate', userId: taggedUser.id }],
+      }])
+    }
+  }, [taggedUser])
 
   // Text overlay state (textOverlays and setTextOverlays come from props)
-  const textEditorRef = useRef(null)
   const [showTextEditor, setShowTextEditor] = useState(false)
   const [currentText, setCurrentText] = useState('')
   const [editingTextId, setEditingTextId] = useState(null)
@@ -1019,71 +1028,6 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [isDragging])
 
-  // Tag drag handlers
-  const handleTagDragStart = (clientX, clientY) => {
-    const tag = tagRef.current
-    if (!tag) return
-
-    const rect = tag.getBoundingClientRect()
-    const parentRect = tag.parentElement.getBoundingClientRect()
-
-    setIsTagDragging(true)
-    tagDragStartRef.current = {
-      x: clientX,
-      y: clientY,
-      tagX: rect.left - parentRect.left,
-      tagY: rect.top - parentRect.top
-    }
-  }
-
-  const handleTagDragMove = (clientX, clientY) => {
-    if (!isTagDragging) return
-
-    const deltaX = clientX - tagDragStartRef.current.x
-    const deltaY = clientY - tagDragStartRef.current.y
-
-    setTagPosition({
-      x: tagDragStartRef.current.tagX + deltaX,
-      y: tagDragStartRef.current.tagY + deltaY
-    })
-  }
-
-  const handleTagDragEnd = () => {
-    setIsTagDragging(false)
-  }
-
-  // Tag mouse/touch events
-  const handleTagMouseDown = (e) => {
-    e.preventDefault()
-    handleTagDragStart(e.clientX, e.clientY)
-  }
-
-  const handleTagTouchStart = (e) => {
-    const touch = e.touches[0]
-    handleTagDragStart(touch.clientX, touch.clientY)
-  }
-
-  const handleTagTouchMove = (e) => {
-    const touch = e.touches[0]
-    handleTagDragMove(touch.clientX, touch.clientY)
-  }
-
-  // Global listeners for tag dragging
-  useEffect(() => {
-    const handleMouseMove = (e) => handleTagDragMove(e.clientX, e.clientY)
-    const handleMouseUp = () => handleTagDragEnd()
-
-    if (isTagDragging) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isTagDragging])
-
   // Text overlay handlers
   const handleAddText = () => {
     setCurrentText('')
@@ -1092,23 +1036,27 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   }
 
   const handleSaveText = () => {
-    if (currentText.trim()) {
-      // Only keep mentions whose markers still exist in the text
-      const validMentions = mentionMeta.filter(m => currentText.includes(`@${m.username}`))
-      if (editingTextId) {
+    if (editingTextId) {
+      if (currentText.trim()) {
+        // Save edits — only keep mentions still present in text
+        const validMentions = mentionMeta.filter(m => currentText.includes(`@${m.username}`))
         setTextOverlays(prev => prev.map(t =>
           t.id === editingTextId ? { ...t, text: currentText, mentions: validMentions } : t
         ))
       } else {
-        const newText = {
-          id: Date.now(),
-          text: currentText,
-          x: 100,
-          y: 300,
-          mentions: validMentions,
-        }
-        setTextOverlays(prev => [...prev, newText])
+        // Text was fully deleted — remove the overlay
+        setTextOverlays(prev => prev.filter(t => t.id !== editingTextId))
       }
+    } else if (currentText.trim()) {
+      const validMentions = mentionMeta.filter(m => currentText.includes(`@${m.username}`))
+      const newText = {
+        id: Date.now(),
+        text: currentText,
+        x: 100,
+        y: 300,
+        mentions: validMentions,
+      }
+      setTextOverlays(prev => [...prev, newText])
     }
     setShowTextEditor(false)
     setCurrentText('')
@@ -1411,31 +1359,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         </div>
       )}
 
-      {/* Tagged User Display - draggable, only shown in nominate mode with a tagged user */}
-      {isNominateMode && taggedUser && (
-        <div
-          ref={tagRef}
-          className={`edit-clip-tag-display ${isTagDragging ? 'dragging' : ''}`}
-          style={tagPosition.y !== null ? {
-            left: tagPosition.x,
-            top: tagPosition.y,
-            bottom: 'auto'
-          } : {
-            left: tagPosition.x
-          }}
-          onMouseDown={handleTagMouseDown}
-          onTouchStart={handleTagTouchStart}
-          onTouchMove={handleTagTouchMove}
-          onTouchEnd={handleTagDragEnd}
-        >
-          <span className="edit-clip-tag-at">@</span>
-          <span className="edit-clip-tag-name">
-            {taggedUser.username || (getContactDisplayName ? getContactDisplayName(taggedUser) : taggedUser.phone)}
-          </span>
-        </div>
-      )}
-
-      {/* Text Overlays - draggable */}
+      {/* Text Overlays - draggable (includes converted tags) */}
       {textOverlays?.map(textItem => (
         <div
           key={textItem.id}
@@ -1480,44 +1404,42 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               {renderTextWithMentions(currentText, mentionMeta)}
             </div>
             <textarea
-              ref={textEditorRef}
               className="text-editor-input"
               value={currentText}
               onChange={(e) => {
                 const value = e.target.value
                 const cursorPos = e.target.selectionStart
-                const isDeleting = value.length < currentText.length
-
-                if (isDeleting && mentionMeta.length > 0) {
-                  // Check if deletion broke into any mention marker
-                  const deletedFrom = cursorPos
+                setCurrentText(value)
+                // Check if @ was just typed (character before cursor is @)
+                if (value.length > currentText.length && cursorPos > 0 && value[cursorPos - 1] === '@') {
+                  setShowMentionPicker(true)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSaveText()
+                } else if (e.key === 'Backspace' && mentionMeta.length > 0) {
+                  const cursorPos = e.target.selectionStart
                   for (const mention of mentionMeta) {
                     const marker = `@${mention.username}`
                     const markerStart = currentText.indexOf(marker)
                     if (markerStart === -1) continue
                     const markerEnd = markerStart + marker.length
-                    // If the cursor landed inside or just removed part of this marker
-                    if (deletedFrom >= markerStart && deletedFrom < markerEnd) {
-                      // Remove the entire marker from text
+                    // Cursor is anywhere inside or at the end of the marker
+                    if (cursorPos > markerStart && cursorPos <= markerEnd) {
+                      e.preventDefault()
                       const newText = currentText.slice(0, markerStart) + currentText.slice(markerEnd)
                       setCurrentText(newText)
                       setMentionMeta(prev => prev.filter(m => m.username !== mention.username))
-                      // Set cursor to where the marker was
+                      // Reposition cursor after React re-render
                       requestAnimationFrame(() => {
-                        if (textEditorRef.current) {
-                          textEditorRef.current.selectionStart = markerStart
-                          textEditorRef.current.selectionEnd = markerStart
-                        }
+                        e.target.selectionStart = markerStart
+                        e.target.selectionEnd = markerStart
                       })
-                      return
+                      break
                     }
                   }
-                }
-
-                setCurrentText(value)
-                // Check if @ was just typed (character before cursor is @)
-                if (value.length > currentText.length && cursorPos > 0 && value[cursorPos - 1] === '@') {
-                  setShowMentionPicker(true)
                 }
               }}
               autoFocus

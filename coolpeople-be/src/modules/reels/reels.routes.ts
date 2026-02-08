@@ -64,6 +64,15 @@ router.get(
   reelsController.getUserActivity
 );
 
+// GET /api/reels/user/:userId/tagged - Get reels where user is mentioned/tagged
+router.get(
+  '/user/:userId/tagged',
+  optionalAuth,
+  validate(userReelsParamSchema),
+  validate(cursorQuerySchema),
+  reelsController.getUserTaggedReels
+);
+
 // GET /api/reels/party/:partyId - Get party's reels
 router.get(
   '/party/:partyId',

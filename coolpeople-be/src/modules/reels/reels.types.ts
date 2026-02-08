@@ -49,6 +49,7 @@ export interface ReelResponse {
   title: string | null;
   description: string | null;
   caption: string | null; // Alias for description (frontend uses 'caption')
+  metadata: Record<string, any> | null; // Text overlays, selfie data, etc.
 
   // Engagement counts
   likeCount: number;
@@ -118,6 +119,7 @@ export interface CreateReelRequest {
   soundId?: string;
   locationId?: string;
   raceIds?: string[];
+  metadata?: Record<string, any>;
 }
 
 // -----------------------------------------------------------------------------

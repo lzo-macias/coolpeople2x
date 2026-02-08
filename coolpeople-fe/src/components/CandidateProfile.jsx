@@ -372,6 +372,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const [fetchedPosts, setFetchedPosts] = useState([])
   const [fetchedReposts, setFetchedReposts] = useState([])
   const [fetchedActivity, setFetchedActivity] = useState([])
+  const [fetchedTaggedReels, setFetchedTaggedReels] = useState([])
   const [fetchedReviews, setFetchedReviews] = useState([])
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
@@ -451,6 +452,15 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
           setFetchedActivity(Array.isArray(activityData) ? activityData : [])
         } catch (e) {
           setFetchedActivity([])
+        }
+
+        // Fetch user's tagged reels
+        try {
+          const taggedRes = await reelsApi.getUserTaggedReels(userId)
+          const taggedData = taggedRes.data || taggedRes || []
+          setFetchedTaggedReels(Array.isArray(taggedData) ? taggedData : [])
+        } catch (e) {
+          setFetchedTaggedReels([])
         }
 
         // Fetch user's reviews (if candidate)
@@ -1260,6 +1270,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
     { name: 'Bio', icon: '/icons/profile/userprofile/bio-icon.svg' },
     { name: 'Posts', icon: '/icons/profile/userprofile/posts-icon.svg' },
     { name: 'Reposts', icon: '/icons/profile/userprofile/tags-icons.svg' },
+    { name: 'Tagged', label: '@' },
     { name: 'Details', icon: '/icons/profile/userprofile/details-icon.svg' },
   ]
 
@@ -1530,7 +1541,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         </div>
 
         {/* Tabs */}
-        <div className={`profile-tabs ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'details' ? 'posts-active' : ''}`}>
+        <div className={`profile-tabs ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'tagged' || activeTab === 'details' ? 'posts-active' : ''}`}>
           {tabs.map((tab) => (
             <button
               key={tab.name}
@@ -1538,14 +1549,18 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               onClick={() => setActiveTab(tab.name.toLowerCase())}
               title={tab.name}
             >
-              <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              {tab.icon ? (
+                <img src={tab.icon} alt={tab.name} className="tab-icon" />
+              ) : (
+                <span className="tab-label">{tab.label}</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
       {/* Content - dark background */}
-      <div className={`profile-content ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'details' ? 'posts-active' : ''}`}>
+      <div className={`profile-content ${activeTab === 'posts' || activeTab === 'reposts' || activeTab === 'tagged' || activeTab === 'details' ? 'posts-active' : ''}`}>
         {/* Posts Tab */}
         {activeTab === 'posts' && (
           <div className="posts-grid">
@@ -1615,6 +1630,35 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
               <div className="empty-reposts">
                 <p>No reposts yet</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Tagged Tab */}
+        {activeTab === 'tagged' && (
+          <div className="posts-grid">
+            {fetchedTaggedReels.length === 0 ? (
+              <div className="posts-empty">
+                <p>No tagged posts yet</p>
+              </div>
+            ) : (
+              fetchedTaggedReels.map((post, index) => (
+                <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'tagged')}>
+                  {post.videoUrl ? (
+                    <video
+                      src={post.videoUrl}
+                      className={post.isMirrored ? 'mirrored' : ''}
+                      muted
+                      playsInline
+                      loop
+                      onMouseOver={(e) => e.target.play()}
+                      onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}
@@ -2606,7 +2650,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       {/* Single Post View - rendered via portal to escape transformed parent */}
       {showSinglePost && createPortal(
         <SinglePostView
-          posts={singlePostSource === 'reposts' ? allReposts : singlePostSource === 'activity' ? activityReels : allPosts}
+          posts={singlePostSource === 'reposts' ? allReposts : singlePostSource === 'tagged' ? fetchedTaggedReels : singlePostSource === 'activity' ? activityReels : allPosts}
           initialIndex={selectedPostIndex}
           onClose={() => setShowSinglePost(false)}
           onEndReached={() => setShowSinglePost(false)}
