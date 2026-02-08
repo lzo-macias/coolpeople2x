@@ -474,7 +474,8 @@ button.profile-bio.empty {
 }
 
 .profile-tab .tab-label {
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 22px;
   font-weight: 700;
   opacity: 0.5;
   color: #fff;

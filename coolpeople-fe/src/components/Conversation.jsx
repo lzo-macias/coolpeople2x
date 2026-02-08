@@ -176,6 +176,28 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     return msg.mediaUrl || msg.metadata?.videoUrl || msg.metadata?.thumbnail
   }
 
+  // Render text with styled @mentions (for text overlays on shared reels)
+  const renderTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain' })
+      parts.push({ text: marker, type: mention.type })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, type: 'plain' })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') return <span key={i} className="mention-nominate">{part.text}</span>
+      if (part.type === 'tag') return <span key={i} className="mention-tag">{part.text}</span>
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
   // Track message to show in reel viewer
   const [reelViewerMessageId, setReelViewerMessageId] = useState(null)
 
@@ -1272,6 +1294,45 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                         muted
                         playsInline
                       />
+                      {/* Selfie overlay - scale from full-screen (430px) to card size (220px) */}
+                      {(msg.metadata?.showSelfieOverlay) && (msg.metadata?.selfieSize) && (() => {
+                        const s = 220 / 430
+                        return (
+                          <div
+                            className="reel-selfie-overlay"
+                            style={{
+                              width: (msg.metadata.selfieSize.w || 120) * s,
+                              height: (msg.metadata.selfieSize.h || 160) * s,
+                              left: (msg.metadata.selfiePosition?.x || 16) * s,
+                              top: (msg.metadata.selfiePosition?.y || 80) * s,
+                            }}
+                          >
+                            <video
+                              src={getMessageVideoUrl(msg)}
+                              className={msg.metadata?.isMirrored ? 'mirrored' : ''}
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          </div>
+                        )
+                      })()}
+                      {/* Text overlays - scale positions from full-screen to card size */}
+                      {msg.metadata?.textOverlays?.map((textItem, idx) => {
+                        const s = 220 / 430
+                        return (
+                          <div
+                            key={`msg-text-${textItem.id || idx}-${idx}`}
+                            className="reel-text-overlay"
+                            style={{ left: (parseFloat(textItem.x) || 0) * s, top: (parseFloat(textItem.y) || 0) * s }}
+                          >
+                            <span className="reel-text-content">
+                              {renderTextWithMentions(textItem.text, textItem.mentions)}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 ) : msg.mediaUrl ? (

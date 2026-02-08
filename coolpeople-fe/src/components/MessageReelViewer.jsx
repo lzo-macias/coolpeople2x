@@ -29,13 +29,18 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const initialIndex = videoMessages.findIndex(msg => msg.id === initialMessageId)
   const [currentIndex, setCurrentIndex] = useState(initialIndex >= 0 ? initialIndex : 0)
   const [showComments, setShowComments] = useState(false)
-  const [touchStartY, setTouchStartY] = useState(0)
-  const [touchDeltaY, setTouchDeltaY] = useState(0)
-  const [isTransitioning, setIsTransitioning] = useState(false)
   const [localStats, setLocalStats] = useState({}) // Track local like/comment counts per message
   const [joinStatus, setJoinStatus] = useState({}) // Track join status per party { partyId: 'idle' | 'joining' | 'joined' | 'requested' }
   const containerRef = useRef(null)
   const videoRef = useRef(null)
+
+  // Use refs for touch/nav state to avoid stale closures and re-render lag
+  const touchStartYRef = useRef(0)
+  const touchDeltaYRef = useRef(0)
+  const [touchDeltaY, setTouchDeltaY] = useState(0) // Only for visual transform
+  const navCooldownRef = useRef(false)
+  const currentIndexRef = useRef(initialIndex >= 0 ? initialIndex : 0)
+  const showCommentsRef = useRef(false)
 
   const currentMessage = videoMessages[currentIndex]
   const isPartyInvite = currentMessage?.metadata?.type === 'party_invite'
@@ -48,6 +53,10 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
 
   // Track if video is ready to play
   const [videoReady, setVideoReady] = useState(false)
+
+  // Keep refs in sync with state
+  useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
+  useEffect(() => { showCommentsRef.current = showComments }, [showComments])
 
   // Reset video error and resolved reel ID when index changes
   useEffect(() => {
@@ -117,65 +126,66 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     fetchReelStats()
   }, [reelId])
 
+  // Navigate to next/prev video — uses refs so it's always current
+  const navigate = useCallback((direction) => {
+    if (navCooldownRef.current || showCommentsRef.current) return
+    const idx = currentIndexRef.current
+    const len = videoMessages.length
+    if (direction === 'next' && idx < len - 1) {
+      navCooldownRef.current = true
+      setCurrentIndex(idx + 1)
+      setTimeout(() => { navCooldownRef.current = false }, 250)
+    } else if (direction === 'prev' && idx > 0) {
+      navCooldownRef.current = true
+      setCurrentIndex(idx - 1)
+      setTimeout(() => { navCooldownRef.current = false }, 250)
+    } else if ((direction === 'prev' && idx === 0) || (direction === 'next' && idx === len - 1)) {
+      onClose()
+    }
+  }, [videoMessages.length, onClose])
+
   // Handle swipe navigation
   const handleTouchStart = (e) => {
-    setTouchStartY(e.touches[0].clientY)
+    touchStartYRef.current = e.touches[0].clientY
+    touchDeltaYRef.current = 0
   }
 
   const handleTouchMove = (e) => {
-    const delta = e.touches[0].clientY - touchStartY
-    setTouchDeltaY(delta)
+    const delta = e.touches[0].clientY - touchStartYRef.current
+    touchDeltaYRef.current = delta
+    setTouchDeltaY(delta) // for visual transform only
   }
 
   const handleTouchEnd = () => {
-    if (Math.abs(touchDeltaY) > 100) {
-      if (touchDeltaY < 0 && currentIndex < videoMessages.length - 1) {
-        setIsTransitioning(true)
-        setTimeout(() => {
-          setCurrentIndex(prev => prev + 1)
-          setIsTransitioning(false)
-        }, 200)
-      } else if (touchDeltaY > 0 && currentIndex > 0) {
-        setIsTransitioning(true)
-        setTimeout(() => {
-          setCurrentIndex(prev => prev - 1)
-          setIsTransitioning(false)
-        }, 200)
-      } else if ((touchDeltaY > 0 && currentIndex === 0) || (touchDeltaY < 0 && currentIndex === videoMessages.length - 1)) {
-        onClose()
-      }
+    const delta = touchDeltaYRef.current
+    if (Math.abs(delta) > 60) {
+      navigate(delta < 0 ? 'next' : 'prev')
     }
+    touchDeltaYRef.current = 0
     setTouchDeltaY(0)
   }
 
-  // Handle scroll wheel for desktop
-  const handleWheel = useCallback((e) => {
-    if (isTransitioning || showComments) return
-
-    if (e.deltaY > 50 && currentIndex < videoMessages.length - 1) {
-      setIsTransitioning(true)
-      setTimeout(() => {
-        setCurrentIndex(prev => prev + 1)
-        setIsTransitioning(false)
-      }, 200)
-    } else if (e.deltaY < -50 && currentIndex > 0) {
-      setIsTransitioning(true)
-      setTimeout(() => {
-        setCurrentIndex(prev => prev - 1)
-        setIsTransitioning(false)
-      }, 200)
-    } else if ((e.deltaY < -50 && currentIndex === 0) || (e.deltaY > 50 && currentIndex === videoMessages.length - 1)) {
-      onClose()
-    }
-  }, [currentIndex, videoMessages.length, isTransitioning, showComments, onClose])
-
+  // Attach non-passive touch + wheel listeners once (stable refs, no re-attach needed)
   useEffect(() => {
     const container = containerRef.current
-    if (container) {
-      container.addEventListener('wheel', handleWheel, { passive: false })
-      return () => container.removeEventListener('wheel', handleWheel)
+    if (!container) return
+
+    const onWheel = (e) => {
+      e.preventDefault()
+      if (navCooldownRef.current || showCommentsRef.current) return
+      if (e.deltaY > 30) navigate('next')
+      else if (e.deltaY < -30) navigate('prev')
     }
-  }, [handleWheel])
+
+    const onTouchMove = (e) => { e.preventDefault() }
+
+    container.addEventListener('wheel', onWheel, { passive: false })
+    container.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      container.removeEventListener('wheel', onWheel)
+      container.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [navigate])
 
   const getVideoUrl = () => {
     if (isPartyInvite) {
@@ -332,6 +342,40 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     return ''
   }
 
+  // Render text with styled @mentions (for text overlays)
+  const renderTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain' })
+      parts.push({ text: marker, type: mention.type, mention })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, type: 'plain' })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') return (
+        <span key={i} className="mention-nominate clickable" onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+          onOpenProfile?.({ id: part.mention?.userId, username: part.mention?.username })
+        }}>{part.text}</span>
+      )
+      if (part.type === 'tag') return (
+        <span key={i} className="mention-tag clickable" onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+          onOpenProfile?.({ id: part.mention?.userId, username: part.mention?.username })
+        }}>{part.text}</span>
+      )
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
   return createPortal(
     <div
       className="reel-card"
@@ -411,6 +455,41 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
         <div className="reel-media" style={{ background: '#1a1a1a' }} />
       )}
 
+      {/* Selfie overlay from message metadata */}
+      {currentMessage?.metadata?.showSelfieOverlay && currentMessage?.metadata?.selfieSize && videoUrl && (
+        <div
+          className="reel-selfie-overlay"
+          style={{
+            width: currentMessage.metadata.selfieSize.w,
+            height: currentMessage.metadata.selfieSize.h,
+            left: currentMessage.metadata.selfiePosition?.x || 16,
+            top: currentMessage.metadata.selfiePosition?.y || 80,
+          }}
+        >
+          <video
+            src={videoUrl}
+            className={isMirrored ? 'mirrored' : ''}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        </div>
+      )}
+
+      {/* Text overlays from message metadata */}
+      {currentMessage?.metadata?.textOverlays?.map((textItem, idx) => (
+        <div
+          key={`msg-text-${textItem.id || idx}-${idx}`}
+          className="reel-text-overlay"
+          style={{ left: textItem.x, top: textItem.y }}
+        >
+          <span className="reel-text-content">
+            {renderTextWithMentions(textItem.text, textItem.mentions)}
+          </span>
+        </div>
+      ))}
+
       {/* Overlay - same structure as ReelCard but no nav bar so less bottom padding */}
       <div className="reel-overlay" style={{ paddingBottom: '20px' }}>
         {/* Close button - absolutely positioned */}
@@ -437,6 +516,26 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
+
+        {/* Video counter */}
+        {videoMessages.length > 1 && (
+          <div style={{
+            position: 'absolute',
+            top: '22px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.5)',
+            borderRadius: '12px',
+            padding: '4px 12px',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: '600',
+            zIndex: 10,
+            pointerEvents: 'none',
+          }}>
+            {currentIndex + 1} / {videoMessages.length}
+          </div>
+        )}
 
         {/* Right side actions - only for shared reels and party invites with a valid reel ID */}
         {!isDirectVideo && reelId && (
@@ -554,17 +653,17 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
                     alt={user.username}
                     className="reel-user-avatar clickable"
                     style={{ borderColor: getPartyColor(user.party) }}
-                    onClick={() => onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar })}
+                    onClick={() => { onClose(); onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar }) }}
                   />
                   <div className="reel-user-details">
                     {user.party ? (
-                      <button className="party-tag clickable" onClick={() => onOpenPartyProfile?.(user.party)}>
+                      <button className="party-tag clickable" onClick={() => { onClose(); onOpenPartyProfile?.(user.party) }}>
                         {user.party}
                       </button>
                     ) : (
                       <span className="party-tag">Independent</span>
                     )}
-                    <button className="username clickable" onClick={() => onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar })}>
+                    <button className="username clickable" onClick={() => { onClose(); onOpenProfile?.(currentMessage.metadata?.user || { username: user.username, avatar: user.avatar }) }}>
                       {user.username}
                     </button>
                   </div>

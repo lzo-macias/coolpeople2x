@@ -497,6 +497,12 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
         type: 'video',
         videoUrl: videoUrl,
         isMirrored: isMirrored || false,
+        ...(textOverlays && textOverlays.length > 0 && { textOverlays }),
+        ...((isNominateMode || quotedReel) && showSelfieOverlay && selfieSize && {
+          showSelfieOverlay: true,
+          selfieSize,
+          selfiePosition: selfiePosition || { x: 16, y: 80 },
+        }),
       }
 
       if (sendTogether) {

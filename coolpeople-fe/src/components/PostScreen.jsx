@@ -394,10 +394,10 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
         // Quote nomination info
         isQuoteNomination: isQuoteNomination || false,
         quotedReel: quotedReel || null,
-        hasSelfieOverlay: isQuoteNomination || isNominateMode,
+        hasSelfieOverlay: (isQuoteNomination || isNominateMode) && showSelfieOverlay,
         selfieSize: selfieSize || { w: 120, h: 160 },
         selfiePosition: selfiePosition || { x: 16, y: 80 },
-        showSelfieOverlay: showSelfieOverlay !== false,
+        showSelfieOverlay: (isQuoteNomination || isNominateMode) && showSelfieOverlay,
         // Text overlays
         textOverlays: textOverlays ? [...textOverlays] : [],
         // Post details
@@ -465,7 +465,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               ) : quotedReel.thumbnail ? (
                 <img src={quotedReel.thumbnail} alt="Quoted reel" />
               ) : null}
-              {recordedVideoUrl && showSelfieOverlay !== false && (
+              {recordedVideoUrl && showSelfieOverlay && (
                 <div
                   className="post-selfie-cam"
                   style={scaledSelfie ? {
@@ -503,7 +503,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           )}
 
           {/* Selfie Cam inside preview - for nominate mode (non-quote) */}
-          {isNominateMode && !isQuoteNomination && showSelfieCam && showSelfieOverlay !== false && recordedVideoUrl && (
+          {isNominateMode && !isQuoteNomination && showSelfieCam && showSelfieOverlay && recordedVideoUrl && (
             <div
               className="post-selfie-cam"
               style={scaledSelfie ? {

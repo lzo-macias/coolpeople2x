@@ -267,7 +267,7 @@ function AppContent() {
       if (profile.racesFollowing) setUserRacesFollowing(profile.racesFollowing)
       if (profile.racesCompeting) setUserRacesCompeting(profile.racesCompeting)
       if (profile.points) setUserPoints(profile.points)
-      if (profile.userType === 'CANDIDATE') setHasOptedIn(true)
+      setHasOptedIn(profile.userType === 'CANDIDATE')
 
       // Load user's party if they have one (from new partyId relation)
       console.log('Profile party data:', profile.party)
@@ -1163,9 +1163,29 @@ function AppContent() {
     saveToHistory()
     setShowComments(false)
     setShowPartyProfile(false)
-    setShowParticipantProfile(false)
-    setActiveCandidate(candidate)
-    setShowProfile(true)
+
+    // Check if we know the user's type from the passed object or from cache
+    const cached = getCachedUserProfile(candidateId || candidate.username)
+    const knownUserType = candidate.userType || cached?.userType
+
+    if (knownUserType === 'PARTICIPANT') {
+      // Route directly to ParticipantProfile
+      console.log('User is PARTICIPANT - opening ParticipantProfile')
+      setShowProfile(false)
+      setActiveCandidate(null)
+      setActiveParticipant({
+        ...candidate,
+        ...(cached || {}),
+        id: candidateId,
+        userId: candidateId,
+      })
+      setShowParticipantProfile(true)
+    } else {
+      // Default to CandidateProfile (will redirect to Participant if API returns PARTICIPANT)
+      setShowParticipantProfile(false)
+      setActiveCandidate(candidate)
+      setShowProfile(true)
+    }
     // Scroll to top after state update
     setTimeout(() => {
       if (profileOverlayRef.current) {

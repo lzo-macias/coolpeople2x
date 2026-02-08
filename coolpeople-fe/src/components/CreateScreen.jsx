@@ -59,7 +59,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Selfie overlay state (shared between EditClipScreen and PostScreen)
   const [selfieSize, setSelfieSize] = useState({ w: 120, h: 160 })
   const [selfiePosition, setSelfiePosition] = useState({ x: 16, y: 80 })
-  const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
+  const [showSelfieOverlay, setShowSelfieOverlay] = useState(false)
 
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
@@ -443,12 +443,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // Store base64 for drafts
   const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
 
-  // Reset selfie overlay when video changes
+  // Reset selfie overlay when video changes — only enable for nominate/quote mode
   useEffect(() => {
     setSelfieSize({ w: 120, h: 160 })
     setSelfiePosition({ x: 16, y: 80 })
-    setShowSelfieOverlay(true)
-  }, [recordedVideoUrl])
+    setShowSelfieOverlay(selectedMode === 'nominate' || !!loadedQuotedReel)
+  }, [recordedVideoUrl, selectedMode, loadedQuotedReel])
 
   // Sync selfie video with main video
   const syncSelfieVideo = () => {
@@ -718,10 +718,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         isNomination: selectedMode === 'nominate',
         taggedUser: selectedTag,
         textOverlays: textOverlays,
-        // Selfie overlay data
-        selfieSize,
-        selfiePosition,
-        showSelfieOverlay,
+        // Selfie overlay data (only for nominate/quote mode)
+        selfieSize: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfieSize : undefined,
+        selfiePosition: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfiePosition : undefined,
+        showSelfieOverlay: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay,
         // Race creation data
         isCreatingNewRace,
         selectedExistingRace,
