@@ -935,6 +935,9 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           selectedSound={selectedSound}
           initialTrimStart={localTrimStart}
           initialTrimEnd={localTrimEnd}
+          showSelfieOverlay={showSelfieOverlay}
+          selfieSize={selfieSize}
+          selfiePosition={selfiePosition}
           onDone={({ trimStart: ts, trimEnd: te, segments: segs }) => {
             setLocalTrimStart(ts)
             setLocalTrimEnd(te)

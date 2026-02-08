@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import '../styling/VideoEditor.css'
 
-function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, onDone, onClose }) {
+function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition }) {
   const videoRef = useRef(null)
   const thumbVideoRef = useRef(null)
   const timelineRef = useRef(null)
+  const previewRef = useRef(null)
+  const [previewWidth, setPreviewWidth] = useState(0)
   const rafRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
@@ -32,8 +34,9 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const [selectedSegmentId, setSelectedSegmentId] = useState(1)
   const nextSegmentId = useRef(2)
   const selectedSegRef = useRef(null)
-  const [segPointerDown, setSegPointerDown] = useState(null) // { idx, startX }
+  const [segPointerDown, setSegPointerDown] = useState(null) // { idx, startX, track }
   const [reorderDragIdx, setReorderDragIdx] = useState(null)
+  const [activeTrack, setActiveTrack] = useState('main') // 'main' or 'selfie'
   const syncingRef = useRef(false)
 
   // Volume state
@@ -343,12 +346,16 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       vid.pause()
       setIsPlaying(false)
     } else {
-      // Always start from the first segment in the current order
-      playingSegIdxRef.current = 0
-      const firstSeg = segments[0]
-      if (firstSeg) {
-        vid.currentTime = firstSeg.start
-        setCurrentTime(firstSeg.start)
+      // Resume from current playhead position
+      const idx = playingSegIdxRef.current
+      const seg = segments[idx]
+      if (seg) {
+        const segEnd = seg.end ?? duration
+        // If video time is outside current segment, seek to segment start
+        if (vid.currentTime < seg.start || vid.currentTime >= segEnd) {
+          vid.currentTime = seg.start
+          setCurrentTime(seg.start)
+        }
       }
       vid.play().catch(err => console.warn('Video play failed:', err))
       setIsPlaying(true)
@@ -400,7 +407,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }
 
-  const handleDragStart = (type, clientX) => {
+  const handleDragStart = (type, clientX, segEl) => {
     setDragging(type)
     const startVal = type === 'left' ? trimStart
       : type === 'right' ? (trimEnd ?? duration)
@@ -412,8 +419,9 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     const startVal2 = type === 'soundMove' ? soundEndFrac : 0
     // For left/right handle drag: compute seconds-per-pixel from selected segment's width
     let secPerPx = 0
-    if ((type === 'left' || type === 'right') && selectedSegRef.current) {
-      const segRect = selectedSegRef.current.getBoundingClientRect()
+    const el = segEl || selectedSegRef.current
+    if ((type === 'left' || type === 'right') && el) {
+      const segRect = el.getBoundingClientRect()
       const segDur = (trimEnd ?? duration) - trimStart
       secPerPx = segRect.width > 0 ? segDur / segRect.width : 1
     }
@@ -580,6 +588,18 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }, [])
 
+  // Measure preview width for selfie overlay scaling
+  useEffect(() => {
+    if (!showSelfieOverlay || !previewRef.current) return
+    const measure = () => {
+      if (previewRef.current) setPreviewWidth(previewRef.current.offsetWidth)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(previewRef.current)
+    return () => ro.disconnect()
+  }, [showSelfieOverlay])
+
   // Sync trimStart/trimEnd changes back to the selected segment
   useEffect(() => {
     if (syncingRef.current) { syncingRef.current = false; return }
@@ -591,9 +611,10 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     })
   }, [trimStart, trimEnd, selectedSegmentIdx])
 
-  const selectSegment = (id) => {
+  const selectSegment = (id, track = 'main') => {
     const seg = segments.find(s => s.id === id)
     if (!seg) return
+    setActiveTrack(track)
     if (id === selectedSegmentId) {
       setShowTimelineOptions(prev => !prev)
       return
@@ -671,7 +692,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       }
     }
     const onEnd = () => {
-      selectSegment(segments[segPointerDown.idx].id)
+      selectSegment(segments[segPointerDown.idx].id, segPointerDown.track || 'main')
       setSegPointerDown(null)
     }
     window.addEventListener('mousemove', onMove)
@@ -750,7 +771,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       </div>
 
       {/* Video Preview */}
-      <div className="video-editor-preview" onClick={togglePlay}>
+      <div className="video-editor-preview" ref={previewRef} onClick={togglePlay}>
         <video
           ref={videoRef}
           src={videoUrl}
@@ -768,6 +789,31 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
             </svg>
           </div>
         )}
+        {/* Selfie cam overlay — display only, non-interactive */}
+        {showSelfieOverlay && selfieSize && previewWidth > 0 && (() => {
+          const selfieScale = previewWidth / 440
+          return (
+            <div
+              className="video-editor-selfie-overlay"
+              style={{
+                width: selfieSize.w * selfieScale,
+                height: selfieSize.h * selfieScale,
+                left: (selfiePosition?.x || 16) * selfieScale,
+                top: (selfiePosition?.y || 80) * selfieScale,
+                borderRadius: 8 * selfieScale,
+              }}
+            >
+              <video
+                src={videoUrl}
+                className={`video-editor-selfie-video ${isMirrored ? 'mirrored' : ''}`}
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            </div>
+          )
+        })()}
       </div>
 
       {/* Time Display — shows output timeline position */}
@@ -781,21 +827,15 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       <div
         className="video-editor-playhead-area"
         ref={playheadAreaRef}
-        onMouseDown={(e) => {
-          const rect = playheadAreaRef.current?.getBoundingClientRect()
-          if (rect && rect.width > 0) seekToOutputFrac(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)))
-          handleDragStart('playheadScrub', e.clientX)
-        }}
-        onTouchStart={(e) => {
-          const rect = playheadAreaRef.current?.getBoundingClientRect()
-          if (rect && rect.width > 0) seekToOutputFrac(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width)))
-          handleDragStart('playheadScrub', e.touches[0].clientX)
-        }}
+        onMouseDown={(e) => { handleDragStart('playheadScrub', e.clientX) }}
+        onTouchStart={(e) => { handleDragStart('playheadScrub', e.touches[0].clientX) }}
       >
       {/* Timeline — segments row */}
       <div
         className="video-editor-timeline"
         ref={timelineRef}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
       >
         {segments.map((seg, idx) => {
           const isSelected = seg.id === selectedSegmentId
@@ -803,14 +843,15 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
           const segDur = segEnd - seg.start
           const segThumbs = getSegmentThumbnails(seg)
 
+          const showHandles = isSelected && activeTrack === 'main'
           return (
             <div
               key={seg.id}
-              ref={isSelected ? selectedSegRef : undefined}
-              className={`video-editor-segment ${isSelected ? 'selected' : ''} ${reorderDragIdx === idx ? 'reorder-dragging' : ''}`}
+              ref={showHandles ? selectedSegRef : undefined}
+              className={`video-editor-segment ${showHandles ? 'selected' : ''} ${reorderDragIdx === idx ? 'reorder-dragging' : ''}`}
               style={{ flex: `${Math.max(segDur, 0.1)} 0 0` }}
-              onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.clientX }) }}
-              onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.touches[0].clientX }) }}
+              onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.clientX, track: 'main' }) }}
+              onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.touches[0].clientX, track: 'main' }) }}
             >
               <div className="video-editor-segment-thumbs">
                 {segThumbs.map((thumb, i) => (
@@ -824,20 +865,20 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
                 ))}
               </div>
 
-              {/* Handles + playhead on selected segment */}
-              {isSelected && (
+              {/* Handles on selected segment when main track active */}
+              {showHandles && (
                 <>
                   <div
                     className={`video-editor-handle video-editor-handle-left ${dragging === 'left' ? 'active' : ''}`}
-                    onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.clientX) }}
-                    onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.touches[0].clientX) }}
+                    onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.clientX, e.currentTarget.parentElement) }}
+                    onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.touches[0].clientX, e.currentTarget.parentElement) }}
                   >
                     <div className="video-editor-handle-grip" />
                   </div>
                   <div
                     className={`video-editor-handle video-editor-handle-right ${dragging === 'right' ? 'active' : ''}`}
-                    onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.clientX) }}
-                    onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.touches[0].clientX) }}
+                    onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.clientX, e.currentTarget.parentElement) }}
+                    onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.touches[0].clientX, e.currentTarget.parentElement) }}
                   >
                     <div className="video-editor-handle-grip" />
                   </div>
@@ -848,10 +889,10 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
         })}
       </div>
 
-      {/* Timeline Options — shown when a segment is tapped */}
-      {showTimelineOptions && (
-        <div className="video-editor-options">
-          <button className="video-editor-option" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onClick={handleSplit}>
+      {/* Options below main track */}
+      {showTimelineOptions && activeTrack === 'main' && (
+        <div className="video-editor-options" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <button className="video-editor-option" onClick={handleSplit}>
             <div className="video-editor-option-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="2" x2="12" y2="22" />
@@ -861,7 +902,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
             </div>
             <span>Split</span>
           </button>
-          <button className="video-editor-option" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onClick={() => setShowVolumePopup(true)}>
+          <button className="video-editor-option" onClick={() => setShowVolumePopup(true)}>
             <div className="video-editor-option-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -871,7 +912,106 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
             </div>
             <span>Volume</span>
           </button>
-          <button className="video-editor-option" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onClick={handleTrashSegment}>
+          <button className="video-editor-option" onClick={handleTrashSegment}>
+            <div className="video-editor-option-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </div>
+            <span>Trash</span>
+          </button>
+        </div>
+      )}
+
+      {/* Selfie segment track — full segment styling with handles */}
+      {showSelfieOverlay && (
+        <div className="video-editor-selfie-track" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <div className="video-editor-selfie-label">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+            <span>Selfie</span>
+          </div>
+          <div className="video-editor-timeline">
+            {segments.map((seg, idx) => {
+              const isSelected = seg.id === selectedSegmentId
+              const showHandles = isSelected && activeTrack === 'selfie'
+              const segEnd = seg.end ?? duration
+              const segDur = segEnd - seg.start
+              const segThumbs = getSegmentThumbnails(seg)
+              return (
+                <div
+                  key={`selfie-${seg.id}`}
+                  ref={showHandles ? selectedSegRef : undefined}
+                  className={`video-editor-segment ${showHandles ? 'selected' : ''} ${reorderDragIdx === idx && activeTrack === 'selfie' ? 'reorder-dragging' : ''}`}
+                  style={{ flex: `${Math.max(segDur, 0.1)} 0 0` }}
+                  onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.clientX, track: 'selfie' }) }}
+                  onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.touches[0].clientX, track: 'selfie' }) }}
+                >
+                  <div className="video-editor-segment-thumbs">
+                    {segThumbs.map((thumb, i) => (
+                      <div key={i} className="video-editor-thumb">
+                        {thumb ? (
+                          <img src={thumb} alt="" draggable={false} />
+                        ) : (
+                          <div className="video-editor-thumb-placeholder" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {showHandles && (
+                    <>
+                      <div
+                        className={`video-editor-handle video-editor-handle-left ${dragging === 'left' ? 'active' : ''}`}
+                        onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.clientX, e.currentTarget.parentElement) }}
+                        onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.touches[0].clientX, e.currentTarget.parentElement) }}
+                      >
+                        <div className="video-editor-handle-grip" />
+                      </div>
+                      <div
+                        className={`video-editor-handle video-editor-handle-right ${dragging === 'right' ? 'active' : ''}`}
+                        onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.clientX, e.currentTarget.parentElement) }}
+                        onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.touches[0].clientX, e.currentTarget.parentElement) }}
+                      >
+                        <div className="video-editor-handle-grip" />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Options below selfie track */}
+      {showSelfieOverlay && showTimelineOptions && activeTrack === 'selfie' && (
+        <div className="video-editor-options" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <button className="video-editor-option" onClick={handleSplit}>
+            <div className="video-editor-option-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="2" x2="12" y2="22" />
+                <polyline points="8 6 12 2 16 6" />
+                <polyline points="8 18 12 22 16 18" />
+              </svg>
+            </div>
+            <span>Split</span>
+          </button>
+          <button className="video-editor-option" onClick={() => setShowVolumePopup(true)}>
+            <div className="video-editor-option-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            </div>
+            <span>Volume</span>
+          </button>
+          <button className="video-editor-option" onClick={handleTrashSegment}>
             <div className="video-editor-option-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -891,7 +1031,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
       {/* Sound Track — beneath video timeline */}
       {selectedSound && soundDuration > 0 && (
-        <div className="sound-track-section" ref={soundTrackRef}>
+        <div className="sound-track-section" ref={soundTrackRef} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
           <div className="sound-track-label">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M9 18V5l12-2v13" />
@@ -962,7 +1102,11 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
         className="video-editor-main-playhead"
         style={{ left: `${outputPlayheadFrac * 100}%` }}
       >
-        <div className="video-editor-playhead-dot" />
+        <div
+          className="video-editor-playhead-dot"
+          onMouseDown={(e) => { e.stopPropagation(); handleDragStart('playheadScrub', e.clientX) }}
+          onTouchStart={(e) => { e.stopPropagation(); handleDragStart('playheadScrub', e.touches[0].clientX) }}
+        />
         <div className="video-editor-playhead-line" />
       </div>
       </div>{/* end playhead-area */}
