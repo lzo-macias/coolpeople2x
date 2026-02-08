@@ -1,12 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import VideoEditor from './VideoEditor'
 import { usersApi, searchApi, favoritesApi } from '../services/api'
 import '../styling/PostScreen.css'
 import '../styling/PartyCreationFlow.css'
+import '../styling/VideoEditor.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound }) {
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
+  const [showVideoEditor, setShowVideoEditor] = useState(false)
+  const [localTrimStart, setLocalTrimStart] = useState(trimStart)
+  const [localTrimEnd, setLocalTrimEnd] = useState(trimEnd)
+  const [localSegments, setLocalSegments] = useState(null)
+  const previewSegIdxRef = useRef(0)
 
   // Render text with styled mentions (matches EditClipScreen)
   const renderTextWithMentions = (text, mentions) => {
@@ -33,10 +40,10 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
     })
   }
 
-  // Restart video from beginning when screen mounts
+  // Seek to trimStart on mount and set up trim loop
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
-      videoRef.current.currentTime = 0
+      videoRef.current.currentTime = localTrimStart || 0
       videoRef.current.play().catch(() => {})
     }
     // Cleanup - pause when unmounting
@@ -46,6 +53,24 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       }
     }
   }, [])
+
+  // Pause video when VideoEditor is open
+  useEffect(() => {
+    if (showVideoEditor) {
+      if (videoRef.current) videoRef.current.pause()
+    } else {
+      // Resuming from VideoEditor — restart video from first segment
+      if (videoRef.current && recordedVideoUrl) {
+        previewSegIdxRef.current = 0
+        if (localSegments && localSegments.length > 0) {
+          videoRef.current.currentTime = localSegments[0].start
+        }
+        videoRef.current.play().catch(() => {})
+      }
+    }
+  }, [showVideoEditor, recordedVideoUrl, localSegments])
+
+
   const [caption, setCaption] = useState('')
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
   const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
@@ -361,7 +386,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay })
+    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments })
   }
 
   const handleSaveDraft = () => {
@@ -493,7 +518,27 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               className={isMirrored ? 'mirrored' : ''}
               autoPlay
               loop
+              muted
               playsInline
+              onTimeUpdate={() => {
+                const vid = videoRef.current
+                if (!vid) return
+                if (localSegments && localSegments.length > 0) {
+                  const idx = previewSegIdxRef.current
+                  const seg = localSegments[idx]
+                  if (seg && vid.currentTime >= seg.end - 0.05) {
+                    if (idx < localSegments.length - 1) {
+                      previewSegIdxRef.current = idx + 1
+                      vid.currentTime = localSegments[idx + 1].start
+                    } else {
+                      previewSegIdxRef.current = 0
+                      vid.currentTime = localSegments[0].start
+                    }
+                  }
+                } else if (localTrimEnd !== null && vid.currentTime >= localTrimEnd) {
+                  vid.currentTime = localTrimStart || 0
+                }
+              }}
             />
           ) : (
             <img
@@ -547,8 +592,9 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           )}
 
           <button className="post-edit-cover-btn">Edit Cover</button>
-          <button className="post-edit-video-btn">Edit Video</button>
+          <button className="post-edit-video-btn" onClick={() => setShowVideoEditor(true)}>Edit Video</button>
         </div>
+
 
         {/* Title & Caption */}
         <div className="post-text-inputs">
@@ -879,6 +925,30 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Video Editor */}
+      {showVideoEditor && (
+        <VideoEditor
+          videoUrl={recordedVideoUrl}
+          isMirrored={isMirrored}
+          selectedSound={selectedSound}
+          initialTrimStart={localTrimStart}
+          initialTrimEnd={localTrimEnd}
+          onDone={({ trimStart: ts, trimEnd: te, segments: segs }) => {
+            setLocalTrimStart(ts)
+            setLocalTrimEnd(te)
+            if (segs) setLocalSegments(segs)
+            setShowVideoEditor(false)
+            if (videoRef.current) {
+              // Start from the first segment's start time
+              const startTime = segs && segs.length > 0 ? segs[0].start : ts
+              videoRef.current.currentTime = startTime
+              videoRef.current.play().catch(() => {})
+            }
+          }}
+          onClose={() => setShowVideoEditor(false)}
+        />
       )}
     </div>
   )

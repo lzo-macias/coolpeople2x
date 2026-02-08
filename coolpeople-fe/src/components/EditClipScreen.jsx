@@ -1,19 +1,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
+import VideoEditor from './VideoEditor'
 import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, favoritesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
+import '../styling/VideoEditor.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay }) {
+function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
+  const soundAudioRef = useRef(null)
   const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const searchTimeoutRef = useRef(null)
+
+  // Video editor state
+  const [showVideoEditor, setShowVideoEditor] = useState(false)
+  const [trimStart, setTrimStart] = useState(0)
+  const [trimEnd, setTrimEnd] = useState(null)
 
   // Selfie overlay local UI state (size/position/visibility come from props)
   const [isSelfieDragging, setIsSelfieDragging] = useState(false)
@@ -142,6 +150,47 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
       }
     }
   }, [recordedVideoUrl])
+
+  // Pause video and sound when VideoEditor is open or PostScreen is shown on top
+  useEffect(() => {
+    if (showVideoEditor || isBackgrounded) {
+      if (videoRef.current) videoRef.current.pause()
+      if (soundAudioRef.current) soundAudioRef.current.pause()
+    } else {
+      // Resuming — restart video
+      if (videoRef.current && recordedVideoUrl) {
+        videoRef.current.play().catch(() => {})
+      }
+    }
+  }, [showVideoEditor, isBackgrounded, recordedVideoUrl])
+
+  // Sync added sound audio with video playback (both play in unison)
+  useEffect(() => {
+    const audio = soundAudioRef.current
+    const video = videoRef.current
+    if (!audio || !video || !selectedSound?.audioUrl) return
+
+    const syncPlay = () => { audio.currentTime = 0; audio.play().catch(() => {}) }
+    const syncPause = () => audio.pause()
+    const syncSeek = () => { audio.currentTime = video.currentTime }
+
+    video.addEventListener('play', syncPlay)
+    video.addEventListener('pause', syncPause)
+    video.addEventListener('seeked', syncSeek)
+
+    // Start playing if video is already playing
+    if (!video.paused) {
+      audio.currentTime = video.currentTime
+      audio.play().catch(() => {})
+    }
+
+    return () => {
+      video.removeEventListener('play', syncPlay)
+      video.removeEventListener('pause', syncPause)
+      video.removeEventListener('seeked', syncSeek)
+      audio.pause()
+    }
+  }, [selectedSound])
   const [isEditingRace, setIsEditingRace] = useState(false)
   // raceType, winMethod, selectedExistingRace come from props now
   const setRaceType = onRaceTypeChange || (() => {})
@@ -1197,6 +1246,13 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             loop
             playsInline
             crossOrigin="anonymous"
+            onTimeUpdate={() => {
+              if (trimEnd !== null && videoRef.current) {
+                if (videoRef.current.currentTime >= trimEnd) {
+                  videoRef.current.currentTime = trimStart
+                }
+              }
+            }}
           />
         ) : (
           <img
@@ -1239,7 +1295,13 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             />
           </div>
         )}
+
       </div>
+
+      {/* Added Sound Audio (plays alongside video audio in unison) */}
+      {selectedSound?.audioUrl && (
+        <audio ref={soundAudioRef} src={selectedSound.audioUrl} loop preload="auto" />
+      )}
 
       {/* Top Controls */}
       <div className="edit-clip-top">
@@ -1286,10 +1348,10 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
               <polyline points="21 15 16 10 5 21" />
             </svg>
           </button>
-          <button className="edit-clip-side-btn">
+          <button className="edit-clip-side-btn" onClick={() => setShowVideoEditor(true)}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M2 8h20M2 16h20M8 4v16M16 4v16" />
             </svg>
           </button>
           <button className="edit-clip-side-btn" onClick={handleAddText}>
@@ -1644,7 +1706,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
-            <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={onNext} disabled={!canProceed}>
+            <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={() => onNext?.({ trimStart, trimEnd })} disabled={!canProceed}>
               next
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M5 12h14M12 5l7 7-7 7" />
@@ -1959,6 +2021,26 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             )}
           </div>
         </div>
+      )}
+
+      {/* Video Editor */}
+      {showVideoEditor && (
+        <VideoEditor
+          videoUrl={recordedVideoUrl}
+          isMirrored={isMirrored}
+          selectedSound={selectedSound}
+          initialTrimStart={trimStart}
+          initialTrimEnd={trimEnd}
+          onDone={({ trimStart: ts, trimEnd: te }) => {
+            setTrimStart(ts)
+            setTrimEnd(te)
+            setShowVideoEditor(false)
+            if (videoRef.current) {
+              videoRef.current.currentTime = ts
+            }
+          }}
+          onClose={() => setShowVideoEditor(false)}
+        />
       )}
 
       {/* Custom Calendar Picker */}

@@ -1982,3 +1982,50 @@
   transform: none;
   box-shadow: none;
 }
+
+/* Added Sound Pill Overlay */
+.added-sound-pill {
+  position: absolute;
+  bottom: 100px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  z-index: 10;
+  overflow: hidden;
+  max-width: calc(100% - 32px);
+}
+
+.added-sound-pill svg {
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.added-sound-pill-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Marquee scroll for long names */
+  animation: soundMarquee 8s linear infinite;
+}
+
+.added-sound-pill-artist {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@keyframes soundMarquee {
+  0%, 20% { transform: translateX(0); }
+  80%, 100% { transform: translateX(-30%); }
+}

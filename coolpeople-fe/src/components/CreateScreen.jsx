@@ -61,6 +61,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [selfiePosition, setSelfiePosition] = useState({ x: 16, y: 80 })
   const [showSelfieOverlay, setShowSelfieOverlay] = useState(false)
 
+  // Video trim state (shared between EditClipScreen and PostScreen)
+  const [videoTrimStart, setVideoTrimStart] = useState(0)
+  const [videoTrimEnd, setVideoTrimEnd] = useState(null)
+
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
   const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
@@ -435,6 +439,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const videoRef = useRef(null)
   const selfieVideoRef = useRef(null)
   const streamRef = useRef(null)
+  const soundAudioRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
   const recordingStartTimeRef = useRef(null)
@@ -442,6 +447,87 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [recordedVideoUrl, setRecordedVideoUrl] = useState(null)
   const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // Store base64 for drafts
   const [recordedWithFrontCamera, setRecordedWithFrontCamera] = useState(false)
+
+  // Play selected sound on CreateScreen — loops freely in camera mode, syncs with recorded video
+  useEffect(() => {
+    const audio = soundAudioRef.current
+    if (!audio) return
+
+    if (!selectedSound?.audioUrl) {
+      audio.pause()
+      audio.src = ''
+      return
+    }
+
+    audio.src = selectedSound.audioUrl
+    audio.loop = true
+
+    if (recordedVideoUrl) {
+      // Sync with recorded video playback
+      // Use a small delay to ensure videoRef points to the new recorded <video> after React re-render
+      let cancelled = false
+      const setup = () => {
+        const video = videoRef.current
+        if (!video || cancelled) return
+
+        // Ensure video plays with audio (browser may have muted it for autoplay policy)
+        video.muted = false
+        video.volume = 1.0
+
+        const syncPlay = () => { audio.currentTime = 0; audio.play().catch(() => {}) }
+        const syncPause = () => audio.pause()
+        const syncSeek = () => { audio.currentTime = video.currentTime }
+
+        video.addEventListener('play', syncPlay)
+        video.addEventListener('pause', syncPause)
+        video.addEventListener('seeked', syncSeek)
+
+        // If video is already playing, start the sound too
+        if (!video.paused) {
+          audio.currentTime = video.currentTime
+          audio.play().catch(() => {})
+        } else {
+          // Video hasn't started yet — kick it off with audio
+          video.play().catch(() => {})
+        }
+
+        // Store for cleanup
+        setup._cleanup = () => {
+          video.removeEventListener('play', syncPlay)
+          video.removeEventListener('pause', syncPause)
+          video.removeEventListener('seeked', syncSeek)
+          audio.pause()
+        }
+      }
+
+      // Delay to let React commit the new video element to the DOM
+      const timer = setTimeout(setup, 100)
+
+      return () => {
+        cancelled = true
+        clearTimeout(timer)
+        setup._cleanup?.()
+        audio.pause()
+      }
+    } else {
+      // No video yet (camera mode) — just loop the sound freely
+      audio.currentTime = 0
+      audio.play().catch(() => {})
+      return () => audio.pause()
+    }
+  }, [selectedSound, recordedVideoUrl])
+
+  // Stop sound when navigating to sub-screens (EditClip/PostScreen handle their own audio)
+  useEffect(() => {
+    const audio = soundAudioRef.current
+    if (!audio) return
+    if (showEditClipScreen || showPostScreen || showPartyCreationFlow) {
+      audio.pause()
+    } else if (selectedSound?.audioUrl) {
+      // Resuming back to CreateScreen — restart sound
+      audio.play().catch(() => {})
+    }
+  }, [showEditClipScreen, showPostScreen, showPartyCreationFlow])
 
   // Reset selfie overlay when video changes — only enable for nominate/quote mode
   useEffect(() => {
@@ -465,7 +551,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const touchEndX = useRef(0)
 
   // Camera initialization
-  const startCamera = async (facing = facingMode) => {
+  const startCamera = async (facing = facingMode, useExact = true) => {
     try {
       // Stop any existing stream
       if (streamRef.current) {
@@ -474,14 +560,26 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
       const constraints = {
         video: {
-          facingMode: facing,
+          // Use exact on mobile to force camera switch, fall back to ideal
+          facingMode: useExact ? { exact: facing } : { ideal: facing },
           width: { ideal: 1080 },
           height: { ideal: 1920 }
         },
         audio: true
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+      } catch (exactErr) {
+        // exact facingMode failed (device may only have one camera) — retry as preference
+        if (useExact) {
+          console.log('Exact facingMode failed, retrying as preference:', exactErr.message)
+          return startCamera(facing, false)
+        }
+        throw exactErr
+      }
+
       streamRef.current = stream
 
       // Attach to video element - might need to wait for ref to be ready
@@ -502,16 +600,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
   }
 
-  // Flip camera
+  // Flip camera between front and back
   const flipCamera = () => {
     const newFacing = facingMode === 'user' ? 'environment' : 'user'
     setFacingMode(newFacing)
-    startCamera(newFacing)
+    startCamera(newFacing, true)
   }
 
-  // Start camera on mount
+  // Start camera on mount — use preference (not exact) so it works on all devices
   useEffect(() => {
-    startCamera()
+    startCamera(facingMode, false)
 
     // Cleanup on unmount
     return () => {
@@ -631,6 +729,14 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setLoadedQuotedReel(null)
     setIsLoadedFromDraft(false)
 
+    // Reset sound selection and stop audio
+    setSelectedSound(null)
+    if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
+
+    // Reset trim state
+    setVideoTrimStart(0)
+    setVideoTrimEnd(null)
+
     // Re-attach camera stream
     setTimeout(() => {
       if (videoRef.current && streamRef.current) {
@@ -639,7 +745,11 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }, 50)
   }
 
-  const handleNextFromEditClip = () => {
+  const handleNextFromEditClip = (trimData) => {
+    if (trimData) {
+      setVideoTrimStart(trimData.trimStart || 0)
+      setVideoTrimEnd(trimData.trimEnd || null)
+    }
     setShowPostScreen(true)
   }
 
@@ -685,6 +795,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setTextOverlays([])
     setLoadedQuotedReel(null)
     setIsLoadedFromDraft(false)
+
+    // Reset sound selection and stop audio
+    setSelectedSound(null)
+    if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
 
     // Reload drafts from storage
     reloadDraftsFromStorage()
@@ -752,6 +866,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
     setRecordedVideoBase64(null)
     setShowClipConfirm(false)
+    setVideoTrimStart(0)
+    setVideoTrimEnd(null)
+    setSelectedSound(null)
+    if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
 
     // Re-attach camera stream after a brief delay to ensure video element is ready
     setTimeout(() => {
@@ -863,8 +981,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
             autoPlay
             loop
             playsInline
-            crossOrigin="anonymous"
             onTimeUpdate={syncSelfieVideo}
+            onPlay={(e) => { e.target.muted = false; e.target.volume = 1.0 }}
             onLoadedData={() => console.log('Recorded video loaded successfully')}
             onError={(e) => console.error('Recorded video error:', e)}
           />
@@ -1335,9 +1453,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                     >
                       {/* Main content - thumbnail or video fallback */}
                       {mainThumbnail ? (
-                        <img src={mainThumbnail} alt="" className={item.isMirrored ? 'mirrored' : ''} />
+                        <img src={mainThumbnail} alt="" />
                       ) : mainVideo ? (
-                        <video src={mainVideo} autoPlay loop muted playsInline className={`media-grid-video ${item.isMirrored ? 'mirrored' : ''}`} />
+                        <video src={mainVideo} autoPlay loop muted playsInline className="media-grid-video" />
                       ) : (
                         <div className="media-grid-placeholder" />
                       )}
@@ -1379,9 +1497,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                       >
                         {/* Main content - thumbnail or video fallback */}
                         {mainThumbnail ? (
-                          <img src={mainThumbnail} alt="" className={draft.isMirrored ? 'mirrored' : ''} />
+                          <img src={mainThumbnail} alt="" />
                         ) : mainVideo ? (
-                          <video src={mainVideo} autoPlay loop muted playsInline className={`media-grid-video ${draft.isMirrored ? 'mirrored' : ''}`} />
+                          <video src={mainVideo} autoPlay loop muted playsInline className="media-grid-video" />
                         ) : (
                           <div className="media-grid-placeholder" />
                         )}
@@ -1465,6 +1583,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         </div>
       )}
 
+      {/* Added Sound Audio (plays on CreateScreen — loops in camera mode, syncs with recorded video) */}
+      <audio ref={soundAudioRef} preload="auto" />
+
       {/* Add Sound Screen */}
       {showAddSound && (
         <AddSound
@@ -1530,6 +1651,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           setSelfiePosition={setSelfiePosition}
           showSelfieOverlay={showSelfieOverlay}
           setShowSelfieOverlay={setShowSelfieOverlay}
+          isBackgrounded={showPostScreen}
         />
       )}
 
@@ -1559,6 +1681,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           selfieSize={selfieSize}
           selfiePosition={selfiePosition}
           showSelfieOverlay={showSelfieOverlay}
+          trimStart={videoTrimStart}
+          trimEnd={videoTrimEnd}
+          selectedSound={selectedSound}
         />
       )}
 

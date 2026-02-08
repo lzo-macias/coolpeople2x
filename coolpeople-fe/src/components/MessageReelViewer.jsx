@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/ReelCard.css'
 import '../styling/ReelActions.css'
@@ -11,38 +11,15 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   // Track video load errors to fallback to thumbnail
   const [videoError, setVideoError] = useState(false)
 
-  // Filter messages with video content (party invites with videos or media messages)
-  // Must match the same criteria as isSharedReel() in Conversation.jsx
-  const videoMessages = messages.filter(msg => {
-    if (msg.metadata?.type === 'party_invite') {
-      // Support both base64 and URL formats, plus fallback to avatar
-      return msg.metadata.introVideoBase64 || msg.metadata.introVideoUrl || msg.metadata.partyAvatar
-    }
-    if (msg.metadata?.type === 'reel') return true
-    if (msg.metadata?.videoUrl) return true
-    if (msg.mediaUrl && msg.mediaType === 'video') return true
-    if (msg.mediaUrl && (msg.mediaUrl.includes('.mp4') || msg.mediaUrl.includes('.webm') || msg.mediaUrl.includes('.mov') || msg.mediaUrl.includes('blob:'))) return true
-    return false
-  })
-
-  // Find initial index
-  const initialIndex = videoMessages.findIndex(msg => msg.id === initialMessageId)
-  const [currentIndex, setCurrentIndex] = useState(initialIndex >= 0 ? initialIndex : 0)
   const [showComments, setShowComments] = useState(false)
   const [localStats, setLocalStats] = useState({}) // Track local like/comment counts per message
   const [joinStatus, setJoinStatus] = useState({}) // Track join status per party { partyId: 'idle' | 'joining' | 'joined' | 'requested' }
   const containerRef = useRef(null)
   const videoRef = useRef(null)
 
-  // Use refs for touch/nav state to avoid stale closures and re-render lag
-  const touchStartYRef = useRef(0)
-  const touchDeltaYRef = useRef(0)
-  const [touchDeltaY, setTouchDeltaY] = useState(0) // Only for visual transform
-  const navCooldownRef = useRef(false)
-  const currentIndexRef = useRef(initialIndex >= 0 ? initialIndex : 0)
-  const showCommentsRef = useRef(false)
+  // Find the single target message directly
+  const currentMessage = messages.find(msg => msg.id === initialMessageId)
 
-  const currentMessage = videoMessages[currentIndex]
   const isPartyInvite = currentMessage?.metadata?.type === 'party_invite'
   const isSharedReel = currentMessage?.metadata?.type === 'reel' || currentMessage?.reelId || currentMessage?.metadata?.reelId
   const isDirectVideo = !isPartyInvite && !isSharedReel
@@ -53,17 +30,6 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
 
   // Track if video is ready to play
   const [videoReady, setVideoReady] = useState(false)
-
-  // Keep refs in sync with state
-  useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
-  useEffect(() => { showCommentsRef.current = showComments }, [showComments])
-
-  // Reset video error and resolved reel ID when index changes
-  useEffect(() => {
-    setVideoError(false)
-    setVideoReady(false)
-    setResolvedReelId(null)
-  }, [currentIndex, currentMessage])
 
   // Fallback: resolve reel ID by looking up user's reels when metadata doesn't have it
   useEffect(() => {
@@ -126,67 +92,6 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     fetchReelStats()
   }, [reelId])
 
-  // Navigate to next/prev video — uses refs so it's always current
-  const navigate = useCallback((direction) => {
-    if (navCooldownRef.current || showCommentsRef.current) return
-    const idx = currentIndexRef.current
-    const len = videoMessages.length
-    if (direction === 'next' && idx < len - 1) {
-      navCooldownRef.current = true
-      setCurrentIndex(idx + 1)
-      setTimeout(() => { navCooldownRef.current = false }, 250)
-    } else if (direction === 'prev' && idx > 0) {
-      navCooldownRef.current = true
-      setCurrentIndex(idx - 1)
-      setTimeout(() => { navCooldownRef.current = false }, 250)
-    } else if ((direction === 'prev' && idx === 0) || (direction === 'next' && idx === len - 1)) {
-      onClose()
-    }
-  }, [videoMessages.length, onClose])
-
-  // Handle swipe navigation
-  const handleTouchStart = (e) => {
-    touchStartYRef.current = e.touches[0].clientY
-    touchDeltaYRef.current = 0
-  }
-
-  const handleTouchMove = (e) => {
-    const delta = e.touches[0].clientY - touchStartYRef.current
-    touchDeltaYRef.current = delta
-    setTouchDeltaY(delta) // for visual transform only
-  }
-
-  const handleTouchEnd = () => {
-    const delta = touchDeltaYRef.current
-    if (Math.abs(delta) > 60) {
-      navigate(delta < 0 ? 'next' : 'prev')
-    }
-    touchDeltaYRef.current = 0
-    setTouchDeltaY(0)
-  }
-
-  // Attach non-passive touch + wheel listeners once (stable refs, no re-attach needed)
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const onWheel = (e) => {
-      e.preventDefault()
-      if (navCooldownRef.current || showCommentsRef.current) return
-      if (e.deltaY > 30) navigate('next')
-      else if (e.deltaY < -30) navigate('prev')
-    }
-
-    const onTouchMove = (e) => { e.preventDefault() }
-
-    container.addEventListener('wheel', onWheel, { passive: false })
-    container.addEventListener('touchmove', onTouchMove, { passive: false })
-    return () => {
-      container.removeEventListener('wheel', onWheel)
-      container.removeEventListener('touchmove', onTouchMove)
-    }
-  }, [navigate])
-
   const getVideoUrl = () => {
     if (isPartyInvite) {
       // Prefer base64 (persistent) over blob URL (session-only)
@@ -230,7 +135,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     }
   }
 
-  if (!currentMessage || videoMessages.length === 0) {
+  if (!currentMessage) {
     return null
   }
 
@@ -380,9 +285,6 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     <div
       className="reel-card"
       ref={containerRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       style={{
         position: 'fixed',
         top: 0,
@@ -393,8 +295,6 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
         maxWidth: '430px',
         margin: '0 auto',
         zIndex: 10001,
-        transform: touchDeltaY !== 0 ? `translateY(${touchDeltaY * 0.3}px)` : 'none',
-        transition: touchDeltaY === 0 ? 'transform 0.2s ease-out' : 'none'
       }}
     >
       {/* Video/Media Background */}
@@ -516,26 +416,6 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
-
-        {/* Video counter */}
-        {videoMessages.length > 1 && (
-          <div style={{
-            position: 'absolute',
-            top: '22px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.5)',
-            borderRadius: '12px',
-            padding: '4px 12px',
-            color: '#fff',
-            fontSize: '13px',
-            fontWeight: '600',
-            zIndex: 10,
-            pointerEvents: 'none',
-          }}>
-            {currentIndex + 1} / {videoMessages.length}
-          </div>
-        )}
 
         {/* Right side actions - only for shared reels and party invites with a valid reel ID */}
         {!isDirectVideo && reelId && (

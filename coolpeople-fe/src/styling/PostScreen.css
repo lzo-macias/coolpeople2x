@@ -645,3 +645,17 @@
 .send-to-toggle-btn:hover:not(.active) {
   background: #e8e8e8;
 }
+
+/* Added Sound Pill in Post Preview (smaller scale) */
+.post-sound-pill {
+  bottom: 50px;
+  left: 8px;
+  right: 8px;
+  padding: 5px 10px;
+  gap: 5px;
+  max-width: calc(100% - 16px);
+}
+
+.post-sound-pill .added-sound-pill-name {
+  font-size: 10px;
+}

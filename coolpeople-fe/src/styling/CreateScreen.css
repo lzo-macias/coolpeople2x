@@ -1277,10 +1277,6 @@
   border-radius: 4px;
 }
 
-.media-grid-item > img.mirrored,
-.media-grid-item > video.mirrored {
-  transform: scaleX(-1);
-}
 
 /* Video icon */
 .media-item-video-icon {
