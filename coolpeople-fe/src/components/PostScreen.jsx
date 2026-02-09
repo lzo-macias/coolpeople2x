@@ -11,6 +11,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const { user: authUser } = useAuth()
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
+  const freezeCanvasRef = useRef(null)
   const [showVideoEditor, setShowVideoEditor] = useState(false)
   const [localTrimStart, setLocalTrimStart] = useState(trimStart)
   const [localTrimEnd, setLocalTrimEnd] = useState(trimEnd)
@@ -23,6 +24,20 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const playlistRef = useRef(videoPlaylist)
   playlistRef.current = videoPlaylist
   const [playlistMirrored, setPlaylistMirrored] = useState(videoPlaylist?.[0]?.isMirrored || false)
+
+  // Freeze last frame on canvas before swapping playlist sources to prevent flash
+  const freezeFrame = (vid) => {
+    const c = freezeCanvasRef.current
+    if (!c || !vid || !vid.videoWidth) return
+    c.width = vid.videoWidth
+    c.height = vid.videoHeight
+    c.getContext('2d').drawImage(vid, 0, 0)
+    c.style.display = 'block'
+  }
+  const unfreezeFrame = () => {
+    const c = freezeCanvasRef.current
+    if (c) c.style.display = 'none'
+  }
 
   // Keep latest segment/trim state in a ref so RAF always reads current values
   const previewStateRef = useRef({ segments: null, trimStart: 0, trimEnd: null })
@@ -53,12 +68,13 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
             const nextItem = playlist[nextSeg.sourceIdx]
             if (nextItem && vid.src !== nextItem.url) {
               playlistSwappingRef.current = true
+              freezeFrame(vid)
               vid.src = nextItem.url
               vid.load()
               setPlaylistMirrored(nextItem.isMirrored || false)
             }
             vid.currentTime = nextSeg.start
-            vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+            vid.play().then(() => { playlistSwappingRef.current = false; unfreezeFrame() }).catch(() => { playlistSwappingRef.current = false; unfreezeFrame() })
           }
         }
       } else if (segs && segs.length > 0) {
@@ -689,7 +705,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               autoPlay
               muted
               playsInline
-              onPlay={() => setPreviewIsPlaying(true)}
+              onPlay={() => { setPreviewIsPlaying(true); unfreezeFrame() }}
               onPause={() => { if (!playlistSwappingRef.current) setPreviewIsPlaying(false) }}
               onEnded={() => {
                 // If video reaches natural end, restart from first segment
@@ -701,12 +717,13 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                   const firstItem = videoPlaylist[segs[0].sourceIdx]
                   if (firstItem && vid.src !== firstItem.url) {
                     playlistSwappingRef.current = true
+                    freezeFrame(vid)
                     vid.src = firstItem.url
                     vid.load()
                     setPlaylistMirrored(firstItem.isMirrored || false)
                   }
                   vid.currentTime = segs[0].start
-                  vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+                  vid.play().then(() => { playlistSwappingRef.current = false; unfreezeFrame() }).catch(() => { playlistSwappingRef.current = false; unfreezeFrame() })
                 } else {
                   const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
                   vid.currentTime = startTime
@@ -720,6 +737,9 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               alt="Video preview"
             />
           )}
+
+          {/* Freeze-frame canvas: holds last frame during playlist source swap */}
+          <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 1 }} />
 
           {/* Selfie Cam inside preview - for nominate mode (non-quote) */}
           {isNominateMode && !isQuoteNomination && showSelfieCam && showSelfieOverlay && recordedVideoUrl && (

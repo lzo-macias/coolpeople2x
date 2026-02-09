@@ -3,6 +3,7 @@ import '../styling/VideoEditor.css'
 
 function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition, videoPlaylist }) {
   const videoRef = useRef(null)
+  const freezeCanvasRef = useRef(null)
   const thumbVideoRef = useRef(null)
   const timelineRef = useRef(null)
   const previewRef = useRef(null)
@@ -72,6 +73,20 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   playlistRef.current = videoPlaylist
   const [playlistMirrored, setPlaylistMirrored] = useState(videoPlaylist?.[0]?.isMirrored || false)
   const playlistSwappingRef = useRef(false) // suppress pause events during source swap
+
+  // Freeze last frame on canvas before swapping playlist sources to prevent flash
+  const freezeFrame = (vid) => {
+    const c = freezeCanvasRef.current
+    if (!c || !vid || !vid.videoWidth) return
+    c.width = vid.videoWidth
+    c.height = vid.videoHeight
+    c.getContext('2d').drawImage(vid, 0, 0)
+    c.style.display = 'block'
+  }
+  const unfreezeFrame = () => {
+    const c = freezeCanvasRef.current
+    if (c) c.style.display = 'none'
+  }
 
   // Ref for sound params so RAF tick always reads latest values
   const soundParamsRef = useRef({ soundStartFrac: 0, soundEndFrac: 1, soundOffset: 0 })
@@ -337,12 +352,13 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
             const nextItem = playlist[nextSeg.sourceIdx]
             if (nextItem && vid.src !== nextItem.url) {
               playlistSwappingRef.current = true
+              freezeFrame(vid)
               vid.src = nextItem.url
               vid.load()
               setPlaylistMirrored(nextItem.isMirrored || false)
             }
             vid.currentTime = nextSeg.start
-            vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+            vid.play().then(() => { playlistSwappingRef.current = false; unfreezeFrame() }).catch(() => { playlistSwappingRef.current = false; unfreezeFrame() })
           } else {
             // Reached the end — stop and reset to first segment's source
             vid.pause()
@@ -1025,9 +1041,10 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
           playsInline
           preload="auto"
           onLoadedMetadata={handleLoadedMetadata}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={() => { setIsPlaying(true); unfreezeFrame() }}
           onPause={() => { if (!playlistSwappingRef.current) setIsPlaying(false) }}
         />
+        <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 1 }} />
         {!isPlaying && (
           <div className="video-editor-play-btn">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="white">

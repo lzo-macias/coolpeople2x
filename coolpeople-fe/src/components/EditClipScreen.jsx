@@ -10,9 +10,24 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
+  const freezeCanvasRef = useRef(null)
   const soundAudioRef = useRef(null)
   const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // Freeze last frame on canvas before swapping playlist sources to prevent flash
+  const freezeFrame = (vid) => {
+    const c = freezeCanvasRef.current
+    if (!c || !vid || !vid.videoWidth) return
+    c.width = vid.videoWidth
+    c.height = vid.videoHeight
+    c.getContext('2d').drawImage(vid, 0, 0)
+    c.style.display = 'block'
+  }
+  const unfreezeFrame = () => {
+    const c = freezeCanvasRef.current
+    if (c) c.style.display = 'none'
+  }
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSending, setIsSending] = useState(false)
@@ -73,12 +88,13 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             const nextSeg = segs[nextIdx]
             const nextItem = playlist[nextSeg.sourceIdx]
             if (nextItem && vid.src !== nextItem.url) {
+              freezeFrame(vid)
               vid.src = nextItem.url
               vid.load()
               setPlaylistMirrored(nextItem.isMirrored || false)
             }
             vid.currentTime = nextSeg.start
-            vid.play().catch(() => {})
+            vid.play().then(() => unfreezeFrame()).catch(() => unfreezeFrame())
           }
         }
       } else if (segs && segs.length > 0) {
@@ -1445,7 +1461,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             autoPlay
             playsInline
             crossOrigin="anonymous"
-            onPlay={() => setEditIsPlaying(true)}
+            onPlay={() => { setEditIsPlaying(true); unfreezeFrame() }}
             onPause={() => setEditIsPlaying(false)}
             onEnded={() => {
               // Video hit natural end — advance segment and restart
@@ -1461,12 +1477,13 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 const nextSeg = segs[nextIdx]
                 const nextItem = playlist[nextSeg.sourceIdx]
                 if (nextItem && vid.src !== nextItem.url) {
+                  freezeFrame(vid)
                   vid.src = nextItem.url
                   vid.load()
                   setPlaylistMirrored(nextItem.isMirrored || false)
                 }
                 vid.currentTime = nextSeg.start
-                vid.play().catch(() => {})
+                vid.play().then(() => unfreezeFrame()).catch(() => unfreezeFrame())
               } else if (segs && segs.length > 0) {
                 const idx = editPlaybackRef.current.segIdx
                 if (idx < segs.length - 1) {
@@ -1489,6 +1506,9 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             alt="Clip preview"
           />
         )}
+
+        {/* Freeze-frame canvas: holds last frame during playlist source swap */}
+        <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 2 }} />
 
         {/* Selfie Overlay - shows in nominate mode or when there's a quoted reel */}
         {(isNominateMode || quotedReel) && recordedVideoUrl && showSelfieOverlay && (
