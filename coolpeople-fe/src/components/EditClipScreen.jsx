@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
 
-function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
+function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
@@ -18,10 +18,71 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   const [isSending, setIsSending] = useState(false)
   const searchTimeoutRef = useRef(null)
 
-  // Video editor state
+  // Video editor state — initialize from parent props (CreateScreen is source of truth)
   const [showVideoEditor, setShowVideoEditor] = useState(false)
-  const [trimStart, setTrimStart] = useState(0)
-  const [trimEnd, setTrimEnd] = useState(null)
+  const [trimStart, setTrimStart] = useState(initialTrimStart)
+  const [trimEnd, setTrimEnd] = useState(initialTrimEnd)
+  const [videoEdits, setVideoEdits] = useState(initialVideoEdits)
+  const editPlaybackRef = useRef({ segIdx: 0 })
+  const editRafRef = useRef(null)
+
+  // Sync from parent props when they change (e.g. PostScreen edits propagated back via CreateScreen)
+  const prevParentEditsRef = useRef(initialVideoEdits)
+  useEffect(() => {
+    if (initialVideoEdits !== prevParentEditsRef.current) {
+      prevParentEditsRef.current = initialVideoEdits
+      if (initialVideoEdits) {
+        setVideoEdits(initialVideoEdits)
+        setTrimStart(initialTrimStart)
+        setTrimEnd(initialTrimEnd)
+      }
+    }
+  }, [initialVideoEdits, initialTrimStart, initialTrimEnd])
+
+  // Keep latest edit state in a ref so RAF tick always reads current values
+  const editStateRef = useRef({ segments: null, trimStart: 0, trimEnd: null })
+  editStateRef.current = { segments: videoEdits?.segments || null, trimStart, trimEnd }
+
+  // RAF-based segment playback loop (replaces unreliable onTimeUpdate)
+  const [editIsPlaying, setEditIsPlaying] = useState(false)
+  useEffect(() => {
+    if (!editIsPlaying) {
+      if (editRafRef.current) cancelAnimationFrame(editRafRef.current)
+      return
+    }
+    const tick = () => {
+      const vid = videoRef.current
+      if (!vid || vid.paused) { editRafRef.current = requestAnimationFrame(tick); return }
+      const { segments: segs, trimStart: ts, trimEnd: te } = editStateRef.current
+      const t = vid.currentTime
+      if (segs && segs.length > 0) {
+        const idx = editPlaybackRef.current.segIdx
+        const seg = segs[idx]
+        if (seg) {
+          if (t < seg.start - 0.1) {
+            vid.currentTime = seg.start
+          } else if (t >= seg.end - 0.05) {
+            if (idx < segs.length - 1) {
+              editPlaybackRef.current.segIdx = idx + 1
+              vid.currentTime = segs[idx + 1].start
+            } else {
+              editPlaybackRef.current.segIdx = 0
+              vid.currentTime = segs[0].start
+            }
+          }
+        }
+      } else if (te !== null) {
+        if (t >= te) {
+          vid.currentTime = ts
+        } else if (t < ts - 0.1) {
+          vid.currentTime = ts
+        }
+      }
+      editRafRef.current = requestAnimationFrame(tick)
+    }
+    editRafRef.current = requestAnimationFrame(tick)
+    return () => { if (editRafRef.current) cancelAnimationFrame(editRafRef.current) }
+  }, [editIsPlaying])
 
   // Selfie overlay local UI state (size/position/visibility come from props)
   const [isSelfieDragging, setIsSelfieDragging] = useState(false)
@@ -137,14 +198,18 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
     }
   }, [isSelfieDragging])
 
-  // Restart video from beginning when screen mounts or video URL changes
+  // Restart video from first segment when screen mounts or video URL changes
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
-      videoRef.current.currentTime = 0
-      videoRef.current.play().catch(() => {})
+      const segs = videoEdits?.segments
+      const startTime = segs && segs.length > 0 ? segs[0].start : trimStart
+      videoRef.current.currentTime = startTime
+      editPlaybackRef.current.segIdx = 0
+      videoRef.current.play().then(() => setEditIsPlaying(true)).catch(() => {})
     }
     // Cleanup - pause when unmounting
     return () => {
+      setEditIsPlaying(false)
       if (videoRef.current) {
         videoRef.current.pause()
       }
@@ -154,43 +219,107 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
   // Pause video and sound when VideoEditor is open or PostScreen is shown on top
   useEffect(() => {
     if (showVideoEditor || isBackgrounded) {
+      setEditIsPlaying(false)
       if (videoRef.current) videoRef.current.pause()
       if (soundAudioRef.current) soundAudioRef.current.pause()
     } else {
-      // Resuming — restart video
+      // Resuming — restart from first segment start
       if (videoRef.current && recordedVideoUrl) {
-        videoRef.current.play().catch(() => {})
+        const segs = videoEdits?.segments
+        const startTime = segs && segs.length > 0 ? segs[0].start : trimStart
+        videoRef.current.currentTime = startTime
+        editPlaybackRef.current.segIdx = 0
+        videoRef.current.play().then(() => setEditIsPlaying(true)).catch(() => {})
       }
     }
-  }, [showVideoEditor, isBackgrounded, recordedVideoUrl])
+  }, [showVideoEditor, isBackgrounded, recordedVideoUrl, trimStart, videoEdits])
 
-  // Sync added sound audio with video playback (both play in unison)
+  // Sync added sound audio with video playback, respecting soundOffset and soundStartFrac/soundEndFrac
+  const editSoundRafRef = useRef(null)
   useEffect(() => {
     const audio = soundAudioRef.current
     const video = videoRef.current
     if (!audio || !video || !selectedSound?.audioUrl) return
 
-    const syncPlay = () => { audio.currentTime = 0; audio.play().catch(() => {}) }
-    const syncPause = () => audio.pause()
-    const syncSeek = () => { audio.currentTime = video.currentTime }
+    const offset = videoEdits?.soundOffset ?? 0
+    const startFrac = videoEdits?.soundStartFrac ?? 0
+    const endFrac = videoEdits?.soundEndFrac ?? 1
+    const segs = videoEdits?.segments
 
-    video.addEventListener('play', syncPlay)
-    video.addEventListener('pause', syncPause)
-    video.addEventListener('seeked', syncSeek)
+    const computeOutputTime = () => {
+      if (segs && segs.length > 0) {
+        let outputTime = 0
+        const idx = editPlaybackRef.current.segIdx
+        for (let i = 0; i < idx && i < segs.length; i++) {
+          outputTime += segs[i].end - segs[i].start
+        }
+        if (segs[idx]) outputTime += Math.max(0, video.currentTime - segs[idx].start)
+        return outputTime
+      } else {
+        return video.currentTime - trimStart
+      }
+    }
 
-    // Start playing if video is already playing
+    const computeTotalDuration = () => {
+      if (segs && segs.length > 0) {
+        return segs.reduce((sum, s) => sum + (s.end - s.start), 0)
+      }
+      return (trimEnd ?? video.duration ?? 0) - trimStart
+    }
+
+    const syncTick = () => {
+      if (video.paused) {
+        if (!audio.paused) audio.pause()
+        return
+      }
+      const total = computeTotalDuration()
+      if (total <= 0) { editSoundRafRef.current = requestAnimationFrame(syncTick); return }
+      const outputTime = computeOutputTime()
+      const soundStart = startFrac * total
+      const soundEnd = endFrac * total
+
+      if (outputTime >= soundStart && outputTime <= soundEnd) {
+        const targetAudioTime = offset + (outputTime - soundStart)
+        if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) {
+          audio.currentTime = targetAudioTime
+        }
+        if (audio.paused) audio.play().catch(() => {})
+      } else {
+        if (!audio.paused) audio.pause()
+      }
+      editSoundRafRef.current = requestAnimationFrame(syncTick)
+    }
+
+    const onPlay = () => { editSoundRafRef.current = requestAnimationFrame(syncTick) }
+    const onPause = () => {
+      if (editSoundRafRef.current) cancelAnimationFrame(editSoundRafRef.current)
+      audio.pause()
+    }
+
+    video.addEventListener('play', onPlay)
+    video.addEventListener('pause', onPause)
+
+    // Start if video is already playing
     if (!video.paused) {
-      audio.currentTime = video.currentTime
-      audio.play().catch(() => {})
+      editSoundRafRef.current = requestAnimationFrame(syncTick)
     }
 
     return () => {
-      video.removeEventListener('play', syncPlay)
-      video.removeEventListener('pause', syncPause)
-      video.removeEventListener('seeked', syncSeek)
+      video.removeEventListener('play', onPlay)
+      video.removeEventListener('pause', onPause)
+      if (editSoundRafRef.current) cancelAnimationFrame(editSoundRafRef.current)
       audio.pause()
     }
-  }, [selectedSound])
+  }, [selectedSound, videoEdits, trimStart, trimEnd])
+
+  // Apply volume levels from video edits
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = (videoEdits?.videoVolume ?? 100) / 100
+  }, [videoEdits?.videoVolume])
+
+  useEffect(() => {
+    if (soundAudioRef.current) soundAudioRef.current.volume = (videoEdits?.soundVolume ?? 100) / 100
+  }, [videoEdits?.soundVolume])
   const [isEditingRace, setIsEditingRace] = useState(false)
   // raceType, winMethod, selectedExistingRace come from props now
   const setRaceType = onRaceTypeChange || (() => {})
@@ -551,6 +680,20 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           showSelfieOverlay: true,
           selfieSize,
           selfiePosition: selfiePosition || { x: 16, y: 80 },
+        }),
+        ...(videoEdits && {
+          trimStart,
+          trimEnd,
+          soundOffset: videoEdits.soundOffset,
+          soundStartFrac: videoEdits.soundStartFrac ?? 0,
+          soundEndFrac: videoEdits.soundEndFrac ?? 1,
+          videoVolume: videoEdits.videoVolume,
+          soundVolume: videoEdits.soundVolume,
+          segments: videoEdits.segments,
+        }),
+        ...(selectedSound && {
+          soundUrl: selectedSound.audioUrl,
+          soundName: selectedSound.name,
         }),
       }
 
@@ -1243,15 +1386,28 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
             src={recordedVideoUrl}
             className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
             autoPlay
-            loop
             playsInline
             crossOrigin="anonymous"
-            onTimeUpdate={() => {
-              if (trimEnd !== null && videoRef.current) {
-                if (videoRef.current.currentTime >= trimEnd) {
-                  videoRef.current.currentTime = trimStart
+            onPlay={() => setEditIsPlaying(true)}
+            onPause={() => setEditIsPlaying(false)}
+            onEnded={() => {
+              // Video hit natural end — advance segment and restart
+              const vid = videoRef.current
+              if (!vid) return
+              const { segments: segs, trimStart: ts } = editStateRef.current
+              if (segs && segs.length > 0) {
+                const idx = editPlaybackRef.current.segIdx
+                if (idx < segs.length - 1) {
+                  editPlaybackRef.current.segIdx = idx + 1
+                  vid.currentTime = segs[idx + 1].start
+                } else {
+                  editPlaybackRef.current.segIdx = 0
+                  vid.currentTime = segs[0].start
                 }
+              } else {
+                vid.currentTime = ts
               }
+              vid.play().catch(() => {})
             }}
           />
         ) : (
@@ -1706,7 +1862,7 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
-            <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={() => onNext?.({ trimStart, trimEnd })} disabled={!canProceed}>
+            <button className={`edit-clip-next-btn ${!canProceed ? 'disabled' : ''}`} onClick={() => onNext?.({ trimStart, trimEnd, ...videoEdits })} disabled={!canProceed}>
               next
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M5 12h14M12 5l7 7-7 7" />
@@ -2031,12 +2187,31 @@ function EditClipScreen({ onClose, onNext, selectedSound, onSelectSound, isRaceM
           selectedSound={selectedSound}
           initialTrimStart={trimStart}
           initialTrimEnd={trimEnd}
-          onDone={({ trimStart: ts, trimEnd: te }) => {
+          initialSegments={videoEdits?.segments || null}
+          initialSoundOffset={videoEdits?.soundOffset ?? 0}
+          initialSoundStartFrac={videoEdits?.soundStartFrac ?? 0}
+          initialSoundEndFrac={videoEdits?.soundEndFrac ?? 1}
+          initialVideoVolume={videoEdits?.videoVolume ?? 100}
+          initialSoundVolume={videoEdits?.soundVolume ?? 100}
+          showSelfieOverlay={showSelfieOverlay}
+          selfieSize={selfieSize}
+          selfiePosition={selfiePosition}
+          onDone={({ trimStart: ts, trimEnd: te, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments }) => {
             setTrimStart(ts)
             setTrimEnd(te)
+            const edits = { soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments }
+            setVideoEdits(edits)
+            // Sync to CreateScreen immediately so edits persist across screen navigation
+            onVideoEditsChange?.({ trimStart: ts, trimEnd: te, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments })
+            editPlaybackRef.current.segIdx = 0
             setShowVideoEditor(false)
             if (videoRef.current) {
-              videoRef.current.currentTime = ts
+              const startTime = segments && segments.length > 0 ? segments[0].start : ts
+              videoRef.current.currentTime = startTime
+              videoRef.current.volume = (videoVolume ?? 100) / 100
+            }
+            if (soundAudioRef.current) {
+              soundAudioRef.current.volume = (soundVolume ?? 100) / 100
             }
           }}
           onClose={() => setShowVideoEditor(false)}

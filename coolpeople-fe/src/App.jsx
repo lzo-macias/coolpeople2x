@@ -784,8 +784,25 @@ function AppContent() {
         showSelfieOverlay: postData.showSelfieOverlay ?? false,
         taggedUser: postData.taggedUser || null,
         isNomination: postData.isNomination || false,
+        soundName: postData.soundName || null,
         isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style (only when party-only)
         partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (including both feeds)
+        metadata: {
+          textOverlays: postData.textOverlays || [],
+          selfieSize: postData.selfieSize || null,
+          selfiePosition: postData.selfiePosition || null,
+          showSelfieOverlay: postData.showSelfieOverlay ?? false,
+          taggedUser: postData.taggedUser || null,
+          isNomination: postData.isNomination || false,
+          trimStart: postData.trimStart ?? 0,
+          trimEnd: postData.trimEnd ?? null,
+          soundOffset: postData.soundOffset ?? 0,
+          videoVolume: postData.videoVolume ?? 100,
+          soundVolume: postData.soundVolume ?? 100,
+          segments: postData.segments || null,
+          soundUrl: postData.soundUrl || null,
+          soundName: postData.soundName || null,
+        },
       }
 
       // Add to main feed (party-only posts still appear in the algorithm feed)
@@ -873,6 +890,14 @@ function AppContent() {
             showSelfieOverlay: postData.showSelfieOverlay ?? false,
             taggedUser: postData.taggedUser || null,
             isNomination: postData.isNomination || false,
+            trimStart: postData.trimStart ?? 0,
+            trimEnd: postData.trimEnd ?? null,
+            soundOffset: postData.soundOffset ?? 0,
+            videoVolume: postData.videoVolume ?? 100,
+            soundVolume: postData.soundVolume ?? 100,
+            segments: postData.segments || null,
+            soundUrl: postData.soundUrl || null,
+            soundName: postData.soundName || null,
           },
         }
         // Add raceIds if we have a race (new or existing)

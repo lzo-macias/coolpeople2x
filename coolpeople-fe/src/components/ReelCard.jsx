@@ -198,6 +198,24 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
 
+  // Edit playback refs
+  const segIdxRef = useRef(0)
+  const rafRef = useRef(null)
+  const soundAudioRef = useRef(null)
+  const editDataRef = useRef(null)
+
+  // --- Edit-aware playback metadata (computed early so hooks below can use it) ---
+  const editMeta = (reel || {}).metadata || {}
+  const playbackSegments = editMeta.segments || (editMeta.trimEnd != null ? [{ start: editMeta.trimStart ?? 0, end: editMeta.trimEnd }] : null)
+  const hasEditPlayback = !!playbackSegments
+  editDataRef.current = {
+    segments: playbackSegments,
+    videoVolume: editMeta.videoVolume ?? 100,
+    soundVolume: editMeta.soundVolume ?? 100,
+    soundOffset: editMeta.soundOffset ?? 0,
+    soundUrl: editMeta.soundUrl || null,
+  }
+
   // IntersectionObserver to detect when video is in viewport
   useEffect(() => {
     const card = cardRef.current
@@ -239,6 +257,104 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
       video.pause()
     }
   }, [isVisible, isPageActive])
+
+  // --- Edit playback effects ---
+
+  // Apply video volume
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = (editMeta.videoVolume ?? 100) / 100
+  }, [editMeta.videoVolume])
+
+  // Setup sound audio element
+  useEffect(() => {
+    const soundUrl = editDataRef.current?.soundUrl
+    if (!soundUrl) { soundAudioRef.current = null; return }
+    const audio = new Audio()
+    audio.preload = 'auto'
+    audio.volume = (editDataRef.current?.soundVolume ?? 100) / 100
+    audio.src = soundUrl
+    soundAudioRef.current = audio
+    return () => { audio.pause(); audio.src = ''; soundAudioRef.current = null }
+  }, [editMeta.soundUrl])
+
+  // Update sound volume
+  useEffect(() => {
+    if (soundAudioRef.current) soundAudioRef.current.volume = (editMeta.soundVolume ?? 100) / 100
+  }, [editMeta.soundVolume])
+
+  // Seek to first segment start on load
+  useEffect(() => {
+    if (!hasEditPlayback) return
+    const vid = videoRef.current
+    if (!vid) return
+    const seekToStart = () => {
+      const segs = editDataRef.current?.segments
+      if (segs && segs[0]) { segIdxRef.current = 0; vid.currentTime = segs[0].start }
+    }
+    vid.addEventListener('loadedmetadata', seekToStart)
+    if (vid.readyState >= 1) seekToStart()
+    return () => vid.removeEventListener('loadedmetadata', seekToStart)
+  }, [hasEditPlayback, reel?.videoUrl])
+
+  // Segment boundary enforcement via RAF
+  useEffect(() => {
+    if (!hasEditPlayback) return
+    const tick = () => {
+      const vid = videoRef.current
+      const ed = editDataRef.current
+      if (!vid || vid.paused || !ed?.segments) { rafRef.current = requestAnimationFrame(tick); return }
+      const segs = ed.segments
+      const idx = segIdxRef.current
+      const seg = segs[idx]
+      if (!seg) { rafRef.current = requestAnimationFrame(tick); return }
+      if (vid.currentTime >= seg.end - 0.05) {
+        if (idx < segs.length - 1) { segIdxRef.current = idx + 1; vid.currentTime = segs[idx + 1].start }
+        else { segIdxRef.current = 0; vid.currentTime = segs[0].start }
+      }
+      // Sync sound
+      const audio = soundAudioRef.current
+      if (audio && audio.src) {
+        let outputTime = 0
+        for (let i = 0; i < segIdxRef.current; i++) outputTime += segs[i].end - segs[i].start
+        const curSeg = segs[segIdxRef.current]
+        if (curSeg) outputTime += Math.max(0, vid.currentTime - curSeg.start)
+        const targetAudioTime = (ed.soundOffset ?? 0) + outputTime
+        if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
+        if (audio.paused) audio.play().catch(() => {})
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [hasEditPlayback])
+
+  // Handle video 'ended' event for edit playback loop
+  useEffect(() => {
+    if (!hasEditPlayback) return
+    const vid = videoRef.current
+    if (!vid) return
+    const handleEnded = () => {
+      const segs = editDataRef.current?.segments
+      if (segs && segs[0]) { segIdxRef.current = 0; vid.currentTime = segs[0].start; vid.play().catch(() => {}) }
+    }
+    vid.addEventListener('ended', handleEnded)
+    return () => vid.removeEventListener('ended', handleEnded)
+  }, [hasEditPlayback])
+
+  // Pause sound when not visible/active
+  useEffect(() => {
+    if (!isVisible || !isPageActive) {
+      if (soundAudioRef.current && !soundAudioRef.current.paused) soundAudioRef.current.pause()
+    }
+  }, [isVisible, isPageActive])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
 
   // Race modal state
   const [showRaceModal, setShowRaceModal] = useState(false)
@@ -594,7 +710,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           ref={videoRef}
           src={data.videoUrl}
           className={`reel-media-video ${data.isMirrored ? 'mirrored' : ''}`}
-          loop
+          loop={!hasEditPlayback}
           playsInline
           onError={(e) => console.error('Video error:', e, 'src:', data.videoUrl)}
           onLoadedData={() => console.log('Video loaded:', data.videoUrl)}
@@ -670,6 +786,21 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
         {/* Bottom info */}
         <div className="reel-bottom">
+          {/* Sound name marquee - above reel info */}
+          {(data.soundName || data.metadata?.soundName) && (
+            <div className="reel-sound-marquee">
+              <svg className="reel-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              <div className="reel-sound-marquee-track">
+                <span className="reel-sound-marquee-text">
+                  {data.soundName || data.metadata?.soundName}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="reel-info">
             {/* Reposted by indicator */}
             {data.repostedBy && (

@@ -64,6 +64,23 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Video trim state (shared between EditClipScreen and PostScreen)
   const [videoTrimStart, setVideoTrimStart] = useState(0)
   const [videoTrimEnd, setVideoTrimEnd] = useState(null)
+  const [videoEdits, setVideoEdits] = useState(null) // soundOffset, videoVolume, soundVolume, segments
+
+  // Callback for child screens to sync video edits back to CreateScreen
+  const handleVideoEditsChange = useCallback((edits) => {
+    if (edits) {
+      setVideoTrimStart(edits.trimStart ?? 0)
+      setVideoTrimEnd(edits.trimEnd ?? null)
+      setVideoEdits({
+        soundOffset: edits.soundOffset,
+        soundStartFrac: edits.soundStartFrac ?? 0,
+        soundEndFrac: edits.soundEndFrac ?? 1,
+        videoVolume: edits.videoVolume,
+        soundVolume: edits.soundVolume,
+        segments: edits.segments,
+      })
+    }
+  }, [])
 
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
@@ -372,6 +389,20 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       raceDeadline: raceDeadline || null,
       taggedUser: selectedTag || null,
       textOverlays: [...textOverlays],
+      // Video edits
+      segments: videoEdits?.segments || null,
+      trimStart: videoTrimStart,
+      trimEnd: videoTrimEnd,
+      soundOffset: videoEdits?.soundOffset ?? 0,
+      soundStartFrac: videoEdits?.soundStartFrac ?? 0,
+      soundEndFrac: videoEdits?.soundEndFrac ?? 1,
+      videoVolume: videoEdits?.videoVolume ?? 100,
+      soundVolume: videoEdits?.soundVolume ?? 100,
+      // Sound selection
+      ...(selectedSound && {
+        soundUrl: selectedSound.audioUrl,
+        soundName: selectedSound.name,
+      }),
     }
     setDrafts(prev => [newDraft, ...prev])
     return newDraft
@@ -409,6 +440,29 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     } else {
       setLoadedQuotedReel(null)
     }
+    // Restore selected sound from draft
+    if (draft.soundUrl && draft.soundName) {
+      setSelectedSound({ audioUrl: draft.soundUrl, name: draft.soundName })
+    } else {
+      setSelectedSound(null)
+    }
+    // Restore video edits from draft
+    if (draft.segments || draft.soundOffset !== undefined) {
+      setVideoEdits({
+        soundOffset: draft.soundOffset ?? 0,
+        soundStartFrac: draft.soundStartFrac ?? 0,
+        soundEndFrac: draft.soundEndFrac ?? 1,
+        videoVolume: draft.videoVolume ?? 100,
+        soundVolume: draft.soundVolume ?? 100,
+        segments: draft.segments || null,
+      })
+      setVideoTrimStart(draft.trimStart ?? 0)
+      setVideoTrimEnd(draft.trimEnd ?? null)
+    } else {
+      setVideoEdits(null)
+      setVideoTrimStart(0)
+      setVideoTrimEnd(null)
+    }
     setIsLoadedFromDraft(true)
     setShowMediaPanel(false)
     setShowClipConfirm(false)
@@ -425,6 +479,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setRaceDeadline(null)
     setSelectedTag(null)
     setTextOverlays([])
+    setVideoEdits(null)
+    setVideoTrimStart(0)
+    setVideoTrimEnd(null)
     setShowMediaPanel(false)
     setShowClipConfirm(false)
     setShowEditClipScreen(true)
@@ -733,9 +790,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setSelectedSound(null)
     if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
 
-    // Reset trim state
+    // Reset trim state and video edits
     setVideoTrimStart(0)
     setVideoTrimEnd(null)
+    setVideoEdits(null)
 
     // Re-attach camera stream
     setTimeout(() => {
@@ -747,8 +805,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
   const handleNextFromEditClip = (trimData) => {
     if (trimData) {
-      setVideoTrimStart(trimData.trimStart || 0)
-      setVideoTrimEnd(trimData.trimEnd || null)
+      setVideoTrimStart(trimData.trimStart ?? 0)
+      setVideoTrimEnd(trimData.trimEnd ?? null)
+      setVideoEdits({
+        soundOffset: trimData.soundOffset,
+        soundStartFrac: trimData.soundStartFrac ?? 0,
+        soundEndFrac: trimData.soundEndFrac ?? 1,
+        videoVolume: trimData.videoVolume,
+        soundVolume: trimData.soundVolume,
+        segments: trimData.segments,
+      })
     }
     setShowPostScreen(true)
   }
@@ -772,8 +838,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
   }, [showEditClipScreen, showPostScreen, showPartyCreationFlow, recordedVideoUrl])
 
-  const handleClosePostScreen = () => {
+  const handleClosePostScreen = (postScreenEdits) => {
     setShowPostScreen(false)
+    // Sync any video edits PostScreen may have made (e.g. via its VideoEditor) back to CreateScreen
+    if (postScreenEdits) {
+      handleVideoEditsChange(postScreenEdits)
+    }
     // Reload drafts in case PostScreen saved any
     reloadDraftsFromStorage()
     // EditClipScreen stays mounted, so all edits (text overlays, race pill, etc.) are preserved
@@ -1599,6 +1669,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         <EditClipScreen
           onClose={handleCloseEditClipScreen}
           onNext={handleNextFromEditClip}
+          onVideoEditsChange={handleVideoEditsChange}
+          initialVideoEdits={videoEdits}
+          initialTrimStart={videoTrimStart}
+          initialTrimEnd={videoTrimEnd}
           selectedSound={selectedSound}
           onSelectSound={setSelectedSound}
           isRaceMode={selectedMode === 'race'}
@@ -1684,6 +1758,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           trimStart={videoTrimStart}
           trimEnd={videoTrimEnd}
           selectedSound={selectedSound}
+          videoEdits={videoEdits}
         />
       )}
 

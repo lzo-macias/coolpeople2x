@@ -2,18 +2,67 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import VideoEditor from './VideoEditor'
 import { usersApi, searchApi, favoritesApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import '../styling/PostScreen.css'
 import '../styling/PartyCreationFlow.css'
 import '../styling/VideoEditor.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound, videoEdits }) {
+  const { user: authUser } = useAuth()
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
   const [showVideoEditor, setShowVideoEditor] = useState(false)
   const [localTrimStart, setLocalTrimStart] = useState(trimStart)
   const [localTrimEnd, setLocalTrimEnd] = useState(trimEnd)
-  const [localSegments, setLocalSegments] = useState(null)
+  const [localSegments, setLocalSegments] = useState(videoEdits?.segments || null)
+  const [localVideoEdits, setLocalVideoEdits] = useState(videoEdits || null)
   const previewSegIdxRef = useRef(0)
+  const previewRafRef = useRef(null)
+  const [previewIsPlaying, setPreviewIsPlaying] = useState(false)
+
+  // Keep latest segment/trim state in a ref so RAF always reads current values
+  const previewStateRef = useRef({ segments: null, trimStart: 0, trimEnd: null })
+  previewStateRef.current = { segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd }
+
+  // RAF-based segment playback loop for reliable multi-segment preview
+  useEffect(() => {
+    if (!previewIsPlaying) {
+      if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current)
+      return
+    }
+    const tick = () => {
+      const vid = videoRef.current
+      if (!vid || vid.paused) { previewRafRef.current = requestAnimationFrame(tick); return }
+      const { segments: segs, trimStart: ts, trimEnd: te } = previewStateRef.current
+      const t = vid.currentTime
+      if (segs && segs.length > 0) {
+        const idx = previewSegIdxRef.current
+        const seg = segs[idx]
+        if (seg) {
+          if (t < seg.start - 0.1) {
+            vid.currentTime = seg.start
+          } else if (t >= seg.end - 0.05) {
+            if (idx < segs.length - 1) {
+              previewSegIdxRef.current = idx + 1
+              vid.currentTime = segs[idx + 1].start
+            } else {
+              previewSegIdxRef.current = 0
+              vid.currentTime = segs[0].start
+            }
+          }
+        }
+      } else if (te !== null) {
+        if (t >= te) {
+          vid.currentTime = ts
+        } else if (t < ts - 0.1) {
+          vid.currentTime = ts
+        }
+      }
+      previewRafRef.current = requestAnimationFrame(tick)
+    }
+    previewRafRef.current = requestAnimationFrame(tick)
+    return () => { if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current) }
+  }, [previewIsPlaying])
 
   // Render text with styled mentions (matches EditClipScreen)
   const renderTextWithMentions = (text, mentions) => {
@@ -40,14 +89,17 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
     })
   }
 
-  // Seek to trimStart on mount and set up trim loop
+  // Seek to first segment start on mount and set up playback
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
-      videoRef.current.currentTime = localTrimStart || 0
-      videoRef.current.play().catch(() => {})
+      const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+      videoRef.current.currentTime = startTime
+      previewSegIdxRef.current = 0
+      videoRef.current.play().then(() => setPreviewIsPlaying(true)).catch(() => {})
     }
     // Cleanup - pause when unmounting
     return () => {
+      setPreviewIsPlaying(false)
       if (videoRef.current) {
         videoRef.current.pause()
       }
@@ -57,15 +109,15 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   // Pause video when VideoEditor is open
   useEffect(() => {
     if (showVideoEditor) {
+      setPreviewIsPlaying(false)
       if (videoRef.current) videoRef.current.pause()
     } else {
       // Resuming from VideoEditor — restart video from first segment
       if (videoRef.current && recordedVideoUrl) {
         previewSegIdxRef.current = 0
-        if (localSegments && localSegments.length > 0) {
-          videoRef.current.currentTime = localSegments[0].start
-        }
-        videoRef.current.play().catch(() => {})
+        const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+        videoRef.current.currentTime = startTime
+        videoRef.current.play().then(() => setPreviewIsPlaying(true)).catch(() => {})
       }
     }
   }, [showVideoEditor, recordedVideoUrl, localSegments])
@@ -74,6 +126,15 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [caption, setCaption] = useState('')
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
   const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
+
+  // Sound name for original audio credit - dynamic default based on post target
+  const getDefaultSoundName = (postTo) => {
+    const postingToParty = userParty && userParty.name !== 'Independent' && postTo.includes(userParty.name)
+    const name = postingToParty ? userParty.name : (authUser?.username || authUser?.displayName || 'you')
+    return `original audio - ${name}`
+  }
+  const [soundName, setSoundName] = useState(() => getDefaultSoundName(['Your Feed']))
+  const [hasEditedSoundName, setHasEditedSoundName] = useState(false)
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedSendToUsers, setSelectedSendToUsers] = useState([]) // Users/chats selected from picker
   const [showSendToPicker, setShowSendToPicker] = useState(false)
@@ -88,6 +149,13 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedSocials, setSelectedSocials] = useState([])
   const [wantToCompete, setWantToCompete] = useState(false) // Default to just following (not competing)
+
+  // Update sound name when post target changes (if user hasn't manually edited)
+  useEffect(() => {
+    if (!hasEditedSoundName) {
+      setSoundName(getDefaultSoundName(selectedPostTo))
+    }
+  }, [selectedPostTo, hasEditedSoundName])
 
   // Scale selfie overlay from edit screen (440px wide) to post preview (180px wide)
   const previewScale = 180 / 440
@@ -386,7 +454,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments })
+    onPost?.({ title, caption, soundName, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd, ...(localVideoEdits && { soundOffset: localVideoEdits.soundOffset, soundStartFrac: localVideoEdits.soundStartFrac ?? 0, soundEndFrac: localVideoEdits.soundEndFrac ?? 1, videoVolume: localVideoEdits.videoVolume, soundVolume: localVideoEdits.soundVolume }), ...(selectedSound && { soundUrl: selectedSound.audioUrl }) })
   }
 
   const handleSaveDraft = () => {
@@ -425,6 +493,20 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
         showSelfieOverlay: (isQuoteNomination || isNominateMode) && showSelfieOverlay,
         // Text overlays
         textOverlays: textOverlays ? [...textOverlays] : [],
+        // Video edits
+        segments: localSegments,
+        trimStart: localTrimStart,
+        trimEnd: localTrimEnd,
+        soundOffset: localVideoEdits?.soundOffset ?? 0,
+        soundStartFrac: localVideoEdits?.soundStartFrac ?? 0,
+        soundEndFrac: localVideoEdits?.soundEndFrac ?? 1,
+        videoVolume: localVideoEdits?.videoVolume ?? 100,
+        soundVolume: localVideoEdits?.soundVolume ?? 100,
+        // Sound selection
+        ...(selectedSound && {
+          soundUrl: selectedSound.audioUrl,
+          soundName: selectedSound.name,
+        }),
         // Post details
         title: title || '',
         caption: caption || '',
@@ -466,7 +548,15 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   return (
     <div className="post-screen">
       {/* Header */}
-      <button className="post-back-btn" onClick={onClose}>
+      <button className="post-back-btn" onClick={() => {
+        // Pass current video edits back to parent so they persist
+        onClose?.({
+          trimStart: localTrimStart,
+          trimEnd: localTrimEnd,
+          ...(localVideoEdits || {}),
+          segments: localSegments,
+        })
+      }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M15 18l-6-6 6-6" />
         </svg>
@@ -517,27 +607,18 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
               src={recordedVideoUrl}
               className={isMirrored ? 'mirrored' : ''}
               autoPlay
-              loop
               muted
               playsInline
-              onTimeUpdate={() => {
+              onPlay={() => setPreviewIsPlaying(true)}
+              onPause={() => setPreviewIsPlaying(false)}
+              onEnded={() => {
+                // If video reaches natural end, restart from first segment
                 const vid = videoRef.current
                 if (!vid) return
-                if (localSegments && localSegments.length > 0) {
-                  const idx = previewSegIdxRef.current
-                  const seg = localSegments[idx]
-                  if (seg && vid.currentTime >= seg.end - 0.05) {
-                    if (idx < localSegments.length - 1) {
-                      previewSegIdxRef.current = idx + 1
-                      vid.currentTime = localSegments[idx + 1].start
-                    } else {
-                      previewSegIdxRef.current = 0
-                      vid.currentTime = localSegments[0].start
-                    }
-                  }
-                } else if (localTrimEnd !== null && vid.currentTime >= localTrimEnd) {
-                  vid.currentTime = localTrimStart || 0
-                }
+                previewSegIdxRef.current = 0
+                const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+                vid.currentTime = startTime
+                vid.play().catch(() => {})
               }}
             />
           ) : (
@@ -613,10 +694,23 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           />
         </div>
 
-        {/* Mention & Hashtag */}
+        {/* Original Audio Credit */}
         <div className="post-mention-row">
-          <button className="post-mention-btn">@</button>
-          <button className="post-hashtag-btn">#</button>
+          <svg className="post-sound-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <input
+            type="text"
+            className="post-sound-name-input"
+            value={soundName}
+            onChange={(e) => {
+              setSoundName(e.target.value)
+              setHasEditedSoundName(true)
+            }}
+            placeholder="original audio"
+          />
         </div>
 
         {/* Target Race - only show if user follows/competes in races */}
@@ -935,13 +1029,20 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           selectedSound={selectedSound}
           initialTrimStart={localTrimStart}
           initialTrimEnd={localTrimEnd}
+          initialSegments={localVideoEdits?.segments || null}
+          initialSoundOffset={localVideoEdits?.soundOffset ?? 0}
+          initialSoundStartFrac={localVideoEdits?.soundStartFrac ?? 0}
+          initialSoundEndFrac={localVideoEdits?.soundEndFrac ?? 1}
+          initialVideoVolume={localVideoEdits?.videoVolume ?? 100}
+          initialSoundVolume={localVideoEdits?.soundVolume ?? 100}
           showSelfieOverlay={showSelfieOverlay}
           selfieSize={selfieSize}
           selfiePosition={selfiePosition}
-          onDone={({ trimStart: ts, trimEnd: te, segments: segs }) => {
+          onDone={({ trimStart: ts, trimEnd: te, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments: segs }) => {
             setLocalTrimStart(ts)
             setLocalTrimEnd(te)
             if (segs) setLocalSegments(segs)
+            setLocalVideoEdits({ soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments: segs })
             setShowVideoEditor(false)
             if (videoRef.current) {
               // Start from the first segment's start time

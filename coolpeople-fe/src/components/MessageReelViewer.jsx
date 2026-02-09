@@ -16,6 +16,9 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const [joinStatus, setJoinStatus] = useState({}) // Track join status per party { partyId: 'idle' | 'joining' | 'joined' | 'requested' }
   const containerRef = useRef(null)
   const videoRef = useRef(null)
+  const segIdxRef = useRef(0)
+  const rafRef = useRef(null)
+  const editDataRef = useRef(null)
 
   // Find the single target message directly
   const currentMessage = messages.find(msg => msg.id === initialMessageId)
@@ -143,6 +146,76 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const thumbnail = getThumbnail()
   const user = getUser()
   const isMirrored = currentMessage.isMirrored || currentMessage.metadata?.isMirrored || currentMessage.metadata?.introVideoMirrored
+
+  // --- Edit-aware playback for message videos ---
+  const msgEditMeta = currentMessage?.metadata || {}
+  const msgPlaybackSegments = msgEditMeta.segments || (msgEditMeta.trimEnd != null ? [{ start: msgEditMeta.trimStart ?? 0, end: msgEditMeta.trimEnd }] : null)
+  const msgHasEditPlayback = !!msgPlaybackSegments
+  editDataRef.current = { segments: msgPlaybackSegments }
+
+  // Seek to first segment on load
+  useEffect(() => {
+    if (!msgHasEditPlayback) return
+    const vid = videoRef.current
+    if (!vid) return
+    const seekToStart = () => {
+      const segs = editDataRef.current?.segments
+      if (segs && segs[0]) {
+        segIdxRef.current = 0
+        vid.currentTime = segs[0].start
+      }
+    }
+    vid.addEventListener('loadedmetadata', seekToStart)
+    if (vid.readyState >= 1) seekToStart()
+    return () => vid.removeEventListener('loadedmetadata', seekToStart)
+  }, [msgHasEditPlayback, videoUrl])
+
+  // Segment boundary enforcement
+  useEffect(() => {
+    if (!msgHasEditPlayback) return
+    const tick = () => {
+      const vid = videoRef.current
+      const segs = editDataRef.current?.segments
+      if (!vid || vid.paused || !segs) { rafRef.current = requestAnimationFrame(tick); return }
+      const idx = segIdxRef.current
+      const seg = segs[idx]
+      if (!seg) { rafRef.current = requestAnimationFrame(tick); return }
+      if (vid.currentTime >= seg.end - 0.05) {
+        if (idx < segs.length - 1) {
+          segIdxRef.current = idx + 1
+          vid.currentTime = segs[idx + 1].start
+        } else {
+          segIdxRef.current = 0
+          vid.currentTime = segs[0].start
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [msgHasEditPlayback])
+
+  // Handle video 'ended' for edit playback loop
+  useEffect(() => {
+    if (!msgHasEditPlayback) return
+    const vid = videoRef.current
+    if (!vid) return
+    const handleEnded = () => {
+      const segs = editDataRef.current?.segments
+      if (segs && segs[0]) {
+        segIdxRef.current = 0
+        vid.currentTime = segs[0].start
+        vid.play().catch(() => {})
+      }
+    }
+    vid.addEventListener('ended', handleEnded)
+    return () => vid.removeEventListener('ended', handleEnded)
+  }, [msgHasEditPlayback])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
 
   // Debug log - important for troubleshooting action buttons
   console.log('MessageReelViewer - metadataReelId:', metadataReelId, 'resolvedReelId:', resolvedReelId, 'effectiveReelId:', reelId, 'isPartyInvite:', isPartyInvite)
@@ -304,7 +377,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             ref={videoRef}
             src={videoUrl}
             className={`reel-media-video ${isMirrored ? 'mirrored' : ''}`}
-            loop
+            loop={!msgHasEditPlayback}
             playsInline
             muted
             onCanPlay={() => {
@@ -434,6 +507,21 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
 
         {/* Bottom info - margin-top auto pushes to bottom */}
         <div className="reel-bottom" style={{ marginTop: 'auto' }}>
+          {/* Sound name marquee */}
+          {(currentMessage?.metadata?.soundName || currentMessage?.reel?.soundName || currentMessage?.reel?.metadata?.soundName) && (
+            <div className="reel-sound-marquee">
+              <svg className="reel-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              <div className="reel-sound-marquee-track">
+                <span className="reel-sound-marquee-text">
+                  {currentMessage?.metadata?.soundName || currentMessage?.reel?.soundName || currentMessage?.reel?.metadata?.soundName}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="reel-info">
             {/* Direct video - minimal UI: just avatar + username */}
             {isDirectVideo ? (

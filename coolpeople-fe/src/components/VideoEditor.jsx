@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import '../styling/VideoEditor.css'
 
-function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition }) {
+function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition }) {
   const videoRef = useRef(null)
   const thumbVideoRef = useRef(null)
   const timelineRef = useRef(null)
@@ -11,8 +11,14 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
-  const [trimStart, setTrimStart] = useState(initialTrimStart)
-  const [trimEnd, setTrimEnd] = useState(initialTrimEnd)
+  // When restoring segments, init trimStart/trimEnd from segment 0 (not from props which
+  // may reflect the last-selected segment and would corrupt segment 0 via sync effect)
+  const [trimStart, setTrimStart] = useState(
+    initialSegments && initialSegments.length > 0 ? initialSegments[0].start : initialTrimStart
+  )
+  const [trimEnd, setTrimEnd] = useState(
+    initialSegments && initialSegments.length > 0 ? initialSegments[0].end : initialTrimEnd
+  )
   const THUMB_COUNT = 10
   const [thumbnails, setThumbnails] = useState(Array(THUMB_COUNT).fill(null))
   const [showTimelineOptions, setShowTimelineOptions] = useState(false)
@@ -21,28 +27,35 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
   // Sound track state
   const [soundDuration, setSoundDuration] = useState(0)
-  const [soundOffset, setSoundOffset] = useState(0) // where in the sound file we start (seconds)
-  const [soundStartFrac, setSoundStartFrac] = useState(0) // left handle (0-1 fraction of bar)
-  const [soundEndFrac, setSoundEndFrac] = useState(1) // right handle (0-1 fraction of bar)
+  const [soundOffset, setSoundOffset] = useState(initialSoundOffset) // where in the sound file we start (seconds)
+  const [soundStartFrac, setSoundStartFrac] = useState(initialSoundStartFrac) // left handle (0-1 fraction of bar)
+  const [soundEndFrac, setSoundEndFrac] = useState(initialSoundEndFrac) // right handle (0-1 fraction of bar)
   const [soundSlideActive, setSoundSlideActive] = useState(false) // double-click to enable slide mode
   const soundTrackRef = useRef(null)
   const soundBarRef = useRef(null)
   const soundAudioRef = useRef(null)
 
   // Segments state — each segment is a clip with start/end in the source video
-  const [segments, setSegments] = useState([{ id: 1, start: initialTrimStart, end: initialTrimEnd }])
-  const [selectedSegmentId, setSelectedSegmentId] = useState(1)
-  const nextSegmentId = useRef(2)
+  // Restore from initialSegments if provided, adding IDs for internal tracking
+  const buildInitialSegments = () => {
+    if (initialSegments && initialSegments.length > 0) {
+      return initialSegments.map((s, i) => ({ id: i + 1, start: s.start, end: s.end }))
+    }
+    return [{ id: 1, start: initialTrimStart, end: initialTrimEnd }]
+  }
+  const [segments, setSegments] = useState(buildInitialSegments)
+  const [selectedSegmentId, setSelectedSegmentId] = useState(segments[0]?.id || 1)
+  const nextSegmentId = useRef(segments.length + 1)
   const selectedSegRef = useRef(null)
   const [segPointerDown, setSegPointerDown] = useState(null) // { idx, startX, track }
   const [reorderDragIdx, setReorderDragIdx] = useState(null)
-  const [activeTrack, setActiveTrack] = useState('main') // 'main' or 'selfie'
   const syncingRef = useRef(false)
 
   // Volume state
+  const [showSoundOptions, setShowSoundOptions] = useState(false)
   const [showVolumePopup, setShowVolumePopup] = useState(false)
-  const [videoVolume, setVideoVolume] = useState(100) // 0-100
-  const [soundVolume, setSoundVolume] = useState(100) // 0-100
+  const [videoVolume, setVideoVolume] = useState(initialVideoVolume) // 0-100
+  const [soundVolume, setSoundVolume] = useState(initialSoundVolume) // 0-100
 
   // Central playhead state
   const playingSegIdxRef = useRef(0)
@@ -194,8 +207,12 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }, [selectedSound])
 
-  // Reset sound offset when sound changes
-  useEffect(() => { setSoundOffset(0) }, [selectedSound])
+  // Reset sound offset when sound changes (skip initial mount to preserve restored value)
+  const soundMountedRef = useRef(false)
+  useEffect(() => {
+    if (!soundMountedRef.current) { soundMountedRef.current = true; return }
+    setSoundOffset(0)
+  }, [selectedSound])
 
   // Deactivate sound slide mode when clicking outside the sound bar
   useEffect(() => {
@@ -611,10 +628,10 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     })
   }, [trimStart, trimEnd, selectedSegmentIdx])
 
-  const selectSegment = (id, track = 'main') => {
+  const selectSegment = (id) => {
     const seg = segments.find(s => s.id === id)
     if (!seg) return
-    setActiveTrack(track)
+    setShowSoundOptions(false)
     if (id === selectedSegmentId) {
       setShowTimelineOptions(prev => !prev)
       return
@@ -629,20 +646,51 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   }
 
   const handleSplit = () => {
-    if (!selectedSeg) return
-    const segEnd = selectedSeg.end ?? duration
-    if (currentTime <= selectedSeg.start + 0.1 || currentTime >= segEnd - 0.1) return
+    // Compute split point from the visual playhead position (outputPlayheadFrac)
+    const total = segments.reduce((sum, s) => sum + ((s.end ?? duration) - s.start), 0)
+    if (total <= 0) return
+
+    let remaining = outputPlayheadFrac * total
+    let splitSegIdx = -1
+    let splitTime = 0
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]
+      const segDur = (seg.end ?? duration) - seg.start
+      if (remaining <= segDur) {
+        splitSegIdx = i
+        splitTime = seg.start + remaining
+        break
+      }
+      remaining -= segDur
+    }
+
+    if (splitSegIdx === -1) return
+    const seg = segments[splitSegIdx]
+    const segEnd = seg.end ?? duration
+
+    // Don't split too close to edges
+    if (splitTime <= seg.start + 0.1 || splitTime >= segEnd - 0.1) return
+
     const id2 = nextSegmentId.current++
-    const seg1 = { id: selectedSeg.id, start: selectedSeg.start, end: currentTime }
-    const seg2 = { id: id2, start: currentTime, end: selectedSeg.end }
+    const seg1 = { id: seg.id, start: seg.start, end: splitTime }
+    const seg2 = { id: id2, start: splitTime, end: segEnd }
+
     setSegments(prev => {
-      const idx = prev.findIndex(s => s.id === selectedSegmentId)
+      const idx = prev.findIndex(s => s.id === seg.id)
+      if (idx === -1) return prev
       const next = [...prev]
       next.splice(idx, 1, seg1, seg2)
       return next
     })
+
+    // Select the left segment and update trim state
+    setSelectedSegmentId(seg.id)
     syncingRef.current = true
-    setTrimEnd(currentTime)
+    setTrimStart(seg.start)
+    setTrimEnd(splitTime)
+    if (videoRef.current) videoRef.current.currentTime = splitTime
+    setCurrentTime(splitTime)
   }
 
   const handleTrashSegment = () => {
@@ -692,7 +740,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       }
     }
     const onEnd = () => {
-      selectSegment(segments[segPointerDown.idx].id, segPointerDown.track || 'main')
+      selectSegment(segments[segPointerDown.idx].id)
       setSegPointerDown(null)
     }
     window.addEventListener('mousemove', onMove)
@@ -754,14 +802,23 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const handleDone = () => {
     if (videoRef.current) videoRef.current.pause()
     if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
-    onDone?.({ trimStart, trimEnd: trimEnd ?? duration, soundOffset, videoVolume, soundVolume, segments: segments.map(s => ({ start: s.start, end: s.end ?? duration })) })
+    if (duration > 0) {
+      const finalSegments = segments.map(s => ({ start: s.start, end: s.end ?? duration }))
+      // Use segment 0's start and last segment's end as overall trim bounds
+      // (trimStart/trimEnd reflect the selected segment, not the overall range)
+      const outTrimStart = finalSegments.length > 0 ? finalSegments[0].start : trimStart
+      const outTrimEnd = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : (trimEnd ?? duration)
+      onDone?.({ trimStart: outTrimStart, trimEnd: outTrimEnd, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments: finalSegments })
+    } else {
+      onClose?.()
+    }
   }
 
   return (
     <div className="video-editor">
       {/* Header */}
       <div className="video-editor-header">
-        <button className="video-editor-close" onClick={onClose}>
+        <button className="video-editor-close" onClick={handleDone}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
@@ -843,7 +900,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
           const segDur = segEnd - seg.start
           const segThumbs = getSegmentThumbnails(seg)
 
-          const showHandles = isSelected && activeTrack === 'main'
+          const showHandles = isSelected
           return (
             <div
               key={seg.id}
@@ -890,7 +947,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       </div>
 
       {/* Options below main track */}
-      {showTimelineOptions && activeTrack === 'main' && (
+      {showTimelineOptions && (
         <div className="video-editor-options" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
           <button className="video-editor-option" onClick={handleSplit}>
             <div className="video-editor-option-icon">
@@ -901,115 +958,6 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
               </svg>
             </div>
             <span>Split</span>
-          </button>
-          <button className="video-editor-option" onClick={() => setShowVolumePopup(true)}>
-            <div className="video-editor-option-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-            </div>
-            <span>Volume</span>
-          </button>
-          <button className="video-editor-option" onClick={handleTrashSegment}>
-            <div className="video-editor-option-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </div>
-            <span>Trash</span>
-          </button>
-        </div>
-      )}
-
-      {/* Selfie segment track — full segment styling with handles */}
-      {showSelfieOverlay && (
-        <div className="video-editor-selfie-track" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-          <div className="video-editor-selfie-label">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-            </svg>
-            <span>Selfie</span>
-          </div>
-          <div className="video-editor-timeline">
-            {segments.map((seg, idx) => {
-              const isSelected = seg.id === selectedSegmentId
-              const showHandles = isSelected && activeTrack === 'selfie'
-              const segEnd = seg.end ?? duration
-              const segDur = segEnd - seg.start
-              const segThumbs = getSegmentThumbnails(seg)
-              return (
-                <div
-                  key={`selfie-${seg.id}`}
-                  ref={showHandles ? selectedSegRef : undefined}
-                  className={`video-editor-segment ${showHandles ? 'selected' : ''} ${reorderDragIdx === idx && activeTrack === 'selfie' ? 'reorder-dragging' : ''}`}
-                  style={{ flex: `${Math.max(segDur, 0.1)} 0 0` }}
-                  onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.clientX, track: 'selfie' }) }}
-                  onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown({ idx, startX: e.touches[0].clientX, track: 'selfie' }) }}
-                >
-                  <div className="video-editor-segment-thumbs">
-                    {segThumbs.map((thumb, i) => (
-                      <div key={i} className="video-editor-thumb">
-                        {thumb ? (
-                          <img src={thumb} alt="" draggable={false} />
-                        ) : (
-                          <div className="video-editor-thumb-placeholder" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {showHandles && (
-                    <>
-                      <div
-                        className={`video-editor-handle video-editor-handle-left ${dragging === 'left' ? 'active' : ''}`}
-                        onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.clientX, e.currentTarget.parentElement) }}
-                        onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('left', e.touches[0].clientX, e.currentTarget.parentElement) }}
-                      >
-                        <div className="video-editor-handle-grip" />
-                      </div>
-                      <div
-                        className={`video-editor-handle video-editor-handle-right ${dragging === 'right' ? 'active' : ''}`}
-                        onMouseDown={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.clientX, e.currentTarget.parentElement) }}
-                        onTouchStart={(e) => { e.stopPropagation(); setSegPointerDown(null); handleDragStart('right', e.touches[0].clientX, e.currentTarget.parentElement) }}
-                      >
-                        <div className="video-editor-handle-grip" />
-                      </div>
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Options below selfie track */}
-      {showSelfieOverlay && showTimelineOptions && activeTrack === 'selfie' && (
-        <div className="video-editor-options" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-          <button className="video-editor-option" onClick={handleSplit}>
-            <div className="video-editor-option-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="2" x2="12" y2="22" />
-                <polyline points="8 6 12 2 16 6" />
-                <polyline points="8 18 12 22 16 18" />
-              </svg>
-            </div>
-            <span>Split</span>
-          </button>
-          <button className="video-editor-option" onClick={() => setShowVolumePopup(true)}>
-            <div className="video-editor-option-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-            </div>
-            <span>Volume</span>
           </button>
           <button className="video-editor-option" onClick={handleTrashSegment}>
             <div className="video-editor-option-icon">
@@ -1031,7 +979,19 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
       {/* Sound Track — beneath video timeline */}
       {selectedSound && soundDuration > 0 && (
-        <div className="sound-track-section" ref={soundTrackRef} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+        <div
+          className={`sound-track-section ${showSoundOptions ? 'selected' : ''}`}
+          ref={soundTrackRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            // Don't toggle if interacting with handles or waveform drag
+            if (dragging) return
+            e.stopPropagation()
+            setShowSoundOptions(prev => !prev)
+            setShowTimelineOptions(false)
+          }}
+        >
           <div className="sound-track-label">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M9 18V5l12-2v13" />
@@ -1094,6 +1054,22 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Options below sound track */}
+      {showSoundOptions && selectedSound && soundDuration > 0 && (
+        <div className="video-editor-options" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <button className="video-editor-option" onClick={() => setShowVolumePopup(true)}>
+            <div className="video-editor-option-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            </div>
+            <span>Volume</span>
+          </button>
         </div>
       )}
 
