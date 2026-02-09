@@ -7,6 +7,7 @@ import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 import { usersApi, reelsApi, reviewsApi, favoritesApi, pointsApi } from '../services/api'
 import { joinRace, leaveRace, onPointsUpdate } from '../services/socket'
+import { isImageUrl } from '../utils/media'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -1570,7 +1571,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 className="post-item"
                 onClick={() => handlePostClick(index)}
               >
-                {post.videoUrl ? (
+                {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                   <video
                     src={post.videoUrl}
                     className={post.isMirrored ? 'mirrored' : ''}
@@ -1581,7 +1582,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                   />
                 ) : (
-                  <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
+                  <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Post ${index + 1}`} />
                 )}
               </div>
             ))}
@@ -1606,7 +1607,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
                     </svg>
                   </div>
-                  {repost.videoUrl ? (
+                  {repost.videoUrl && !isImageUrl(repost.videoUrl) ? (
                     <video
                       src={repost.videoUrl}
                       className={repost.isMirrored ? 'mirrored' : ''}
@@ -1617,7 +1618,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
+                    <img src={repost.videoUrl || repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
                   )}
                   {repost.author && (
                     <div className="repost-author">
@@ -1644,7 +1645,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             ) : (
               fetchedTaggedReels.map((post, index) => (
                 <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'tagged')}>
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -1655,7 +1656,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
                   )}
                 </div>
               ))

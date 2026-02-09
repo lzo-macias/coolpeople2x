@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
 
-function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
+function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
@@ -25,6 +25,11 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const [videoEdits, setVideoEdits] = useState(initialVideoEdits)
   const editPlaybackRef = useRef({ segIdx: 0 })
   const editRafRef = useRef(null)
+
+  // Playlist playback state (for multi-video original-quality mode)
+  const playlistRef = useRef(videoPlaylist)
+  playlistRef.current = videoPlaylist
+  const [playlistMirrored, setPlaylistMirrored] = useState(videoPlaylist?.[0]?.isMirrored || false)
 
   // Sync from parent props when they change (e.g. PostScreen edits propagated back via CreateScreen)
   const prevParentEditsRef = useRef(initialVideoEdits)
@@ -54,8 +59,30 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       const vid = videoRef.current
       if (!vid || vid.paused) { editRafRef.current = requestAnimationFrame(tick); return }
       const { segments: segs, trimStart: ts, trimEnd: te } = editStateRef.current
+      const playlist = playlistRef.current
       const t = vid.currentTime
-      if (segs && segs.length > 0) {
+
+      if (playlist && segs && segs.length > 0) {
+        // ── PLAYLIST MODE: each segment = separate video source ──
+        const idx = editPlaybackRef.current.segIdx
+        const seg = segs[idx]
+        if (seg) {
+          const segDuration = seg.end - seg.start
+          if (t >= segDuration - 0.05) {
+            const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
+            editPlaybackRef.current.segIdx = nextIdx
+            const nextItem = playlist[nextIdx]
+            if (nextItem && vid.src !== nextItem.url) {
+              vid.src = nextItem.url
+              vid.load()
+              setPlaylistMirrored(nextItem.isMirrored || false)
+            }
+            vid.currentTime = 0
+            vid.play().catch(() => {})
+          }
+        }
+      } else if (segs && segs.length > 0) {
+        // ── COMBINED VIDEO MODE: segments are cumulative timestamps ──
         const idx = editPlaybackRef.current.segIdx
         const seg = segs[idx]
         if (seg) {
@@ -226,6 +253,15 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       // Resuming — restart from first segment start
       if (videoRef.current && recordedVideoUrl) {
         const segs = videoEdits?.segments
+        const playlist = playlistRef.current
+        // In playlist mode, reset to first source
+        if (playlist && playlist.length > 0) {
+          if (videoRef.current.src !== playlist[0].url) {
+            videoRef.current.src = playlist[0].url
+            videoRef.current.load()
+          }
+          setPlaylistMirrored(playlist[0].isMirrored || false)
+        }
         const startTime = segs && segs.length > 0 ? segs[0].start : trimStart
         videoRef.current.currentTime = startTime
         editPlaybackRef.current.segIdx = 0
@@ -253,7 +289,14 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
         for (let i = 0; i < idx && i < segs.length; i++) {
           outputTime += segs[i].end - segs[i].start
         }
-        if (segs[idx]) outputTime += Math.max(0, video.currentTime - segs[idx].start)
+        if (segs[idx]) {
+          // In playlist mode, currentTime is local (0-based per source)
+          // In combined mode, currentTime is global (cumulative)
+          const localTime = playlistRef.current
+            ? video.currentTime
+            : Math.max(0, video.currentTime - segs[idx].start)
+          outputTime += localTime
+        }
         return outputTime
       } else {
         return video.currentTime - trimStart
@@ -1380,11 +1423,17 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               height: '100%'
             }}
           />
+        ) : recordedVideoUrl && recordedVideoUrl.startsWith('data:image/') ? (
+          <img
+            src={recordedVideoUrl}
+            className={`edit-clip-video`}
+            alt=""
+          />
         ) : recordedVideoUrl ? (
           <video
             ref={videoRef}
             src={recordedVideoUrl}
-            className={`edit-clip-video ${isMirrored ? 'mirrored' : ''}`}
+            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}`}
             autoPlay
             playsInline
             crossOrigin="anonymous"
@@ -1394,8 +1443,22 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               // Video hit natural end — advance segment and restart
               const vid = videoRef.current
               if (!vid) return
+              const playlist = playlistRef.current
               const { segments: segs, trimStart: ts } = editStateRef.current
-              if (segs && segs.length > 0) {
+              if (playlist && segs && segs.length > 0) {
+                // Playlist mode: swap to next source
+                const idx = editPlaybackRef.current.segIdx
+                const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
+                editPlaybackRef.current.segIdx = nextIdx
+                const nextItem = playlist[nextIdx]
+                if (nextItem && vid.src !== nextItem.url) {
+                  vid.src = nextItem.url
+                  vid.load()
+                  setPlaylistMirrored(nextItem.isMirrored || false)
+                }
+                vid.currentTime = 0
+                vid.play().catch(() => {})
+              } else if (segs && segs.length > 0) {
                 const idx = editPlaybackRef.current.segIdx
                 if (idx < segs.length - 1) {
                   editPlaybackRef.current.segIdx = idx + 1
@@ -1404,10 +1467,11 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                   editPlaybackRef.current.segIdx = 0
                   vid.currentTime = segs[0].start
                 }
+                vid.play().catch(() => {})
               } else {
                 vid.currentTime = ts
+                vid.play().catch(() => {})
               }
-              vid.play().catch(() => {})
             }}
           />
         ) : (
@@ -1441,14 +1505,18 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
             </div>
-            <video
-              src={recordedVideoUrl}
-              className="edit-clip-selfie-video"
-              autoPlay
-              loop
-              muted
-              playsInline
-            />
+            {recordedVideoUrl.startsWith('data:image/') ? (
+              <img src={recordedVideoUrl} className="edit-clip-selfie-video" alt="" />
+            ) : (
+              <video
+                src={recordedVideoUrl}
+                className="edit-clip-selfie-video"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            )}
           </div>
         )}
 
@@ -2188,6 +2256,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           initialTrimStart={trimStart}
           initialTrimEnd={trimEnd}
           initialSegments={videoEdits?.segments || null}
+          videoPlaylist={videoPlaylist}
           initialSoundOffset={videoEdits?.soundOffset ?? 0}
           initialSoundStartFrac={videoEdits?.soundStartFrac ?? 0}
           initialSoundEndFrac={videoEdits?.soundEndFrac ?? 1}

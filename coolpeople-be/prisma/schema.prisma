@@ -139,6 +139,9 @@ model User {
   isFrozen        Boolean   @default(false)  // Candidate reverted to participant
   isPrivate       Boolean   @default(false)  // Only applies to PARTICIPANT role
 
+  // Device media access (user granted photo/video library permission)
+  mediaAccessGranted Boolean @default(false)
+
   // Primary party affiliation (displayed on profile sitewide)
   // Users can be members of multiple parties, but this is their PRIMARY affiliation
   partyId         String?

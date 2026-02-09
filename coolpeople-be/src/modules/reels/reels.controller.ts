@@ -6,6 +6,8 @@
 import type { Request, Response } from 'express';
 import * as reelsService from './reels.service.js';
 import { sendSuccess, sendCreated, sendNoContent, sendPaginated } from '../../lib/response.js';
+import { ValidationError } from '../../lib/errors.js';
+import type { CombineSegment } from './reels.types.js';
 
 // -----------------------------------------------------------------------------
 // POST /api/reels
@@ -248,4 +250,37 @@ export const hideReel = async (req: Request, res: Response): Promise<void> => {
 export const hideUser = async (req: Request, res: Response): Promise<void> => {
   await reelsService.hideUser(req.body.hiddenUserId, req.user!.userId);
   sendSuccess(res, { hidden: true });
+};
+
+// -----------------------------------------------------------------------------
+// POST /api/reels/combine-videos
+// -----------------------------------------------------------------------------
+
+export const combineVideos = async (req: Request, res: Response): Promise<void> => {
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) {
+    throw new ValidationError('No video files uploaded');
+  }
+
+  // Parse segments from the multipart body (sent as JSON string)
+  let segments: CombineSegment[];
+  try {
+    segments = JSON.parse(req.body.segments);
+  } catch {
+    throw new ValidationError('Invalid segments JSON');
+  }
+
+  if (!Array.isArray(segments) || segments.length === 0) {
+    throw new ValidationError('segments must be a non-empty array');
+  }
+
+  // Validate each segment has required fields
+  for (const seg of segments) {
+    if (typeof seg.fileIndex !== 'number' || typeof seg.startTime !== 'number' || typeof seg.endTime !== 'number') {
+      throw new ValidationError('Each segment must have fileIndex, startTime, and endTime as numbers');
+    }
+  }
+
+  const result = await reelsService.combineVideoSegments(files, segments);
+  sendCreated(res, result);
 };

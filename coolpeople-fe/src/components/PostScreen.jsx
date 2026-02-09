@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import VideoEditor from './VideoEditor'
-import { usersApi, searchApi, favoritesApi } from '../services/api'
+import { usersApi, searchApi, favoritesApi, reelsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/PostScreen.css'
 import '../styling/PartyCreationFlow.css'
 import '../styling/VideoEditor.css'
 
-function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound, videoEdits }) {
+function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound, videoEdits, videoPlaylist }) {
   const { user: authUser } = useAuth()
   const [title, setTitle] = useState('')
   const videoRef = useRef(null)
@@ -19,6 +19,10 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const previewSegIdxRef = useRef(0)
   const previewRafRef = useRef(null)
   const [previewIsPlaying, setPreviewIsPlaying] = useState(false)
+  const playlistSwappingRef = useRef(false)
+  const playlistRef = useRef(videoPlaylist)
+  playlistRef.current = videoPlaylist
+  const [playlistMirrored, setPlaylistMirrored] = useState(videoPlaylist?.[0]?.isMirrored || false)
 
   // Keep latest segment/trim state in a ref so RAF always reads current values
   const previewStateRef = useRef({ segments: null, trimStart: 0, trimEnd: null })
@@ -34,8 +38,31 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       const vid = videoRef.current
       if (!vid || vid.paused) { previewRafRef.current = requestAnimationFrame(tick); return }
       const { segments: segs, trimStart: ts, trimEnd: te } = previewStateRef.current
+      const playlist = playlistRef.current
       const t = vid.currentTime
-      if (segs && segs.length > 0) {
+
+      if (playlist && segs && segs.length > 0) {
+        // ── PLAYLIST MODE: each segment = separate video source, time is local (0-based) ──
+        const idx = previewSegIdxRef.current
+        const seg = segs[idx]
+        if (seg) {
+          const segDuration = seg.end - seg.start
+          if (t >= segDuration - 0.05) {
+            const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
+            previewSegIdxRef.current = nextIdx
+            const nextItem = playlist[nextIdx]
+            if (nextItem && vid.src !== nextItem.url) {
+              playlistSwappingRef.current = true
+              vid.src = nextItem.url
+              vid.load()
+              setPlaylistMirrored(nextItem.isMirrored || false)
+            }
+            vid.currentTime = 0
+            vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+          }
+        }
+      } else if (segs && segs.length > 0) {
+        // ── COMBINED VIDEO MODE: segments are cumulative timestamps ──
         const idx = previewSegIdxRef.current
         const seg = segs[idx]
         if (seg) {
@@ -92,9 +119,19 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   // Seek to first segment start on mount and set up playback
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
-      const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
-      videoRef.current.currentTime = startTime
       previewSegIdxRef.current = 0
+      if (videoPlaylist && videoPlaylist.length > 0) {
+        // Playlist mode: ensure first source is loaded, start at time 0
+        const firstItem = videoPlaylist[0]
+        if (firstItem) {
+          videoRef.current.src = firstItem.url
+          setPlaylistMirrored(firstItem.isMirrored || false)
+        }
+        videoRef.current.currentTime = 0
+      } else {
+        const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+        videoRef.current.currentTime = startTime
+      }
       videoRef.current.play().then(() => setPreviewIsPlaying(true)).catch(() => {})
     }
     // Cleanup - pause when unmounting
@@ -115,8 +152,18 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       // Resuming from VideoEditor — restart video from first segment
       if (videoRef.current && recordedVideoUrl) {
         previewSegIdxRef.current = 0
-        const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
-        videoRef.current.currentTime = startTime
+        if (videoPlaylist && videoPlaylist.length > 0) {
+          const firstItem = videoPlaylist[0]
+          if (firstItem && videoRef.current.src !== firstItem.url) {
+            videoRef.current.src = firstItem.url
+            videoRef.current.load()
+            setPlaylistMirrored(firstItem.isMirrored || false)
+          }
+          videoRef.current.currentTime = 0
+        } else {
+          const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+          videoRef.current.currentTime = startTime
+        }
         videoRef.current.play().then(() => setPreviewIsPlaying(true)).catch(() => {})
       }
     }
@@ -127,13 +174,35 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedTarget, setSelectedTarget] = useState(isRaceMode ? raceName : null)
   const [selectedPostTo, setSelectedPostTo] = useState(['Your Feed']) // Array for multi-select
 
-  // Sound name for original audio credit - dynamic default based on post target
-  const getDefaultSoundName = (postTo) => {
+  // Track existing sound names for uniqueness
+  const [existingSoundNames, setExistingSoundNames] = useState(new Set())
+
+  // Fetch user's existing reels to build set of used sound names
+  useEffect(() => {
+    if (!authUser?.id) return
+    reelsApi.getUserReels(authUser.id).then(res => {
+      const reels = res.data?.reels || res.reels || res.data || []
+      const names = new Set()
+      for (const reel of reels) {
+        const name = reel.soundName || reel.metadata?.soundName
+        if (name) names.add(name)
+      }
+      setExistingSoundNames(names)
+    }).catch(() => {})
+  }, [authUser?.id])
+
+  // Sound name for original audio credit - dynamic default based on post target, unique per user
+  const getDefaultSoundName = (postTo, takenNames) => {
     const postingToParty = userParty && userParty.name !== 'Independent' && postTo.includes(userParty.name)
     const name = postingToParty ? userParty.name : (authUser?.username || authUser?.displayName || 'you')
-    return `original audio - ${name}`
+    const baseName = `original audio - ${name}`
+    if (!takenNames.has(baseName)) return baseName
+    // Find next available number
+    let num = 2
+    while (takenNames.has(`${baseName} ${num}`)) num++
+    return `${baseName} ${num}`
   }
-  const [soundName, setSoundName] = useState(() => getDefaultSoundName(['Your Feed']))
+  const [soundName, setSoundName] = useState(() => getDefaultSoundName(['Your Feed'], new Set()))
   const [hasEditedSoundName, setHasEditedSoundName] = useState(false)
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedSendToUsers, setSelectedSendToUsers] = useState([]) // Users/chats selected from picker
@@ -150,12 +219,12 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   const [selectedSocials, setSelectedSocials] = useState([])
   const [wantToCompete, setWantToCompete] = useState(false) // Default to just following (not competing)
 
-  // Update sound name when post target changes (if user hasn't manually edited)
+  // Update sound name when post target or existing names change (if user hasn't manually edited)
   useEffect(() => {
     if (!hasEditedSoundName) {
-      setSoundName(getDefaultSoundName(selectedPostTo))
+      setSoundName(getDefaultSoundName(selectedPostTo, existingSoundNames))
     }
-  }, [selectedPostTo, hasEditedSoundName])
+  }, [selectedPostTo, hasEditedSoundName, existingSoundNames])
 
   // Scale selfie overlay from edit screen (440px wide) to post preview (180px wide)
   const previewScale = 180 / 440
@@ -590,35 +659,58 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                     top: scaledSelfie.y,
                   } : undefined}
                 >
-                  <video
-                    src={recordedVideoUrl}
-                    className={isMirrored ? 'mirrored' : ''}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                  />
+                  {recordedVideoUrl.startsWith('data:image/') ? (
+                    <img src={recordedVideoUrl} className={isMirrored ? 'mirrored' : ''} alt="" />
+                  ) : (
+                    <video
+                      src={recordedVideoUrl}
+                      className={isMirrored ? 'mirrored' : ''}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                    />
+                  )}
                 </div>
               )}
             </>
+          ) : recordedVideoUrl && recordedVideoUrl.startsWith('data:image/') ? (
+            <img
+              src={recordedVideoUrl}
+              className={`${isMirrored ? 'mirrored' : ''}`}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           ) : recordedVideoUrl ? (
             <video
               ref={videoRef}
               src={recordedVideoUrl}
-              className={isMirrored ? 'mirrored' : ''}
+              className={(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}
               autoPlay
               muted
               playsInline
               onPlay={() => setPreviewIsPlaying(true)}
-              onPause={() => setPreviewIsPlaying(false)}
+              onPause={() => { if (!playlistSwappingRef.current) setPreviewIsPlaying(false) }}
               onEnded={() => {
                 // If video reaches natural end, restart from first segment
                 const vid = videoRef.current
                 if (!vid) return
                 previewSegIdxRef.current = 0
-                const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
-                vid.currentTime = startTime
-                vid.play().catch(() => {})
+                if (videoPlaylist && videoPlaylist.length > 0) {
+                  const firstItem = videoPlaylist[0]
+                  if (firstItem && vid.src !== firstItem.url) {
+                    playlistSwappingRef.current = true
+                    vid.src = firstItem.url
+                    vid.load()
+                    setPlaylistMirrored(firstItem.isMirrored || false)
+                  }
+                  vid.currentTime = 0
+                  vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+                } else {
+                  const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
+                  vid.currentTime = startTime
+                  vid.play().catch(() => {})
+                }
               }}
             />
           ) : (
@@ -639,14 +731,18 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                 top: scaledSelfie.y,
               } : undefined}
             >
-              <video
-                src={recordedVideoUrl}
-                className={isMirrored ? 'mirrored' : ''}
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
+              {recordedVideoUrl.startsWith('data:image/') ? (
+                <img src={recordedVideoUrl} className={isMirrored ? 'mirrored' : ''} alt="" />
+              ) : (
+                <video
+                  src={recordedVideoUrl}
+                  className={isMirrored ? 'mirrored' : ''}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              )}
             </div>
           )}
 
@@ -1030,6 +1126,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           initialTrimStart={localTrimStart}
           initialTrimEnd={localTrimEnd}
           initialSegments={localVideoEdits?.segments || null}
+          videoPlaylist={videoPlaylist}
           initialSoundOffset={localVideoEdits?.soundOffset ?? 0}
           initialSoundStartFrac={localVideoEdits?.soundStartFrac ?? 0}
           initialSoundEndFrac={localVideoEdits?.soundEndFrac ?? 1}
@@ -1044,10 +1141,20 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
             if (segs) setLocalSegments(segs)
             setLocalVideoEdits({ soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments: segs })
             setShowVideoEditor(false)
+            previewSegIdxRef.current = 0
             if (videoRef.current) {
-              // Start from the first segment's start time
-              const startTime = segs && segs.length > 0 ? segs[0].start : ts
-              videoRef.current.currentTime = startTime
+              if (videoPlaylist && videoPlaylist.length > 0) {
+                const firstItem = videoPlaylist[0]
+                if (firstItem && videoRef.current.src !== firstItem.url) {
+                  videoRef.current.src = firstItem.url
+                  videoRef.current.load()
+                  setPlaylistMirrored(firstItem.isMirrored || false)
+                }
+                videoRef.current.currentTime = 0
+              } else {
+                const startTime = segs && segs.length > 0 ? segs[0].start : ts
+                videoRef.current.currentTime = startTime
+              }
               videoRef.current.play().catch(() => {})
             }
           }}

@@ -129,3 +129,18 @@ export interface CreateReelRequest {
 export interface FeedReel extends ReelResponse {
   score?: number;
 }
+
+// -----------------------------------------------------------------------------
+// Video Combine Types
+// -----------------------------------------------------------------------------
+
+export interface CombineSegment {
+  fileIndex: number;
+  startTime: number;
+  endTime: number;
+}
+
+export interface CombineVideosResponse {
+  videoUrl: string;
+  duration: number;
+}

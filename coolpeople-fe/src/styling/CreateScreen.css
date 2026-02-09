@@ -1277,6 +1277,134 @@
   border-radius: 4px;
 }
 
+/* Add from device tile */
+.add-media-tile {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.add-media-tile:active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.add-media-tile span {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.add-media-tile svg {
+  opacity: 0.7;
+}
+
+/* Loading spinner for media imports */
+.media-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: media-spin 0.6s linear infinite;
+}
+
+@keyframes media-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Media Permission Prompt */
+.media-permission-prompt {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.media-permission-icon {
+  margin-bottom: 8px;
+}
+
+.media-permission-prompt h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.media-permission-prompt p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+.media-permission-allow-btn {
+  margin-top: 8px;
+  padding: 12px 32px;
+  background: linear-gradient(135deg, #00F2EA 0%, #FF2A55 100%);
+  border: none;
+  border-radius: 24px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.media-permission-allow-btn:active {
+  opacity: 0.85;
+  transform: scale(0.97);
+}
+
+.media-permission-skip-btn {
+  padding: 8px 20px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.media-permission-skip-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Gallery empty icon (when no media or drafts) */
+.gallery-empty-icon {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Image type icon */
+.media-item-image-icon {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* Video icon */
 .media-item-video-icon {
@@ -1467,4 +1595,161 @@
 .media-panel-empty p {
   font-size: 13px;
   margin: 0;
+}
+
+/* ===================== */
+/* MULTI-SELECT          */
+/* ===================== */
+
+.media-panel-multiselect-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+/* "Multiple" button — pushed to the right */
+.media-panel-multiselect-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.media-panel-multiselect-btn .multiselect-icon {
+  flex-shrink: 0;
+}
+
+.media-panel-multiselect-btn.active {
+  background: rgba(0, 242, 234, 0.12);
+  border-color: #00F2EA;
+  color: #fff;
+}
+
+/* "Done" button — sits on the left */
+.media-panel-multiselect-done-btn {
+  padding: 7px 20px;
+  border-radius: 20px;
+  border: none;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.media-panel-multiselect-done-btn:active {
+  transform: scale(0.96);
+}
+
+.media-panel-multiselect-done-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.media-combine-error {
+  font-size: 12px;
+  color: #ff4757;
+}
+
+/* Numbered badge — bottom left of grid item */
+.media-multiselect-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #00F2EA, #FF2A55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Selected item — cyan border highlight (pseudo-element so it renders ON TOP of img) */
+.media-grid-item.multi-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid #00F2EA;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Dim overlay on selected items for clearer visual feedback */
+.media-grid-item.multi-selected::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 242, 234, 0.08);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Combine overlay */
+.media-combine-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 20px 20px 0 0;
+}
+
+.media-combine-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+}
+
+.media-combine-modal p {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.media-combine-progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.media-combine-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.media-combine-percent {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
 }

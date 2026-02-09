@@ -7,6 +7,7 @@ import { Router } from 'express';
 import * as reelsController from './reels.controller.js';
 import { validate } from '../../middleware/validate.js';
 import { requireAuth, optionalAuth } from '../../middleware/auth.js';
+import { videoUpload } from '../../middleware/upload.js';
 import {
   reelIdParamSchema,
   createReelSchema,
@@ -92,6 +93,18 @@ router.post(
   requireAuth,
   validate(hideUserSchema),
   reelsController.hideUser
+);
+
+// -----------------------------------------------------------------------------
+// Video Combine (must be before /:id to avoid route conflict)
+// -----------------------------------------------------------------------------
+
+// POST /api/reels/combine-videos - Combine multiple video segments server-side
+router.post(
+  '/combine-videos',
+  requireAuth,
+  videoUpload.array('videos', 10),
+  reelsController.combineVideos
 );
 
 // -----------------------------------------------------------------------------

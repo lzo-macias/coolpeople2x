@@ -7,6 +7,7 @@ import SinglePostView from './SinglePostView'
 import { partiesApi, reelsApi, pointsApi } from '../services/api'
 import { joinRace, leaveRace, onPointsUpdate } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
+import { isImageUrl } from '../utils/media'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -768,7 +769,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                   className="party-post-item"
                   onClick={() => handlePostClick(index)}
                 >
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -779,7 +780,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop'} alt={`Post ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=600&fit=crop'} alt={`Post ${index + 1}`} />
                   )}
                 </div>
               ))

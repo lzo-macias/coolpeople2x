@@ -6,6 +6,7 @@ import EngagementScoreBar from './EngagementScoreBar'
 import QuoteNominateScreen from './QuoteNominateScreen'
 import { getPartyColor } from '../data/mockData'
 import { racesApi, reelsApi } from '../services/api'
+import { isImageUrl } from '../utils/media'
 
 // Helper to format points for display (e.g., 25000 -> "25,000")
 const formatPoints = (points) => {
@@ -705,7 +706,13 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   return (
     <div className="reel-card" ref={cardRef}>
-      {data.videoUrl ? (
+      {data.videoUrl && (data.videoUrl.startsWith('data:image/') || isImageUrl(data.videoUrl)) ? (
+        <img
+          src={data.videoUrl}
+          className={`reel-media-video ${data.isMirrored ? 'mirrored' : ''}`}
+          alt=""
+        />
+      ) : data.videoUrl ? (
         <video
           ref={videoRef}
           src={data.videoUrl}
@@ -734,14 +741,18 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             top: (data.selfiePosition || data.metadata?.selfiePosition)?.y || 80,
           }}
         >
-          <video
-            src={data.videoUrl}
-            className={data.isMirrored ? 'mirrored' : ''}
-            autoPlay
-            loop
-            muted
-            playsInline
-          />
+          {(data.videoUrl.startsWith('data:image/') || isImageUrl(data.videoUrl)) ? (
+            <img src={data.videoUrl} className={data.isMirrored ? 'mirrored' : ''} alt="" />
+          ) : (
+            <video
+              src={data.videoUrl}
+              className={data.isMirrored ? 'mirrored' : ''}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          )}
         </div>
       )}
 

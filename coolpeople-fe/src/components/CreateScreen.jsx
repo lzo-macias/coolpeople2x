@@ -4,8 +4,9 @@ import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/CreateScreen.css'
-import { messagesApi, usersApi, partiesApi, searchApi } from '../services/api'
+import { messagesApi, usersApi, partiesApi, searchApi, reelsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { combineMediaItems } from '../utils/combineMedia'
 
 // Mock phone contacts
 const mockContacts = [
@@ -85,6 +86,23 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Drafts & Media Panel state
   const [showMediaPanel, setShowMediaPanel] = useState(false)
   const [mediaPanelTab, setMediaPanelTab] = useState('recents') // 'recents' or 'drafts'
+  const [deviceMedia, setDeviceMedia] = useState([])
+  const [loadingDeviceMedia, setLoadingDeviceMedia] = useState(false)
+  const fileInputRef = useRef(null)
+
+  // Multi-select state
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedMediaItems, setSelectedMediaItems] = useState([])
+  const [isCombiningMedia, setIsCombiningMedia] = useState(false)
+  const [combineProgress, setCombineProgress] = useState(0)
+  const [combineError, setCombineError] = useState(null)
+
+  // Playlist for multi-video playback (original quality, no re-encoding)
+  const [videoPlaylist, setVideoPlaylist] = useState(null)
+
+  // Combining state for post-time rendering
+  const [isCombiningForPost, setIsCombiningForPost] = useState(false)
+
   // Filter out drafts older than 30 days
   const filterExpiredDrafts = (draftsArray) => {
     const thirtyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 30
@@ -322,26 +340,452 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
   }, [])
 
-  // Mock recent media from phone (in real app, this would come from device)
-  const mockRecentMedia = [
-    { id: 'recent-1', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4', timestamp: Date.now() - 1000 * 60 * 5 },
-    { id: 'recent-2', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', timestamp: Date.now() - 1000 * 60 * 30 },
-    { id: 'recent-3', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', timestamp: Date.now() - 1000 * 60 * 60 },
-    { id: 'recent-4', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 2 },
-    { id: 'recent-5', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 5 },
-    { id: 'recent-6', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 },
-    { id: 'recent-7', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 * 2 },
-    { id: 'recent-8', type: 'video', thumbnail: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=200&h=350&fit=crop', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3 },
-  ]
+  // =========================================================================
+  // Device Media Library Access
+  // =========================================================================
 
-  // Get combined recents (phone media + drafts from last 30 days)
+  const [mediaPermissionStatus, setMediaPermissionStatus] = useState('unknown') // 'unknown' | 'prompt' | 'granted' | 'denied'
+  const dirHandleRef = useRef(null) // For File System Access API (desktop)
+
+  // IndexedDB helpers for persisting device media + directory handle
+  const DB_NAME = 'coolpeople-media'
+  const DB_STORE = 'device-media'
+  const DB_HANDLE_STORE = 'dir-handle'
+
+  const openMediaDB = () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 2)
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result
+        if (!db.objectStoreNames.contains(DB_STORE)) {
+          db.createObjectStore(DB_STORE, { keyPath: 'id' })
+        }
+        if (!db.objectStoreNames.contains(DB_HANDLE_STORE)) {
+          db.createObjectStore(DB_HANDLE_STORE, { keyPath: 'key' })
+        }
+      }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  const saveMediaToDB = async (mediaItems) => {
+    try {
+      const db = await openMediaDB()
+      const tx = db.transaction(DB_STORE, 'readwrite')
+      const store = tx.objectStore(DB_STORE)
+      for (const item of mediaItems) {
+        store.put(item)
+      }
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve
+        tx.onerror = () => reject(tx.error)
+      })
+    } catch (e) {
+      console.warn('Failed to save media to IndexedDB:', e)
+    }
+  }
+
+  const clearMediaDB = async () => {
+    try {
+      const db = await openMediaDB()
+      const tx = db.transaction(DB_STORE, 'readwrite')
+      tx.objectStore(DB_STORE).clear()
+    } catch (e) {
+      console.warn('Failed to clear media DB:', e)
+    }
+  }
+
+  // Save/load the directory handle for File System Access API (desktop)
+  const saveDirHandle = async (handle) => {
+    try {
+      const db = await openMediaDB()
+      const tx = db.transaction(DB_HANDLE_STORE, 'readwrite')
+      tx.objectStore(DB_HANDLE_STORE).put({ key: 'photos-dir', handle })
+    } catch (e) {
+      console.warn('Failed to save dir handle:', e)
+    }
+  }
+
+  const loadDirHandle = async () => {
+    try {
+      const db = await openMediaDB()
+      const tx = db.transaction(DB_HANDLE_STORE, 'readonly')
+      const request = tx.objectStore(DB_HANDLE_STORE).get('photos-dir')
+      return new Promise((resolve) => {
+        request.onsuccess = () => resolve(request.result?.handle || null)
+        request.onerror = () => resolve(null)
+      })
+    } catch {
+      return null
+    }
+  }
+
+  // Generate thumbnail from a video file
+  const generateVideoThumbnail = (file) => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.preload = 'metadata'
+      video.muted = true
+      video.playsInline = true
+      const url = URL.createObjectURL(file)
+      video.src = url
+
+      video.onloadeddata = () => {
+        video.currentTime = Math.min(1, video.duration * 0.1)
+      }
+
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.min(video.videoWidth, 400)
+        canvas.height = Math.min(video.videoHeight, 700)
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url)
+          resolve(blob)
+        }, 'image/jpeg', 0.7)
+      }
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url)
+        resolve(null)
+      }
+    })
+  }
+
+  // Process files into media items (shared by all access methods)
+  const processFilesIntoMedia = async (files) => {
+    const newMedia = []
+    for (const file of files) {
+      const isVideo = file.type.startsWith('video/')
+      const isImage = file.type.startsWith('image/')
+      if (!isVideo && !isImage) continue
+
+      const id = `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      let thumbnailBlob = null
+      if (isVideo) {
+        thumbnailBlob = await generateVideoThumbnail(file)
+      }
+
+      newMedia.push({
+        id,
+        type: isVideo ? 'video' : 'image',
+        blob: file,
+        thumbnailBlob,
+        thumbnail: isImage ? URL.createObjectURL(file) : (thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : null),
+        videoUrl: isVideo ? URL.createObjectURL(file) : null,
+        timestamp: file.lastModified || Date.now(),
+        fileName: file.name,
+      })
+    }
+    return newMedia
+  }
+
+  // Detect if running inside Capacitor native shell
+  const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()
+
+  // Detect if File System Access API is available (desktop Chrome/Edge)
+  const hasFileSystemAccess = typeof window !== 'undefined' && 'showDirectoryPicker' in window
+
+  // Check if user is on mobile browser (not Capacitor)
+  const isMobileBrowser = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && !isCapacitor
+
+  // ---- DESKTOP: File System Access API ----
+  // Read all images/videos from a directory handle recursively
+  const readMediaFromDirectory = async (dirHandle, maxFiles = 200) => {
+    const files = []
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif']
+    const videoExts = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v']
+
+    const walk = async (handle) => {
+      if (files.length >= maxFiles) return
+      for await (const entry of handle.values()) {
+        if (files.length >= maxFiles) break
+        if (entry.kind === 'file') {
+          const name = entry.name.toLowerCase()
+          const isMedia = [...imageExts, ...videoExts].some(ext => name.endsWith(ext))
+          if (isMedia) {
+            try {
+              const file = await entry.getFile()
+              files.push(file)
+            } catch { /* skip inaccessible files */ }
+          }
+        } else if (entry.kind === 'directory' && !entry.name.startsWith('.')) {
+          await walk(entry)
+        }
+      }
+    }
+
+    await walk(dirHandle)
+    // Sort by lastModified, newest first
+    files.sort((a, b) => b.lastModified - a.lastModified)
+    return files
+  }
+
+  // Request directory access (first time on desktop)
+  const requestDesktopDirectoryAccess = async () => {
+    try {
+      const dirHandle = await window.showDirectoryPicker({
+        mode: 'read',
+        startIn: 'pictures',
+      })
+      dirHandleRef.current = dirHandle
+      await saveDirHandle(dirHandle)
+      return dirHandle
+    } catch (e) {
+      // User cancelled the picker
+      if (e.name === 'AbortError') return null
+      throw e
+    }
+  }
+
+  // Re-verify permission on a saved directory handle
+  const verifyDirPermission = async (handle) => {
+    const opts = { mode: 'read' }
+    if (await handle.queryPermission(opts) === 'granted') return true
+    if (await handle.requestPermission(opts) === 'granted') return true
+    return false
+  }
+
+  // Load media from directory handle (desktop)
+  const loadDesktopMedia = async (dirHandle) => {
+    setLoadingDeviceMedia(true)
+    try {
+      await clearMediaDB()
+      const files = await readMediaFromDirectory(dirHandle)
+      const media = await processFilesIntoMedia(files)
+
+      // Save to IndexedDB for fast reload
+      await saveMediaToDB(media.map(item => ({
+        id: item.id,
+        type: item.type,
+        blob: item.blob,
+        thumbnailBlob: item.thumbnailBlob,
+        timestamp: item.timestamp,
+        fileName: item.fileName,
+      })))
+
+      setDeviceMedia(media.sort((a, b) => b.timestamp - a.timestamp))
+    } catch (e) {
+      console.warn('Failed to read desktop directory:', e)
+    }
+    setLoadingDeviceMedia(false)
+  }
+
+  // ---- MOBILE (Capacitor): Native photo library ----
+  const loadCapacitorMedia = async () => {
+    setLoadingDeviceMedia(true)
+    try {
+      const { Media } = await import('@capacitor-community/media')
+
+      const { medias } = await Media.getMedias({
+        quantity: 200,
+        types: 'all',
+        sort: 'creationDate',
+        thumbnailWidth: 400,
+        thumbnailHeight: 700,
+        thumbnailQuality: 70,
+      })
+
+      const media = medias.map((asset, i) => {
+        // duration > 0 means video, otherwise image
+        const isVideo = asset.duration && asset.duration > 0
+        // Thumbnail is returned as base64 JPEG data
+        const thumbnailSrc = asset.data ? `data:image/jpeg;base64,${asset.data}` : null
+
+        return {
+          id: `cap-${asset.identifier || i}`,
+          type: isVideo ? 'video' : 'image',
+          thumbnail: thumbnailSrc,
+          videoUrl: null, // will be resolved via getMediaByIdentifier when selected
+          identifier: asset.identifier, // needed to get full-res path on iOS
+          timestamp: asset.creationDate ? new Date(asset.creationDate).getTime() : Date.now() - i * 1000,
+          fileName: asset.identifier || `media-${i}`,
+          duration: asset.duration || 0,
+        }
+      })
+
+      setDeviceMedia(media)
+    } catch (e) {
+      console.warn('Failed to load Capacitor media:', e)
+      // Fallback to file input on error
+      setMediaPermissionStatus('granted')
+    }
+    setLoadingDeviceMedia(false)
+  }
+
+  // Resolve full-res path for a Capacitor media asset when user taps it
+  const resolveCapacitorMediaPath = async (item) => {
+    try {
+      const { Media } = await import('@capacitor-community/media')
+      const { path } = await Media.getMediaByIdentifier({ identifier: item.identifier })
+      return path
+    } catch (e) {
+      console.warn('Failed to resolve media path:', e)
+      return null
+    }
+  }
+
+  // ---- MOBILE BROWSER: File input (opens native photo picker) ----
+  const handleDeviceFilesSelected = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+
+    setLoadingDeviceMedia(true)
+    const newMedia = await processFilesIntoMedia(files)
+
+    setDeviceMedia(prev => {
+      const existingIds = new Set(prev.map(m => m.fileName))
+      const deduped = newMedia.filter(m => !existingIds.has(m.fileName))
+      const combined = [...deduped, ...prev]
+      return combined.sort((a, b) => b.timestamp - a.timestamp)
+    })
+
+    // Persist to IndexedDB
+    await saveMediaToDB(newMedia.map(item => ({
+      id: item.id,
+      type: item.type,
+      blob: item.blob,
+      thumbnailBlob: item.thumbnailBlob,
+      timestamp: item.timestamp,
+      fileName: item.fileName,
+    })))
+
+    setLoadingDeviceMedia(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // ---- PERMISSION FLOW ----
+  // Called when user opens media panel for the first time
+  const handleMediaPermissionGrant = async () => {
+    setMediaPermissionStatus('granting')
+
+    try {
+      if (isCapacitor) {
+        // Native: getMedias() auto-triggers the OS permission prompt on first call
+        setMediaPermissionStatus('granted')
+        if (authUser?.id) {
+          usersApi.grantMediaAccess(authUser.id).catch(() => {})
+        }
+        await loadCapacitorMedia()
+        // If loadCapacitorMedia failed (permission denied), it will fallback internally
+      } else if (hasFileSystemAccess && !isMobileBrowser) {
+        // Desktop Chrome/Edge: use File System Access API
+        const dirHandle = await requestDesktopDirectoryAccess()
+        if (dirHandle) {
+          setMediaPermissionStatus('granted')
+          if (authUser?.id) {
+            usersApi.grantMediaAccess(authUser.id).catch(() => {})
+          }
+          await loadDesktopMedia(dirHandle)
+        } else {
+          setMediaPermissionStatus('prompt') // User cancelled, stay on prompt
+        }
+      } else {
+        // Mobile browser / Firefox / Safari: use file input
+        // Permission is implicit when user selects files
+        setMediaPermissionStatus('granted')
+        if (authUser?.id) {
+          usersApi.grantMediaAccess(authUser.id).catch(() => {})
+        }
+        // Trigger file picker immediately
+        fileInputRef.current?.click()
+      }
+    } catch (e) {
+      console.warn('Media permission error:', e)
+      setMediaPermissionStatus('denied')
+    }
+  }
+
+  // Load persisted device media & check permission on mount
+  useEffect(() => {
+    const initMediaAccess = async () => {
+      // Check if user already granted via backend
+      const userGranted = authUser?.mediaAccessGranted
+
+      if (userGranted) {
+        setMediaPermissionStatus('granted')
+
+        if (isCapacitor) {
+          await loadCapacitorMedia()
+        } else if (hasFileSystemAccess && !isMobileBrowser) {
+          // Desktop: try to restore saved directory handle
+          const savedHandle = await loadDirHandle()
+          if (savedHandle) {
+            const hasAccess = await verifyDirPermission(savedHandle).catch(() => false)
+            if (hasAccess) {
+              dirHandleRef.current = savedHandle
+              await loadDesktopMedia(savedHandle)
+              return
+            }
+          }
+          // No saved handle or permission expired — load from IndexedDB cache
+          const db = await openMediaDB()
+          const tx = db.transaction(DB_STORE, 'readonly')
+          const request = tx.objectStore(DB_STORE).getAll()
+          request.onsuccess = () => {
+            const items = request.result.map(item => ({
+              ...item,
+              thumbnail: item.type === 'image' ? URL.createObjectURL(item.blob) : (item.thumbnailBlob ? URL.createObjectURL(item.thumbnailBlob) : null),
+              videoUrl: item.type === 'video' ? URL.createObjectURL(item.blob) : null,
+            }))
+            if (items.length > 0) setDeviceMedia(items.sort((a, b) => b.timestamp - a.timestamp))
+          }
+        } else {
+          // Mobile browser: load any previously cached media from IndexedDB
+          const db = await openMediaDB()
+          const tx = db.transaction(DB_STORE, 'readonly')
+          const request = tx.objectStore(DB_STORE).getAll()
+          request.onsuccess = () => {
+            const items = request.result.map(item => ({
+              ...item,
+              thumbnail: item.type === 'image' ? URL.createObjectURL(item.blob) : (item.thumbnailBlob ? URL.createObjectURL(item.thumbnailBlob) : null),
+              videoUrl: item.type === 'video' ? URL.createObjectURL(item.blob) : null,
+            }))
+            if (items.length > 0) setDeviceMedia(items.sort((a, b) => b.timestamp - a.timestamp))
+          }
+        }
+      } else {
+        setMediaPermissionStatus('prompt')
+      }
+    }
+
+    initMediaAccess()
+
+    return () => {
+      // Cleanup blob URLs on unmount
+      deviceMedia.forEach(item => {
+        if (item.thumbnail) URL.revokeObjectURL(item.thumbnail)
+        if (item.videoUrl) URL.revokeObjectURL(item.videoUrl)
+      })
+    }
+  }, [authUser?.mediaAccessGranted]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Desktop: refresh media from directory (re-scan for new files)
+  const refreshDesktopMedia = async () => {
+    if (dirHandleRef.current) {
+      await loadDesktopMedia(dirHandleRef.current)
+    } else if (hasFileSystemAccess && !isMobileBrowser) {
+      const savedHandle = await loadDirHandle()
+      if (savedHandle) {
+        const hasAccess = await verifyDirPermission(savedHandle).catch(() => false)
+        if (hasAccess) {
+          dirHandleRef.current = savedHandle
+          await loadDesktopMedia(savedHandle)
+        }
+      }
+    }
+  }
+
+  // Get combined timeline (device media + drafts), sorted newest first
   const getRecentsWithDrafts = () => {
     const thirtyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 30
     const recentDrafts = drafts
       .filter(d => d.timestamp > thirtyDaysAgo)
       .map(d => ({ ...d, isDraft: true }))
 
-    const combined = [...mockRecentMedia, ...recentDrafts]
+    const combined = [...deviceMedia, ...recentDrafts]
     return combined.sort((a, b) => b.timestamp - a.timestamp)
   }
 
@@ -428,6 +872,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     })
 
     setRecordedVideoUrl(videoToLoad)
+    // Keep recordedVideoBase64 in sync so all downstream paths
+    // (post, save-draft, send) use the correct video data
+    setRecordedVideoBase64(videoToLoad && videoToLoad.startsWith('data:') ? videoToLoad : null)
+    setVideoPlaylist(null)
     setRecordedWithFrontCamera(draft.isMirrored || false)
     if (draft.mode) setSelectedMode(draft.mode)
     if (draft.raceName) setRaceName(draft.raceName)
@@ -469,11 +917,31 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowEditClipScreen(true)
   }
 
-  // Load recent media (from phone) into editor
-  const loadRecentMedia = (media) => {
-    setRecordedVideoUrl(media.videoUrl)
+  // Load recent media (from device) into editor
+  const loadRecentMedia = async (media) => {
+    let url = null
+
+    if (media.identifier && isCapacitor) {
+      // Capacitor native asset — resolve full-res path
+      const path = await resolveCapacitorMediaPath(media)
+      if (path) {
+        // Capacitor file paths need to be converted to web-viewable URLs
+        url = window.Capacitor?.convertFileSrc?.(path) || path
+      }
+    } else if (media.type === 'image') {
+      url = media.thumbnail
+    } else {
+      url = media.videoUrl
+    }
+
+    if (url) {
+      setRecordedVideoUrl(url)
+    }
+    // Clear stale base64 — device media uses blob URLs, not base64
+    setRecordedVideoBase64(null)
+    setVideoPlaylist(null)
+
     setRecordedWithFrontCamera(false)
-    // Reset any previous draft state
     setSelectedMode('record')
     setRaceName('')
     setRaceDeadline(null)
@@ -485,6 +953,158 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowMediaPanel(false)
     setShowClipConfirm(false)
     setShowEditClipScreen(true)
+  }
+
+  // Multi-select handlers
+  const handleMultiSelectToggle = (item) => {
+    setSelectedMediaItems(prev => {
+      const exists = prev.find(i => i.id === item.id)
+      if (exists) return prev.filter(i => i.id !== item.id)
+      if (prev.length >= 10) return prev // max 10 items
+      return [...prev, item]
+    })
+  }
+
+  // Probe video duration from a URL (blob or data URL)
+  const probeVideoDuration = (url) => {
+    return new Promise((resolve) => {
+      const vid = document.createElement('video')
+      vid.preload = 'auto'
+      vid.muted = true
+      vid.playsInline = true
+      vid.src = url
+      const onReady = () => {
+        vid.removeEventListener('loadeddata', onReady)
+        if (vid.duration && isFinite(vid.duration) && vid.duration > 0) {
+          resolve(vid.duration)
+          return
+        }
+        // Blob URL Infinity workaround
+        const onSeeked = () => {
+          vid.removeEventListener('seeked', onSeeked)
+          resolve(isFinite(vid.duration) ? vid.duration : 10)
+        }
+        vid.addEventListener('seeked', onSeeked)
+        vid.currentTime = 1e10
+      }
+      vid.addEventListener('loadeddata', onReady)
+      vid.addEventListener('error', () => resolve(10))
+      vid.load()
+    })
+  }
+
+  const handleMultiSelectDone = async () => {
+    if (selectedMediaItems.length < 2) return
+
+    setIsCombiningMedia(true)
+    setCombineProgress(0)
+    setCombineError(null)
+
+    try {
+      // Build items array with resolved URLs
+      const items = []
+      for (const media of selectedMediaItems) {
+        let url = null
+        if (media.isDraft) {
+          url = media.videoUrl
+        } else if (media.identifier && isCapacitor) {
+          const path = await resolveCapacitorMediaPath(media)
+          if (path) url = window.Capacitor?.convertFileSrc?.(path) || path
+        } else if (media.type === 'image') {
+          url = media.thumbnail
+        } else {
+          url = media.videoUrl
+        }
+        if (url) {
+          items.push({ type: media.type, url, isMirrored: media.isMirrored || false })
+        }
+      }
+
+      if (items.length < 2) {
+        throw new Error('Could not resolve enough media items')
+      }
+
+      const allVideos = items.every(i => i.type === 'video')
+
+      if (allVideos) {
+        // ── PLAYLIST MODE: no re-encoding, original quality ──
+        const playlist = []
+        for (let i = 0; i < items.length; i++) {
+          setCombineProgress((i + 0.5) / items.length)
+          const dur = await probeVideoDuration(items[i].url)
+          playlist.push({ url: items[i].url, duration: dur, isMirrored: items[i].isMirrored })
+        }
+
+        // Build cumulative segments (for sound sync / segment loop)
+        const segments = []
+        let cumTime = 0
+        for (const p of playlist) {
+          segments.push({ start: cumTime, end: cumTime + p.duration })
+          cumTime += p.duration
+        }
+
+        setRecordedVideoUrl(playlist[0].url)
+        setRecordedVideoBase64(playlist[0].url.startsWith('data:') ? playlist[0].url : null)
+        setRecordedWithFrontCamera(playlist[0].isMirrored)
+        setVideoPlaylist(playlist)
+        setSelectedMode('record')
+        setRaceName('')
+        setRaceDeadline(null)
+        setSelectedTag(null)
+        setTextOverlays([])
+        setVideoTrimStart(0)
+        setVideoTrimEnd(null)
+        setVideoEdits({
+          soundOffset: 0,
+          soundStartFrac: 0,
+          soundEndFrac: 1,
+          videoVolume: 100,
+          soundVolume: 100,
+          segments,
+        })
+      } else {
+        // ── CANVAS COMBINE: needed when images are mixed in ──
+        const result = await combineMediaItems(items, (p) => setCombineProgress(p))
+        setRecordedVideoUrl(result.blobUrl)
+        setRecordedVideoBase64(null)
+        try {
+          const resp = await fetch(result.blobUrl)
+          const blob = await resp.blob()
+          const reader = new FileReader()
+          reader.onloadend = () => setRecordedVideoBase64(reader.result)
+          reader.readAsDataURL(blob)
+        } catch { /* blob URL still works for this session */ }
+        setRecordedWithFrontCamera(false)
+        setVideoPlaylist(null)
+        setSelectedMode('record')
+        setRaceName('')
+        setRaceDeadline(null)
+        setSelectedTag(null)
+        setTextOverlays([])
+        setVideoTrimStart(0)
+        setVideoTrimEnd(null)
+        setVideoEdits({
+          soundOffset: 0,
+          soundStartFrac: 0,
+          soundEndFrac: 1,
+          videoVolume: 100,
+          soundVolume: 100,
+          segments: result.segments,
+        })
+      }
+
+      // Reset multi-select and open editor
+      setMultiSelectMode(false)
+      setSelectedMediaItems([])
+      setShowMediaPanel(false)
+      setShowClipConfirm(false)
+      setShowEditClipScreen(true)
+    } catch (e) {
+      console.error('Failed to combine media:', e)
+      setCombineError(e.message || 'Failed to combine media')
+    } finally {
+      setIsCombiningMedia(false)
+    }
   }
 
   // Delete draft
@@ -685,7 +1305,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   }, [recordedVideoUrl])
 
   // Recording handlers
-  const handleRecordStart = () => {
+  // Long-press timer for PHOTO mode → hold to record video
+  const longPressTimerRef = useRef(null)
+  const isLongPressRef = useRef(false)
+  const isPressingRef = useRef(false)
+
+  const startVideoRecording = () => {
     if (!streamRef.current) return
 
     setIsRecording(true)
@@ -705,7 +1330,6 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       mediaRecorderRef.current = mediaRecorder
 
       mediaRecorder.ondataavailable = (event) => {
-        console.log('Data available:', event.data.size, 'bytes')
         if (event.data.size > 0) {
           recordedChunksRef.current.push(event.data)
         }
@@ -723,7 +1347,6 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           : 10
         setRecordedDuration(Math.max(1, elapsed))
         const blob = new Blob(recordedChunksRef.current, { type: mimeType })
-        console.log('Recorded blob size:', blob.size)
         const url = URL.createObjectURL(blob)
         setRecordedVideoUrl(url)
 
@@ -744,7 +1367,102 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }
   }
 
+  // Capture a still photo from the live camera feed
+  const capturePhoto = () => {
+    if (!streamRef.current) return
+
+    // Use ImageCapture API if available (higher quality, works reliably)
+    const videoTrack = streamRef.current.getVideoTracks()[0]
+    if (!videoTrack) return
+
+    if (typeof ImageCapture !== 'undefined') {
+      const imageCapture = new ImageCapture(videoTrack)
+      imageCapture.grabFrame().then(bitmap => {
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        const ctx = canvas.getContext('2d')
+
+        if (facingMode === 'user') {
+          ctx.translate(canvas.width, 0)
+          ctx.scale(-1, 1)
+        }
+
+        ctx.drawImage(bitmap, 0, 0)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+        setRecordedVideoUrl(dataUrl)
+        setRecordedVideoBase64(dataUrl)
+        setRecordedWithFrontCamera(false) // Already mirrored in canvas
+        setRecordedDuration(0)
+        setShowClipConfirm(true)
+      }).catch(() => {
+        // Fallback to canvas drawImage from video element
+        capturePhotoFromVideo()
+      })
+    } else {
+      capturePhotoFromVideo()
+    }
+  }
+
+  // Fallback photo capture from video element (Safari, Firefox)
+  const capturePhotoFromVideo = () => {
+    const video = videoRef.current
+    if (!video || video.readyState < 2) return // HAVE_CURRENT_DATA
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 1080
+    canvas.height = video.videoHeight || 1920
+    const ctx = canvas.getContext('2d')
+
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0)
+      ctx.scale(-1, 1)
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+    setRecordedVideoUrl(dataUrl)
+    setRecordedVideoBase64(dataUrl)
+    setRecordedWithFrontCamera(false) // Already mirrored in canvas
+    setRecordedDuration(0)
+    setShowClipConfirm(true)
+  }
+
+  const handleRecordStart = () => {
+    if (!streamRef.current) return
+    isPressingRef.current = true
+
+    if (selectedDuration === 'PHOTO') {
+      // PHOTO mode: tap = photo, hold = video
+      isLongPressRef.current = false
+      longPressTimerRef.current = setTimeout(() => {
+        isLongPressRef.current = true
+        startVideoRecording()
+      }, 300)
+    } else {
+      // Video durations: start recording immediately on press
+      startVideoRecording()
+    }
+  }
+
   const handleRecordEnd = () => {
+    // Clear long-press timer if it hasn't fired yet
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+
+    // Only capture if handleRecordStart was called first (prevents phantom captures on mount)
+    if (!isPressingRef.current) return
+    isPressingRef.current = false
+
+    if (selectedDuration === 'PHOTO' && !isLongPressRef.current && !isRecording) {
+      // Short tap in PHOTO mode → capture still photo
+      capturePhoto()
+      return
+    }
+
+    // Stop video recording
     if (isRecording && mediaRecorderRef.current) {
       setIsRecording(false)
       mediaRecorderRef.current.stop()
@@ -777,6 +1495,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       setRecordedVideoUrl(null)
     }
     setRecordedVideoBase64(null)
+    setVideoPlaylist(null)
 
     // Reset nominate mode state
     setSelectedTag(null)
@@ -859,6 +1578,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       setRecordedVideoUrl(null)
     }
     setRecordedVideoBase64(null)
+    setVideoPlaylist(null)
 
     // Reset mode-specific state
     setSelectedTag(null)
@@ -881,8 +1601,86 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     }, 50)
   }
 
-  const handlePost = (postData) => {
+  const handlePost = async (postData) => {
     console.log('Posting:', postData)
+
+    let videoUrl = recordedVideoBase64 || recordedVideoUrl
+    let postDuration = recordedDuration || 10
+    let postMirrored = recordedWithFrontCamera
+
+    // If playlist mode, combine all segments server-side via FFmpeg
+    if (videoPlaylist && videoPlaylist.length > 1) {
+      setIsCombiningForPost(true)
+      setCombineProgress(0)
+      try {
+        const segments = postData.segments || videoEdits?.segments || []
+
+        // Map each segment back to its playlist source with local time range
+        const ranges = []
+        let cumTime = 0
+        for (const p of videoPlaylist) {
+          ranges.push({ start: cumTime, end: cumTime + p.duration, url: p.url, isMirrored: p.isMirrored || false })
+          cumTime += p.duration
+        }
+
+        // Deduplicate playlist URLs and map to file indices
+        const uniqueUrls = [...new Set(videoPlaylist.map(p => p.url))]
+        const urlToIndex = new Map(uniqueUrls.map((url, i) => [url, i]))
+
+        // Build segments with fileIndex references
+        const serverSegments = segments.map(seg => {
+          let rangeIdx = 0
+          for (let r = 0; r < ranges.length; r++) {
+            if (seg.start >= ranges[r].start - 0.001) rangeIdx = r
+          }
+          const range = ranges[rangeIdx]
+          return {
+            fileIndex: urlToIndex.get(range.url),
+            startTime: seg.start - range.start,
+            endTime: seg.end - range.start,
+          }
+        })
+
+        setCombineProgress(0.1) // Fetching blobs
+
+        // Fetch each unique blob URL into a Blob
+        const blobs = await Promise.all(
+          uniqueUrls.map(async (url) => {
+            const resp = await fetch(url)
+            return resp.blob()
+          })
+        )
+
+        setCombineProgress(0.3) // Building upload
+
+        // Build FormData
+        const formData = new FormData()
+        blobs.forEach((blob, i) => {
+          formData.append('videos', blob, `video-${i}.webm`)
+        })
+        formData.append('segments', JSON.stringify(serverSegments))
+
+        setCombineProgress(0.5) // Uploading & combining
+
+        // Upload to server for FFmpeg concatenation
+        const result = await reelsApi.combineVideos(formData)
+
+        setCombineProgress(1.0)
+
+        videoUrl = result.data.videoUrl
+        postDuration = result.data.duration
+        // FFmpeg stream copy doesn't alter mirroring — preserve source mirror state for the player
+        postMirrored = videoPlaylist.every(p => p.isMirrored)
+      } catch (err) {
+        console.error('Failed to combine playlist for post:', err)
+        // Fall through with first video as fallback
+      } finally {
+        setIsCombiningForPost(false)
+      }
+    }
+
+    // Backend schema requires integer duration
+    postDuration = Math.max(1, Math.round(postDuration))
 
     // Use targetRace from PostScreen if provided, otherwise use raceName from race mode
     const finalTargetRace = postData.targetRace || (selectedMode === 'race' ? raceName : null)
@@ -891,13 +1689,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     const isCreatingNewRace = selectedMode === 'race' && raceName && !selectedExistingRace
 
     // Create the post with video and all data
-    // Use base64 version for persistence (blob URLs are temporary)
     if (onPostCreated) {
       onPostCreated({
         ...postData,
-        videoUrl: recordedVideoBase64 || recordedVideoUrl, // Prefer base64 for persistence
-        duration: recordedDuration || 10,
-        isMirrored: recordedWithFrontCamera,
+        videoUrl,
+        duration: postDuration,
+        isMirrored: postMirrored,
         targetRace: finalTargetRace,
         isNomination: selectedMode === 'nominate',
         taggedUser: selectedTag,
@@ -935,6 +1732,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       setRecordedVideoUrl(null)
     }
     setRecordedVideoBase64(null)
+    setVideoPlaylist(null)
     setShowClipConfirm(false)
     setVideoTrimStart(0)
     setVideoTrimEnd(null)
@@ -1042,7 +1840,15 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     <div className="create-screen">
       {/* Camera Preview */}
       <div className="create-camera-preview">
-        {recordedVideoUrl ? (
+        {recordedVideoUrl && recordedDuration === 0 ? (
+          /* Photo capture — show as image */
+          <img
+            key="photo"
+            src={recordedVideoUrl}
+            className={`create-preview-video`}
+            alt=""
+          />
+        ) : recordedVideoUrl ? (
           <video
             key="recorded"
             ref={videoRef}
@@ -1476,50 +2282,194 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       {!showTagFlow && (
         <div className="create-bottom-bar">
           <button className="create-gallery-btn" onClick={() => setShowMediaPanel(true)}>
-            <img
-              src={drafts.length > 0 ? drafts[0].thumbnail : "https://images.unsplash.com/photo-1551632811-561732d1e306?w=100&h=100&fit=crop"}
-              alt="Gallery"
-            />
+            {drafts.length > 0 || deviceMedia.length > 0 ? (
+              <img
+                src={drafts.length > 0 ? drafts[0].thumbnail : deviceMedia[0]?.thumbnail}
+                alt="Gallery"
+              />
+            ) : (
+              <div className="gallery-empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              </div>
+            )}
             {drafts.length > 0 && <span className="gallery-draft-badge">{drafts.length}</span>}
           </button>
         </div>
       )}
 
+      {/* Hidden file input for device media picker */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleDeviceFilesSelected}
+      />
+
       {/* Media Panel (Drafts & Recents) */}
       {showMediaPanel && (
-        <div className="media-panel-overlay" onClick={() => setShowMediaPanel(false)}>
+        <div className="media-panel-overlay" onClick={() => { setShowMediaPanel(false); setMultiSelectMode(false); setSelectedMediaItems([]) }}>
           <div className="media-panel" onClick={(e) => e.stopPropagation()}>
             {/* Tab Header */}
             <div className="media-panel-header">
               <button
                 className={`media-panel-tab ${mediaPanelTab === 'recents' ? 'active' : ''}`}
-                onClick={() => setMediaPanelTab('recents')}
+                onClick={() => { setMediaPanelTab('recents') }}
               >
                 Recents
               </button>
               <button
                 className={`media-panel-tab ${mediaPanelTab === 'drafts' ? 'active' : ''}`}
-                onClick={() => setMediaPanelTab('drafts')}
+                onClick={() => { setMediaPanelTab('drafts') }}
               >
                 Drafts
               </button>
             </div>
 
+            {/* Multi-Select Bar (both tabs, if MediaRecorder available) */}
+            {typeof MediaRecorder !== 'undefined' && (mediaPanelTab === 'drafts' || mediaPermissionStatus === 'granted') && (
+              <div className="media-panel-multiselect-bar">
+                {multiSelectMode && selectedMediaItems.length >= 1 && (
+                  <button
+                    className="media-panel-multiselect-done-btn"
+                    onClick={handleMultiSelectDone}
+                    disabled={isCombiningMedia || selectedMediaItems.length < 2}
+                  >
+                    Done ({selectedMediaItems.length})
+                  </button>
+                )}
+                {combineError && (
+                  <span className="media-combine-error">{combineError}</span>
+                )}
+                <button
+                  className={`media-panel-multiselect-btn ${multiSelectMode ? 'active' : ''}`}
+                  onClick={() => {
+                    setMultiSelectMode(prev => !prev)
+                    setSelectedMediaItems([])
+                    setCombineError(null)
+                  }}
+                >
+                  <svg className="multiselect-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <rect x="0.5" y="3.5" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+                    <rect x="4.5" y="0.5" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="rgba(0,0,0,0.3)" />
+                  </svg>
+                  Multiple
+                </button>
+              </div>
+            )}
+
             {/* Media Grid */}
             <div className="media-panel-grid">
               {mediaPanelTab === 'recents' ? (
-                getRecentsWithDrafts().map(item => {
+                <>
+                {/* Permission prompt - shown on first open before granting access */}
+                {(mediaPermissionStatus === 'prompt' || mediaPermissionStatus === 'unknown') && (
+                  <div className="media-permission-prompt" onClick={(e) => e.stopPropagation()}>
+                    <div className="media-permission-icon">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="url(#permGrad)" strokeWidth="1.5">
+                        <defs>
+                          <linearGradient id="permGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#00F2EA" />
+                            <stop offset="100%" stopColor="#FF2A55" />
+                          </linearGradient>
+                        </defs>
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="M21 15l-5-5L5 21" />
+                      </svg>
+                    </div>
+                    <h3>Access your photos & videos</h3>
+                    <p>Allow CoolPeople to access your photo library to share your best moments</p>
+                    <button className="media-permission-allow-btn" onClick={handleMediaPermissionGrant}>
+                      Allow Access
+                    </button>
+                    <button className="media-permission-skip-btn" onClick={() => setMediaPermissionStatus('denied')}>
+                      Not now
+                    </button>
+                  </div>
+                )}
+
+                {/* Granting in progress */}
+                {mediaPermissionStatus === 'granting' && (
+                  <div className="media-permission-prompt">
+                    <div className="media-loading-spinner" />
+                    <p>Loading your media...</p>
+                  </div>
+                )}
+
+                {/* Denied state */}
+                {mediaPermissionStatus === 'denied' && (
+                  <div className="media-permission-prompt">
+                    <p>Media access not granted</p>
+                    <button className="media-permission-allow-btn" onClick={handleMediaPermissionGrant}>
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                {/* Granted: show media grid with optional "Add more" tile */}
+                {mediaPermissionStatus === 'granted' && (
+                  <>
+                  {/* Add more tile (for mobile browser / adding more files) */}
+                  {(isMobileBrowser || (!hasFileSystemAccess && !isCapacitor)) && (
+                    <div
+                      className="media-grid-item add-media-tile"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      <span>Add more</span>
+                    </div>
+                  )}
+
+                  {/* Desktop: refresh button to re-scan directory */}
+                  {hasFileSystemAccess && !isMobileBrowser && !isCapacitor && (
+                    <div
+                      className="media-grid-item add-media-tile"
+                      onClick={refreshDesktopMedia}
+                    >
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                        <path d="M1 4v6h6" />
+                        <path d="M23 20v-6h-6" />
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                      </svg>
+                      <span>{loadingDeviceMedia ? 'Scanning...' : 'Refresh'}</span>
+                      {loadingDeviceMedia && <div className="media-loading-spinner" />}
+                    </div>
+                  )}
+                  </>
+                )}
+
+                {mediaPermissionStatus === 'granted' && getRecentsWithDrafts().length > 0 ? getRecentsWithDrafts().map(item => {
                   // Determine what to show as main content
                   const mainThumbnail = item.isDraft && item.isQuoteNomination && item.quotedReel?.thumbnail
                     ? item.quotedReel.thumbnail
                     : item.thumbnail
-                  const mainVideo = item.isDraft ? item.videoUrl : null
+                  const mainVideo = item.isDraft ? item.videoUrl : (!item.thumbnail && item.videoUrl ? item.videoUrl : null)
+
+                  const multiSelectIndex = multiSelectMode
+                    ? selectedMediaItems.findIndex(i => i.id === item.id)
+                    : -1
 
                   return (
                     <div
                       key={item.id}
-                      className={`media-grid-item ${item.isDraft && (item.isQuoteNomination || item.mode === 'nominate') ? 'draft-item' : ''}`}
-                      onClick={() => item.isDraft ? loadDraft(item) : loadRecentMedia(item)}
+                      className={`media-grid-item ${item.isDraft && (item.isQuoteNomination || item.mode === 'nominate') ? 'draft-item' : ''} ${multiSelectIndex >= 0 ? 'multi-selected' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (multiSelectMode) {
+                          handleMultiSelectToggle(item.isDraft ? { ...item, isDraft: true } : item)
+                          return
+                        }
+                        item.isDraft ? loadDraft(item) : loadRecentMedia(item)
+                      }}
                     >
                       {/* Main content - thumbnail or video fallback */}
                       {mainThumbnail ? (
@@ -1530,6 +2480,13 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                         <div className="media-grid-placeholder" />
                       )}
 
+                      {/* Multi-select number badge — bottom left */}
+                      {multiSelectMode && multiSelectIndex >= 0 && (
+                        <div className="media-multiselect-badge">
+                          {multiSelectIndex + 1}
+                        </div>
+                      )}
+
                       {/* Selfie overlay for nominate mode drafts in recents */}
                       {item.isDraft && (item.isQuoteNomination || item.mode === 'nominate') && (item.selfieVideoUrl || item.videoUrl) && (
                         <div className="draft-selfie-overlay">
@@ -1537,10 +2494,20 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                         </div>
                       )}
 
-                      {item.type === 'video' && (
+                      {/* Hide type icons when multiselect badge is showing (same position) */}
+                      {item.type === 'video' && multiSelectIndex < 0 && (
                         <div className="media-item-video-icon">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
                             <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </div>
+                      )}
+                      {item.type === 'image' && !item.isDraft && multiSelectIndex < 0 && (
+                        <div className="media-item-image-icon">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="white" strokeWidth="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5" fill="white"/>
+                            <path d="M21 15l-5-5L5 21" stroke="white" strokeWidth="2" fill="none"/>
                           </svg>
                         </div>
                       )}
@@ -1549,7 +2516,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                       )}
                     </div>
                   )
-                })
+                }) : null}
+                </>
               ) : (
                 drafts.length > 0 ? (
                   drafts.map(draft => {
@@ -1559,11 +2527,21 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                       : draft.thumbnail
                     const mainVideo = draft.videoUrl
 
+                    const draftMultiSelectIndex = multiSelectMode
+                      ? selectedMediaItems.findIndex(i => i.id === draft.id)
+                      : -1
+
                     return (
                       <div
                         key={draft.id}
-                        className={`media-grid-item draft-item ${draft.isQuoteNomination ? 'quote-draft' : ''}`}
-                        onClick={() => loadDraft(draft)}
+                        className={`media-grid-item draft-item ${draft.isQuoteNomination ? 'quote-draft' : ''} ${draftMultiSelectIndex >= 0 ? 'multi-selected' : ''}`}
+                        onClick={() => {
+                          if (multiSelectMode) {
+                            handleMultiSelectToggle({ ...draft, isDraft: true })
+                            return
+                          }
+                          loadDraft(draft)
+                        }}
                       >
                         {/* Main content - thumbnail or video fallback */}
                         {mainThumbnail ? (
@@ -1573,6 +2551,13 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                         ) : (
                           <div className="media-grid-placeholder" />
                         )}
+
+                      {/* Multi-select number badge — bottom left */}
+                      {multiSelectMode && draftMultiSelectIndex >= 0 && (
+                        <div className="media-multiselect-badge">
+                          {draftMultiSelectIndex + 1}
+                        </div>
+                      )}
 
                       {/* Selfie overlay for nominate mode drafts (including quote nominations) */}
                       {(draft.isQuoteNomination || draft.mode === 'nominate') && (draft.selfieVideoUrl || draft.videoUrl) && (
@@ -1597,22 +2582,28 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                         </div>
                       )}
 
-                      <div className="media-item-video-icon">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </div>
-                      <button
-                        className="draft-delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteDraft(draft.id)
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                      </button>
+                      {/* Hide video icon when multiselect badge is showing (same position) */}
+                      {draftMultiSelectIndex < 0 && (
+                        <div className="media-item-video-icon">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </div>
+                      )}
+                      {/* Hide delete button in multiselect mode */}
+                      {!multiSelectMode && (
+                        <button
+                          className="draft-delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteDraft(draft.id)
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
                       <div className={`draft-mode-badge ${draft.mode === 'race' ? 'race' : draft.mode === 'nominate' ? 'nominate' : draft.mode === 'party' ? 'party' : ''}`}>
                         {draft.isQuoteNomination ? 'Quote' : draft.mode === 'race' ? 'Race' : draft.mode === 'nominate' ? 'Nominate' : draft.mode === 'party' ? 'Party' : 'Post'}
                       </div>
@@ -1632,6 +2623,23 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 )
               )}
             </div>
+
+            {/* Combining Media Overlay */}
+            {isCombiningMedia && (
+              <div className="media-combine-overlay">
+                <div className="media-combine-modal">
+                  <div className="media-loading-spinner" />
+                  <p>Combining {selectedMediaItems.length} items...</p>
+                  <div className="media-combine-progress-bar">
+                    <div
+                      className="media-combine-progress-fill"
+                      style={{ width: `${Math.round(combineProgress * 100)}%` }}
+                    />
+                  </div>
+                  <span className="media-combine-percent">{Math.round(combineProgress * 100)}%</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1690,6 +2698,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           recordedVideoUrl={recordedVideoUrl}
           recordedVideoBase64={recordedVideoBase64}
           isMirrored={recordedWithFrontCamera}
+          videoPlaylist={videoPlaylist}
           isConversationMode={isConversationMode}
           conversationUser={conversationUser}
           taggedUser={selectedTag}
@@ -1759,7 +2768,25 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           trimEnd={videoTrimEnd}
           selectedSound={selectedSound}
           videoEdits={videoEdits}
+          videoPlaylist={videoPlaylist}
         />
+      )}
+
+      {/* Combining overlay for playlist post rendering */}
+      {isCombiningForPost && (
+        <div className="media-combine-overlay">
+          <div className="media-combine-modal">
+            <div className="media-loading-spinner" />
+            <p>Uploading & combining video...</p>
+            <div className="media-combine-progress-bar">
+              <div
+                className="media-combine-progress-fill"
+                style={{ width: `${Math.round(combineProgress * 100)}%` }}
+              />
+            </div>
+            <span className="media-combine-percent">{Math.round(combineProgress * 100)}%</span>
+          </div>
+        </div>
       )}
 
       {/* Party Creation Flow */}

@@ -6,6 +6,7 @@ import { getPartyColor } from '../data/mockData'
 import { usersApi, reelsApi } from '../services/api'
 import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
+import { isImageUrl } from '../utils/media'
 
 const activityConfig = {
   like: { color: '#FF4D6A', icon: '♥' },
@@ -566,7 +567,7 @@ function ParticipantProfile({
             ) : (
               fetchedPosts.map((post, index) => (
                 <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'posts')}>
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -577,7 +578,7 @@ function ParticipantProfile({
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Post ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Post ${index + 1}`} />
                   )}
                 </div>
               ))
@@ -598,7 +599,7 @@ function ParticipantProfile({
                       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
                     </svg>
                   </div>
-                  {repost.videoUrl ? (
+                  {repost.videoUrl && !isImageUrl(repost.videoUrl) ? (
                     <video
                       src={repost.videoUrl}
                       className={repost.isMirrored ? 'mirrored' : ''}
@@ -609,7 +610,7 @@ function ParticipantProfile({
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
+                    <img src={repost.videoUrl || repost.thumbnailUrl || repost.thumbnail} alt={`Repost ${index + 1}`} />
                   )}
                   {repost.author && (
                     <div className="repost-author">
@@ -635,7 +636,7 @@ function ParticipantProfile({
             ) : (
               fetchedTaggedReels.map((post, index) => (
                 <div key={post.id || index} className="post-item" onClick={() => handlePostClick(index, 'tagged')}>
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -646,7 +647,7 @@ function ParticipantProfile({
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
                   )}
                 </div>
               ))

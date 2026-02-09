@@ -54,6 +54,29 @@ const apiFetch = async (endpoint, options = {}) => {
   return response.json();
 };
 
+// Upload wrapper for multipart/form-data (no Content-Type — browser sets boundary)
+const apiUpload = async (endpoint, formData) => {
+  const token = getAuthToken();
+  const headers = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+    throw new Error(error.message || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+};
+
 // =============================================================================
 // Auth API
 // =============================================================================
@@ -124,6 +147,10 @@ export const usersApi = {
   }),
 
   revertToParticipant: (userId) => apiFetch(`/api/users/${userId}/revert-participant`, {
+    method: 'POST',
+  }),
+
+  grantMediaAccess: (userId) => apiFetch(`/api/users/${userId}/media-access`, {
     method: 'POST',
   }),
 };
@@ -204,6 +231,8 @@ export const reelsApi = {
     method: 'POST',
     body: JSON.stringify({ hiddenUserId: userId }),
   }),
+
+  combineVideos: (formData) => apiUpload('/api/reels/combine-videos', formData),
 };
 
 // =============================================================================

@@ -1,0 +1,10 @@
+{
+  "appId": "com.coolpeople.app",
+  "appName": "CoolPeople",
+  "webDir": "dist",
+  "plugins": {
+    "Media": {
+      "androidGalleryMode": true
+    }
+  }
+}

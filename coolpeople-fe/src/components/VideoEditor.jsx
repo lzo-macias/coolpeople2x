@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import '../styling/VideoEditor.css'
 
-function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition }) {
+function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition, videoPlaylist }) {
   const videoRef = useRef(null)
   const thumbVideoRef = useRef(null)
   const timelineRef = useRef(null)
@@ -62,6 +62,12 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const [outputPlayheadFrac, setOutputPlayheadFrac] = useState(0)
   const playheadAreaRef = useRef(null)
 
+  // Playlist mode refs
+  const playlistRef = useRef(videoPlaylist)
+  playlistRef.current = videoPlaylist
+  const [playlistMirrored, setPlaylistMirrored] = useState(videoPlaylist?.[0]?.isMirrored || false)
+  const playlistSwappingRef = useRef(false) // suppress pause events during source swap
+
   // Ref for sound params so RAF tick always reads latest values
   const soundParamsRef = useRef({ soundStartFrac: 0, soundEndFrac: 1, soundOffset: 0 })
   soundParamsRef.current = { soundStartFrac, soundEndFrac, soundOffset }
@@ -73,6 +79,20 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const handleLoadedMetadata = useCallback(() => {
     const vid = videoRef.current
     if (!vid) return
+
+    // In playlist mode, total duration comes from playlist items, not single video.
+    // Skip re-processing if we're mid-playback source swap (duration already set).
+    if (videoPlaylist && videoPlaylist.length > 0) {
+      if (playlistSwappingRef.current) return // mid-playback source swap, skip
+      const totalDur = videoPlaylist.reduce((sum, p) => sum + p.duration, 0)
+      setDuration(totalDur)
+      if (trimEnd === null) {
+        setTrimEnd(Math.min(totalDur, MAX_CLIP))
+      }
+      vid.currentTime = 0
+      return
+    }
+
     let dur = vid.duration
 
     if (!dur || !isFinite(dur) || dur <= 0) {
@@ -98,91 +118,123 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       setTrimEnd(Math.min(dur, MAX_CLIP))
     }
     vid.currentTime = trimStart
-  }, [trimStart, trimEnd])
+  }, [trimStart, trimEnd, videoPlaylist])
 
   // Extract thumbnails from video (runs independently — determines duration itself)
   useEffect(() => {
     if (!videoUrl) return
     let cancelled = false
 
-    const extractThumbs = async () => {
+    // Helper: load a video element and probe its duration
+    const loadAndProbe = async (url) => {
       const vid = document.createElement('video')
       vid.muted = true
       vid.playsInline = true
       vid.preload = 'auto'
-      // Don't set crossOrigin for blob URLs — causes failures
-      if (!videoUrl.startsWith('blob:') && !videoUrl.startsWith('data:')) {
+      if (!url.startsWith('blob:') && !url.startsWith('data:')) {
         vid.crossOrigin = 'anonymous'
       }
-      vid.src = videoUrl
-
-      try {
-        // Wait for video to have enough data
-        await new Promise((resolve, reject) => {
-          vid.onloadeddata = resolve
-          vid.onerror = () => reject(new Error('Video load error'))
-          setTimeout(() => resolve(), 4000) // fallback resolve
+      vid.src = url
+      await new Promise((resolve, reject) => {
+        vid.onloadeddata = resolve
+        vid.onerror = () => reject(new Error('Video load error'))
+        setTimeout(() => resolve(), 4000)
+      })
+      let dur = vid.duration
+      if (!dur || !isFinite(dur) || dur <= 0) {
+        vid.currentTime = 1e10
+        await new Promise((resolve) => {
+          const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
+          vid.addEventListener('seeked', onSeeked)
+          setTimeout(resolve, 2000)
         })
+        dur = vid.currentTime
+        if (!dur || dur <= 0) dur = 10
+      }
+      return { vid, dur }
+    }
 
-        // Determine duration — blob URLs from MediaRecorder often return Infinity
-        let dur = vid.duration
-        if (!dur || !isFinite(dur) || dur <= 0) {
-          // Workaround: seek to a very large time, browser clamps to actual end
-          vid.currentTime = 1e10
-          await new Promise((resolve) => {
-            const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
-            vid.addEventListener('seeked', onSeeked)
-            setTimeout(resolve, 2000)
-          })
-          dur = vid.currentTime
-          if (!dur || dur <= 0) dur = 10 // last resort fallback
-        }
-
-        if (cancelled) return
-
+    const extractThumbs = async () => {
+      try {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         canvas.width = 80
         canvas.height = 56
 
-        const frames = []
-        for (let i = 0; i < THUMB_COUNT; i++) {
-          if (cancelled) return
-          const time = (dur / THUMB_COUNT) * (i + 0.5)
-          vid.currentTime = time
-
-          await new Promise((resolve) => {
-            const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
-            vid.addEventListener('seeked', onSeeked)
-            setTimeout(resolve, 1000) // per-frame timeout
-          })
-
-          try {
-            if (isMirrored) {
-              ctx.save()
-              ctx.translate(canvas.width, 0)
-              ctx.scale(-1, 1)
-            }
-            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
-            if (isMirrored) ctx.restore()
-            frames.push(canvas.toDataURL('image/jpeg', 0.5))
-          } catch {
-            frames.push(null)
+        if (videoPlaylist && videoPlaylist.length > 0) {
+          // ── PLAYLIST MODE: extract thumbs across multiple video sources ──
+          const totalDur = videoPlaylist.reduce((sum, p) => sum + p.duration, 0)
+          const frames = []
+          // Build segment list with cumulative offsets
+          const playlistSegs = []
+          let cumStart = 0
+          for (const p of videoPlaylist) {
+            playlistSegs.push({ url: p.url, mirrored: p.isMirrored || false, start: cumStart, end: cumStart + p.duration, duration: p.duration })
+            cumStart += p.duration
           }
+          // Preload all playlist videos
+          const vidEls = {}
+          for (const ps of playlistSegs) {
+            if (!vidEls[ps.url]) {
+              const { vid } = await loadAndProbe(ps.url)
+              vidEls[ps.url] = vid
+            }
+          }
+          for (let i = 0; i < THUMB_COUNT; i++) {
+            if (cancelled) return
+            const time = (totalDur / THUMB_COUNT) * (i + 0.5)
+            // Find which playlist segment this falls in
+            const ps = playlistSegs.find(s => time >= s.start && time < s.end) || playlistSegs[playlistSegs.length - 1]
+            const localTime = time - ps.start
+            const vid = vidEls[ps.url]
+            vid.currentTime = Math.min(localTime, ps.duration - 0.01)
+            await new Promise((resolve) => {
+              const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
+              vid.addEventListener('seeked', onSeeked)
+              setTimeout(resolve, 1000)
+            })
+            try {
+              if (ps.mirrored) { ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1) }
+              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+              if (ps.mirrored) ctx.restore()
+              frames.push(canvas.toDataURL('image/jpeg', 0.5))
+            } catch { frames.push(null) }
+          }
+          // Cleanup
+          for (const vid of Object.values(vidEls)) { vid.src = ''; vid.load() }
+          if (!cancelled) setThumbnails(frames)
+        } else {
+          // ── SINGLE VIDEO MODE ──
+          const { vid, dur } = await loadAndProbe(videoUrl)
+          if (cancelled) { vid.src = ''; vid.load(); return }
+          const frames = []
+          for (let i = 0; i < THUMB_COUNT; i++) {
+            if (cancelled) { vid.src = ''; vid.load(); return }
+            const time = (dur / THUMB_COUNT) * (i + 0.5)
+            vid.currentTime = time
+            await new Promise((resolve) => {
+              const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
+              vid.addEventListener('seeked', onSeeked)
+              setTimeout(resolve, 1000)
+            })
+            try {
+              if (isMirrored) { ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1) }
+              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+              if (isMirrored) ctx.restore()
+              frames.push(canvas.toDataURL('image/jpeg', 0.5))
+            } catch { frames.push(null) }
+          }
+          vid.src = ''; vid.load()
+          if (!cancelled) setThumbnails(frames)
         }
-
-        if (!cancelled) setThumbnails(frames)
       } catch (err) {
         console.warn('Thumbnail extraction failed:', err)
-      } finally {
-        vid.src = ''
-        vid.load()
       }
     }
 
     extractThumbs()
     return () => { cancelled = true }
-  }, [videoUrl, isMirrored])
+  }, [videoUrl, isMirrored, videoPlaylist])
 
   // Load sound duration — listen to multiple events as fallback
   useEffect(() => {
@@ -250,6 +302,15 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }, [isPlaying])
 
+  // In playlist mode, ensure total duration is set from playlist items
+  // (handleLoadedMetadata may fire before useCallback captures videoPlaylist)
+  useEffect(() => {
+    if (videoPlaylist && videoPlaylist.length > 0) {
+      const totalDur = videoPlaylist.reduce((sum, p) => sum + p.duration, 0)
+      if (totalDur > 0) setDuration(totalDur)
+    }
+  }, [videoPlaylist])
+
   // Multi-segment sequential playback + central playhead RAF
   useEffect(() => {
     if (!isPlaying) {
@@ -260,6 +321,7 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     // Capture segments at effect start so RAF uses consistent data
     const segs = segments
     const dur = duration
+    const playlist = playlistRef.current
 
     const tick = () => {
       const vid = videoRef.current
@@ -270,57 +332,124 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
       const idx = playingSegIdxRef.current
       const seg = segs[idx]
-      if (!seg) return
+      if (!seg) { rafRef.current = requestAnimationFrame(tick); return }
 
-      const segEnd = seg.end ?? dur
-
-      // If past current segment end, advance to next
-      if (t >= segEnd - 0.05) {
-        if (idx < segs.length - 1) {
-          playingSegIdxRef.current = idx + 1
-          const nextSeg = segs[idx + 1]
-          vid.currentTime = nextSeg.start
-        } else {
-          // Reached the end — stop and reset to beginning
-          vid.pause()
-          if (soundAudioRef.current && !soundAudioRef.current.paused) soundAudioRef.current.pause()
-          setIsPlaying(false)
-          playingSegIdxRef.current = 0
-          vid.currentTime = segs[0].start
-          setCurrentTime(segs[0].start)
-          setOutputPlayheadFrac(0)
-          return
-        }
-      }
-
-      // Calculate output playhead fraction
-      let outputTime = 0
-      for (let i = 0; i < playingSegIdxRef.current && i < segs.length; i++) {
-        outputTime += (segs[i].end ?? dur) - segs[i].start
-      }
-      const curSeg = segs[playingSegIdxRef.current]
-      if (curSeg) {
-        const elapsed = Math.max(0, vid.currentTime - curSeg.start)
-        const segDur = (curSeg.end ?? dur) - curSeg.start
-        outputTime += Math.min(elapsed, segDur)
-      }
-      const total = segs.reduce((sum, s) => sum + ((s.end ?? dur) - s.start), 0)
-      setOutputPlayheadFrac(total > 0 ? Math.min(1, outputTime / total) : 0)
-
-      // Sync audio to output timeline position (independent of source video time)
-      const audio = soundAudioRef.current
-      if (audio && audio.src) {
-        const sp = soundParamsRef.current
-        const soundStart = sp.soundStartFrac * total
-        const soundEnd = sp.soundEndFrac * total
-        if (outputTime >= soundStart && outputTime <= soundEnd) {
-          const targetAudioTime = sp.soundOffset + (outputTime - soundStart)
-          if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) {
-            audio.currentTime = targetAudioTime
+      if (playlist && playlist.length > 0) {
+        // ── PLAYLIST MODE: each segment = separate video source, time is local (0-based) ──
+        const segDuration = seg.end - seg.start
+        if (t >= segDuration - 0.05) {
+          if (idx < segs.length - 1) {
+            playingSegIdxRef.current = idx + 1
+            const nextItem = playlist[idx + 1]
+            if (nextItem && vid.src !== nextItem.url) {
+              playlistSwappingRef.current = true
+              vid.src = nextItem.url
+              vid.load()
+              setPlaylistMirrored(nextItem.isMirrored || false)
+            }
+            vid.currentTime = 0
+            vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
+          } else {
+            // Reached the end — stop and reset to first source
+            vid.pause()
+            if (soundAudioRef.current && !soundAudioRef.current.paused) soundAudioRef.current.pause()
+            setIsPlaying(false)
+            playingSegIdxRef.current = 0
+            const firstItem = playlist[0]
+            if (firstItem && vid.src !== firstItem.url) {
+              vid.src = firstItem.url
+              vid.load()
+              setPlaylistMirrored(firstItem.isMirrored || false)
+            }
+            vid.currentTime = 0
+            setCurrentTime(0)
+            setOutputPlayheadFrac(0)
+            return
           }
-          if (audio.paused) audio.play().catch(() => {})
-        } else {
-          if (!audio.paused) audio.pause()
+        }
+
+        // Calculate output playhead fraction for playlist mode
+        let outputTime = 0
+        for (let i = 0; i < playingSegIdxRef.current && i < segs.length; i++) {
+          outputTime += segs[i].end - segs[i].start
+        }
+        const curSeg = segs[playingSegIdxRef.current]
+        if (curSeg) {
+          const elapsed = Math.max(0, vid.currentTime)
+          const segDur = curSeg.end - curSeg.start
+          outputTime += Math.min(elapsed, segDur)
+        }
+        const total = segs.reduce((sum, s) => sum + (s.end - s.start), 0)
+        setOutputPlayheadFrac(total > 0 ? Math.min(1, outputTime / total) : 0)
+
+        // Sync audio
+        const audio = soundAudioRef.current
+        if (audio && audio.src) {
+          const sp = soundParamsRef.current
+          const soundStart = sp.soundStartFrac * total
+          const soundEnd = sp.soundEndFrac * total
+          if (outputTime >= soundStart && outputTime <= soundEnd) {
+            const targetAudioTime = sp.soundOffset + (outputTime - soundStart)
+            if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) {
+              audio.currentTime = targetAudioTime
+            }
+            if (audio.paused) audio.play().catch(() => {})
+          } else {
+            if (!audio.paused) audio.pause()
+          }
+        }
+      } else {
+        // ── COMBINED VIDEO MODE: segments are cumulative timestamps in single video ──
+        const segEnd = seg.end ?? dur
+
+        // If past current segment end, advance to next
+        if (t >= segEnd - 0.05) {
+          if (idx < segs.length - 1) {
+            playingSegIdxRef.current = idx + 1
+            const nextSeg = segs[idx + 1]
+            vid.currentTime = nextSeg.start
+          } else {
+            // Reached the end — stop and reset to beginning
+            vid.pause()
+            if (soundAudioRef.current && !soundAudioRef.current.paused) soundAudioRef.current.pause()
+            setIsPlaying(false)
+            playingSegIdxRef.current = 0
+            vid.currentTime = segs[0].start
+            setCurrentTime(segs[0].start)
+            setOutputPlayheadFrac(0)
+            return
+          }
+        }
+
+        // Calculate output playhead fraction
+        let outputTime = 0
+        for (let i = 0; i < playingSegIdxRef.current && i < segs.length; i++) {
+          outputTime += (segs[i].end ?? dur) - segs[i].start
+        }
+        const curSeg = segs[playingSegIdxRef.current]
+        if (curSeg) {
+          const elapsed = Math.max(0, vid.currentTime - curSeg.start)
+          const segDur = (curSeg.end ?? dur) - curSeg.start
+          outputTime += Math.min(elapsed, segDur)
+        }
+        const total = segs.reduce((sum, s) => sum + ((s.end ?? dur) - s.start), 0)
+        setOutputPlayheadFrac(total > 0 ? Math.min(1, outputTime / total) : 0)
+
+        // Sync audio to output timeline position (independent of source video time)
+        const audio = soundAudioRef.current
+        if (audio && audio.src) {
+          const sp = soundParamsRef.current
+          const soundStart = sp.soundStartFrac * total
+          const soundEnd = sp.soundEndFrac * total
+          if (outputTime >= soundStart && outputTime <= soundEnd) {
+            const targetAudioTime = sp.soundOffset + (outputTime - soundStart)
+            if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) {
+              audio.currentTime = targetAudioTime
+            }
+            if (audio.paused) audio.play().catch(() => {})
+          } else {
+            if (!audio.paused) audio.pause()
+          }
         }
       }
 
@@ -363,15 +492,29 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       vid.pause()
       setIsPlaying(false)
     } else {
-      // Resume from current playhead position
       const idx = playingSegIdxRef.current
       const seg = segments[idx]
       if (seg) {
-        const segEnd = seg.end ?? duration
-        // If video time is outside current segment, seek to segment start
-        if (vid.currentTime < seg.start || vid.currentTime >= segEnd) {
-          vid.currentTime = seg.start
-          setCurrentTime(seg.start)
+        if (videoPlaylist && videoPlaylist.length > 0) {
+          // Playlist mode: ensure correct source is loaded, time is local (0-based)
+          const item = videoPlaylist[idx]
+          if (item && vid.src !== item.url) {
+            vid.src = item.url
+            vid.load()
+            setPlaylistMirrored(item.isMirrored || false)
+          }
+          const segDuration = seg.end - seg.start
+          if (vid.currentTime < 0 || vid.currentTime >= segDuration) {
+            vid.currentTime = 0
+            setCurrentTime(0)
+          }
+        } else {
+          // Combined mode: cumulative timestamps
+          const segEnd = seg.end ?? duration
+          if (vid.currentTime < seg.start || vid.currentTime >= segEnd) {
+            vid.currentTime = seg.start
+            setCurrentTime(seg.start)
+          }
         }
       }
       vid.play().catch(err => console.warn('Video play failed:', err))
@@ -407,9 +550,24 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
       if (targetTime <= segDur) {
         // Seek into this segment
         playingSegIdxRef.current = i
-        const seekTime = seg.start + targetTime
-        if (videoRef.current) videoRef.current.currentTime = seekTime
-        setCurrentTime(seekTime)
+        if (videoPlaylist && videoPlaylist.length > 0) {
+          // Playlist mode: swap source and seek local time
+          const item = videoPlaylist[i]
+          if (item && videoRef.current) {
+            if (videoRef.current.src !== item.url) {
+              videoRef.current.src = item.url
+              videoRef.current.load()
+              setPlaylistMirrored(item.isMirrored || false)
+            }
+            videoRef.current.currentTime = targetTime
+          }
+          setCurrentTime(targetTime)
+        } else {
+          // Combined mode: cumulative seek
+          const seekTime = seg.start + targetTime
+          if (videoRef.current) videoRef.current.currentTime = seekTime
+          setCurrentTime(seekTime)
+        }
         setOutputPlayheadFrac(frac)
         // Also select this segment
         if (seg.id !== selectedSegmentId) {
@@ -618,15 +776,18 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   }, [showSelfieOverlay])
 
   // Sync trimStart/trimEnd changes back to the selected segment
+  // Skip during reorder drag to prevent corrupting segment data when indices shift
   useEffect(() => {
     if (syncingRef.current) { syncingRef.current = false; return }
+    if (reorderDragIdx !== null) return
     if (selectedSegmentIdx === -1) return
     setSegments(prev => {
       const seg = prev[selectedSegmentIdx]
+      if (!seg) return prev
       if (seg.start === trimStart && seg.end === trimEnd) return prev
       return prev.map((s, i) => i === selectedSegmentIdx ? { ...s, start: trimStart, end: trimEnd } : s)
     })
-  }, [trimStart, trimEnd, selectedSegmentIdx])
+  }, [trimStart, trimEnd, selectedSegmentIdx, reorderDragIdx])
 
   const selectSegment = (id) => {
     const seg = segments.find(s => s.id === id)
@@ -710,18 +871,19 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   const getSegmentThumbnails = (seg) => {
     if (duration <= 0) return thumbnails
     const segEnd = seg.end ?? duration
+    const segDur = segEnd - seg.start
+    // Determine how many thumbs to show for this segment (proportional to its share of total,
+    // at least 1, capped at THUMB_COUNT)
+    const count = Math.max(1, Math.min(THUMB_COUNT, Math.round((segDur / duration) * THUMB_COUNT)))
     const result = []
-    for (let i = 0; i < THUMB_COUNT; i++) {
-      const thumbTime = (duration / THUMB_COUNT) * (i + 0.5)
-      if (thumbTime >= seg.start && thumbTime <= segEnd) {
-        result.push(thumbnails[i])
-      }
-    }
-    if (result.length === 0) {
-      const midTime = (seg.start + segEnd) / 2
+    for (let j = 0; j < count; j++) {
+      // Evenly-spaced sample time within this segment
+      const sampleTime = seg.start + (segDur / count) * (j + 0.5)
+      // Find the nearest pre-extracted thumbnail
       let bestIdx = 0, bestDist = Infinity
       for (let i = 0; i < THUMB_COUNT; i++) {
-        const d = Math.abs((duration / THUMB_COUNT) * (i + 0.5) - midTime)
+        const thumbTime = (duration / THUMB_COUNT) * (i + 0.5)
+        const d = Math.abs(thumbTime - sampleTime)
         if (d < bestDist) { bestDist = d; bestIdx = i }
       }
       result.push(thumbnails[bestIdx])
@@ -755,33 +917,37 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }, [segPointerDown, reorderDragIdx, segments, selectedSegmentId])
 
-  // Segment reorder drag
+  // Segment reorder drag — use ref to always read latest index in listeners
+  const reorderDragIdxRef = useRef(reorderDragIdx)
+  reorderDragIdxRef.current = reorderDragIdx
   useEffect(() => {
     if (reorderDragIdx === null) return
     const onMove = (e) => {
+      const idx = reorderDragIdxRef.current
+      if (idx === null) return
       const clientX = e.touches ? e.touches[0].clientX : e.clientX
       const segElements = timelineRef.current?.querySelectorAll('.video-editor-segment')
       if (!segElements || segElements.length < 2) return
       // Swap with adjacent neighbor if pointer crosses its midpoint
-      if (reorderDragIdx > 0) {
-        const leftRect = segElements[reorderDragIdx - 1].getBoundingClientRect()
+      if (idx > 0) {
+        const leftRect = segElements[idx - 1].getBoundingClientRect()
         if (clientX < leftRect.left + leftRect.width / 2) {
-          const fromIdx = reorderDragIdx
           setSegments(prev => {
-            const next = [...prev]; [next[fromIdx - 1], next[fromIdx]] = [next[fromIdx], next[fromIdx - 1]]; return next
+            const next = [...prev]; [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]; return next
           })
-          setReorderDragIdx(fromIdx - 1)
+          reorderDragIdxRef.current = idx - 1
+          setReorderDragIdx(idx - 1)
           return
         }
       }
-      if (reorderDragIdx < segElements.length - 1) {
-        const rightRect = segElements[reorderDragIdx + 1].getBoundingClientRect()
+      if (idx < segElements.length - 1) {
+        const rightRect = segElements[idx + 1].getBoundingClientRect()
         if (clientX > rightRect.left + rightRect.width / 2) {
-          const fromIdx = reorderDragIdx
           setSegments(prev => {
-            const next = [...prev]; [next[fromIdx + 1], next[fromIdx]] = [next[fromIdx], next[fromIdx + 1]]; return next
+            const next = [...prev]; [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]; return next
           })
-          setReorderDragIdx(fromIdx + 1)
+          reorderDragIdxRef.current = idx + 1
+          setReorderDragIdx(idx + 1)
           return
         }
       }
@@ -832,12 +998,12 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
         <video
           ref={videoRef}
           src={videoUrl}
-          className={`video-editor-video ${isMirrored ? 'mirrored' : ''}`}
+          className={`video-editor-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}`}
           playsInline
           preload="auto"
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
+          onPause={() => { if (!playlistSwappingRef.current) setIsPlaying(false) }}
         />
         {!isPlaying && (
           <div className="video-editor-play-btn">

@@ -69,6 +69,14 @@ router.patch(
   usersController.togglePrivacy
 );
 
+// POST /api/users/:id/media-access - Grant media library access
+router.post(
+  '/:id/media-access',
+  requireAuth,
+  validate(userIdParamSchema),
+  usersController.grantMediaAccess
+);
+
 // GET /api/users/:id/follow-requests - List pending follow requests
 router.get(
   '/:id/follow-requests',

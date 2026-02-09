@@ -7,6 +7,7 @@ import { getPartyColor } from '../data/mockData'
 import { usersApi, reelsApi } from '../services/api'
 import '../styling/MyProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
+import { isImageUrl } from '../utils/media'
 
 // Activity type colors and icons (same as CandidateProfile)
 const activityConfig = {
@@ -762,7 +763,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                   className="post-item"
                   onClick={() => handlePostClick(index)}
                 >
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -773,7 +774,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnail || post} alt={`Post ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Post ${index + 1}`} />
                   )}
                 </div>
               ))
@@ -802,7 +803,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
                     </svg>
                   </div>
-                  {repost.videoUrl ? (
+                  {repost.videoUrl && !isImageUrl(repost.videoUrl) ? (
                     <video
                       src={repost.videoUrl}
                       muted
@@ -810,7 +811,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                       className={repost.isMirrored ? 'mirrored' : ''}
                     />
                   ) : (
-                    <img src={repost.thumbnail || repost} alt={`Repost ${index + 1}`} />
+                    <img src={repost.videoUrl || repost.thumbnailUrl || repost.thumbnail || repost} alt={`Repost ${index + 1}`} />
                   )}
                 </div>
               ))
@@ -831,7 +832,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                   className="post-item"
                   onClick={() => handlePostClick(index, 'tagged')}
                 >
-                  {post.videoUrl ? (
+                  {post.videoUrl && !isImageUrl(post.videoUrl) ? (
                     <video
                       src={post.videoUrl}
                       className={post.isMirrored ? 'mirrored' : ''}
@@ -842,7 +843,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                       onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
                     />
                   ) : (
-                    <img src={post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
+                    <img src={post.videoUrl || post.thumbnailUrl || post.thumbnail || post} alt={`Tagged ${index + 1}`} />
                   )}
                 </div>
               ))

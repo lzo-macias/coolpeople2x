@@ -244,6 +244,7 @@ export const getPrivateProfile = async (userId: string): Promise<PrivateProfile>
     isVerified: user.isVerified,
     isPrivate: user.isPrivate,
     isFrozen: user.isFrozen,
+    mediaAccessGranted: user.mediaAccessGranted,
     createdAt: user.createdAt,
     followersCount: user._count.followers,
     followingCount: user._count.following,
@@ -324,6 +325,18 @@ export const updateProfile = async (
   });
 
   return getPrivateProfile(userId);
+};
+
+// -----------------------------------------------------------------------------
+// Grant Media Access
+// -----------------------------------------------------------------------------
+
+export const grantMediaAccess = async (userId: string): Promise<{ mediaAccessGranted: boolean }> => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { mediaAccessGranted: true },
+  });
+  return { mediaAccessGranted: true };
 };
 
 // -----------------------------------------------------------------------------

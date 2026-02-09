@@ -55,6 +55,7 @@ export interface PrivateProfile extends PublicProfile {
   email: string;
   phone: string | null;
   isFrozen: boolean;
+  mediaAccessGranted: boolean;
 
   // Party memberships
   parties: {

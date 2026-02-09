@@ -3,11 +3,14 @@
  * Business logic for reel CRUD, engagement, and feed algorithm
  */
 
+import fs from 'fs/promises';
 import { prisma } from '../../lib/prisma.js';
-import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
+import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '../../lib/errors.js';
 import { recordReelEngagementPoints } from '../points/points.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
-import type { ReelResponse, CreateReelRequest, FeedReel } from './reels.types.js';
+import { combineVideos, cleanupFiles, type VideoSegment } from '../../lib/ffmpeg.js';
+import { getStorage, generateStorageKey } from '../../lib/storage.js';
+import type { ReelResponse, CreateReelRequest, FeedReel, CombineSegment, CombineVideosResponse } from './reels.types.js';
 
 // -----------------------------------------------------------------------------
 // Helpers: Parse hashtags and mentions from description
@@ -910,4 +913,51 @@ const updateAffinity = async (
     update: { score: { increment } },
     create: { userId, targetUserId, score: increment },
   });
+};
+
+// -----------------------------------------------------------------------------
+// Combine Video Segments (server-side FFmpeg)
+// -----------------------------------------------------------------------------
+
+export const combineVideoSegments = async (
+  files: Express.Multer.File[],
+  segments: CombineSegment[]
+): Promise<CombineVideosResponse> => {
+  // Validate segments reference valid file indices
+  for (const seg of segments) {
+    if (seg.fileIndex < 0 || seg.fileIndex >= files.length) {
+      throw new ValidationError(`Invalid fileIndex ${seg.fileIndex}. Must be 0-${files.length - 1}`);
+    }
+    if (seg.startTime < 0 || seg.endTime <= seg.startTime) {
+      throw new ValidationError(`Invalid time range: ${seg.startTime}-${seg.endTime}`);
+    }
+  }
+
+  // Map segments to ffmpeg format
+  const videoSegments: VideoSegment[] = segments.map((seg) => ({
+    filePath: files[seg.fileIndex].path,
+    startTime: seg.startTime,
+    endTime: seg.endTime,
+  }));
+
+  const filesToCleanup: string[] = files.map((f) => f.path);
+
+  try {
+    const { outputPath, duration } = await combineVideos(
+      files.map((f) => f.path),
+      videoSegments
+    );
+    filesToCleanup.push(outputPath);
+
+    // Read output and upload to storage
+    const outputBuffer = await fs.readFile(outputPath);
+    const storage = getStorage();
+    const storageKey = generateStorageKey('reels', 'combined.webm');
+    const videoUrl = await storage.upload(outputBuffer, storageKey, 'video/webm');
+
+    return { videoUrl, duration: Math.round(duration) };
+  } finally {
+    // Clean up all temp files (uploaded + output)
+    await cleanupFiles(filesToCleanup);
+  }
 };

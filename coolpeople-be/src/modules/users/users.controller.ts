@@ -83,6 +83,25 @@ export const togglePrivacy = async (req: Request, res: Response): Promise<void> 
 };
 
 // -----------------------------------------------------------------------------
+// POST /api/users/:id/media-access
+// -----------------------------------------------------------------------------
+
+export const grantMediaAccess = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+
+  if (req.user?.userId !== id) {
+    res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'You can only update your own settings' },
+    });
+    return;
+  }
+
+  const result = await usersService.grantMediaAccess(id);
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/users/:id/follow-requests
 // -----------------------------------------------------------------------------
 
