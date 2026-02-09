@@ -505,8 +505,8 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
           </div>
         )}
 
-        {/* Bottom info - margin-top auto pushes to bottom */}
-        <div className="reel-bottom" style={{ marginTop: 'auto' }}>
+        {/* Bottom section wrapper */}
+        <div className="reel-bottom-wrapper" style={{ marginTop: 'auto' }}>
           {/* Sound name marquee */}
           {(currentMessage?.metadata?.soundName || currentMessage?.reel?.soundName || currentMessage?.reel?.metadata?.soundName) && (
             <div className="reel-sound-marquee">
@@ -522,7 +522,9 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
               </div>
             </div>
           )}
-          <div className="reel-info">
+          {/* Bottom info */}
+          <div className="reel-bottom" style={{ marginTop: 0 }}>
+            <div className="reel-info">
             {/* Direct video - minimal UI: just avatar + username */}
             {isDirectVideo ? (
               <div className="reel-user-row">
@@ -666,6 +668,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
               <span>Nominate</span>
             </button>
           )}
+          </div>
         </div>
       </div>
 

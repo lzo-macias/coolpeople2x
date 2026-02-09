@@ -784,9 +784,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           />
         </div>
 
-        {/* Bottom info */}
-        <div className="reel-bottom">
-          {/* Sound name marquee - above reel info */}
+        {/* Bottom section wrapper */}
+        <div className="reel-bottom-wrapper">
+          {/* Sound name marquee */}
           {(data.soundName || data.metadata?.soundName) && (
             <div className="reel-sound-marquee">
               <svg className="reel-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -801,7 +801,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               </div>
             </div>
           )}
-          <div className="reel-info">
+          {/* Bottom info */}
+          <div className="reel-bottom">
+            <div className="reel-info">
             {/* Reposted by indicator */}
             {data.repostedBy && (
               <button
@@ -1033,6 +1035,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 <span>Nominate</span>
               )}
             </button>
+          </div>
         </div>
       </div>
 
