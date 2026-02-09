@@ -21,6 +21,8 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   )
   const THUMB_COUNT = 10
   const [thumbnails, setThumbnails] = useState(Array(THUMB_COUNT).fill(null))
+  // Per-source thumbnails for playlist mode: { [sourceIdx]: string[] }
+  const [sourceThumbs, setSourceThumbs] = useState({})
   const [showTimelineOptions, setShowTimelineOptions] = useState(false)
   const [dragging, setDragging] = useState(null) // 'left', 'right', 'scrub', 'soundLeft', 'soundRight', 'soundSlide', 'soundMove'
   const dragRef = useRef({ type: null, startX: 0, startVal: 0, startVal2: 0 })
@@ -165,47 +167,36 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
         canvas.height = 56
 
         if (videoPlaylist && videoPlaylist.length > 0) {
-          // ── PLAYLIST MODE: extract thumbs across multiple video sources ──
-          const totalDur = videoPlaylist.reduce((sum, p) => sum + p.duration, 0)
-          const frames = []
-          // Build segment list with cumulative offsets
-          const playlistSegs = []
-          let cumStart = 0
-          for (const p of videoPlaylist) {
-            playlistSegs.push({ url: p.url, mirrored: p.isMirrored || false, start: cumStart, end: cumStart + p.duration, duration: p.duration })
-            cumStart += p.duration
-          }
-          // Preload all playlist videos
-          const vidEls = {}
-          for (const ps of playlistSegs) {
-            if (!vidEls[ps.url]) {
-              const { vid } = await loadAndProbe(ps.url)
-              vidEls[ps.url] = vid
-            }
-          }
-          for (let i = 0; i < THUMB_COUNT; i++) {
+          // ── PLAYLIST MODE: extract thumbs per source for correct segment mapping ──
+          const perSource = {}
+          for (let si = 0; si < videoPlaylist.length; si++) {
             if (cancelled) return
-            const time = (totalDur / THUMB_COUNT) * (i + 0.5)
-            // Find which playlist segment this falls in
-            const ps = playlistSegs.find(s => time >= s.start && time < s.end) || playlistSegs[playlistSegs.length - 1]
-            const localTime = time - ps.start
-            const vid = vidEls[ps.url]
-            vid.currentTime = Math.min(localTime, ps.duration - 0.01)
-            await new Promise((resolve) => {
-              const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
-              vid.addEventListener('seeked', onSeeked)
-              setTimeout(resolve, 1000)
-            })
-            try {
-              if (ps.mirrored) { ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1) }
-              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
-              if (ps.mirrored) ctx.restore()
-              frames.push(canvas.toDataURL('image/jpeg', 0.5))
-            } catch { frames.push(null) }
+            const p = videoPlaylist[si]
+            const { vid, dur } = await loadAndProbe(p.url)
+            if (cancelled) { vid.src = ''; vid.load(); return }
+            const sourceDur = dur > 0 ? dur : p.duration
+            const count = Math.max(2, Math.min(THUMB_COUNT, Math.round((p.duration / videoPlaylist.reduce((s, x) => s + x.duration, 0)) * THUMB_COUNT * 2)))
+            const frames = []
+            for (let i = 0; i < count; i++) {
+              if (cancelled) { vid.src = ''; vid.load(); return }
+              const time = (sourceDur / count) * (i + 0.5)
+              vid.currentTime = Math.min(time, sourceDur - 0.01)
+              await new Promise((resolve) => {
+                const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve() }
+                vid.addEventListener('seeked', onSeeked)
+                setTimeout(resolve, 1000)
+              })
+              try {
+                if (p.isMirrored) { ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1) }
+                ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+                if (p.isMirrored) ctx.restore()
+                frames.push({ time, dataUrl: canvas.toDataURL('image/jpeg', 0.5) })
+              } catch { frames.push({ time, dataUrl: null }) }
+            }
+            vid.src = ''; vid.load()
+            perSource[si] = { frames, duration: sourceDur }
           }
-          // Cleanup
-          for (const vid of Object.values(vidEls)) { vid.src = ''; vid.load() }
-          if (!cancelled) setThumbnails(frames)
+          if (!cancelled) setSourceThumbs(perSource)
         } else {
           // ── SINGLE VIDEO MODE ──
           const { vid, dur } = await loadAndProbe(videoUrl)
@@ -883,17 +874,35 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
   }
 
   const getSegmentThumbnails = (seg) => {
+    // Playlist mode: use per-source thumbnails
+    if (seg.sourceIdx != null && sourceThumbs[seg.sourceIdx]) {
+      const { frames, duration: srcDur } = sourceThumbs[seg.sourceIdx]
+      const segEnd = seg.end ?? srcDur
+      const segDur = segEnd - seg.start
+      const totalDur = segments.reduce((sum, s) => sum + ((s.end ?? duration) - s.start), 0)
+      const count = Math.max(1, Math.min(THUMB_COUNT, Math.round((segDur / totalDur) * THUMB_COUNT)))
+      const result = []
+      for (let j = 0; j < count; j++) {
+        const sampleTime = seg.start + (segDur / count) * (j + 0.5)
+        // Find nearest extracted thumbnail for this source
+        let bestIdx = 0, bestDist = Infinity
+        for (let i = 0; i < frames.length; i++) {
+          const d = Math.abs(frames[i].time - sampleTime)
+          if (d < bestDist) { bestDist = d; bestIdx = i }
+        }
+        result.push(frames[bestIdx].dataUrl)
+      }
+      return result
+    }
+
+    // Single-video mode: use flat thumbnails array
     if (duration <= 0) return thumbnails
     const segEnd = seg.end ?? duration
     const segDur = segEnd - seg.start
-    // Determine how many thumbs to show for this segment (proportional to its share of total,
-    // at least 1, capped at THUMB_COUNT)
     const count = Math.max(1, Math.min(THUMB_COUNT, Math.round((segDur / duration) * THUMB_COUNT)))
     const result = []
     for (let j = 0; j < count; j++) {
-      // Evenly-spaced sample time within this segment
       const sampleTime = seg.start + (segDur / count) * (j + 0.5)
-      // Find the nearest pre-extracted thumbnail
       let bestIdx = 0, bestDist = Infinity
       for (let i = 0; i < THUMB_COUNT; i++) {
         const thumbTime = (duration / THUMB_COUNT) * (i + 0.5)
