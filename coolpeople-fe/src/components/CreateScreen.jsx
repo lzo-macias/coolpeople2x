@@ -1035,13 +1035,12 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           playlist.push({ url: items[i].url, duration: dur, isMirrored: items[i].isMirrored })
         }
 
-        // Build cumulative segments (for sound sync / segment loop)
-        const segments = []
-        let cumTime = 0
-        for (const p of playlist) {
-          segments.push({ start: cumTime, end: cumTime + p.duration })
-          cumTime += p.duration
-        }
+        // Build segments with local times + source index (for VideoEditor)
+        const segments = playlist.map((p, i) => ({
+          start: 0,
+          end: p.duration,
+          sourceIdx: i,
+        }))
 
         setRecordedVideoUrl(playlist[0].url)
         setRecordedVideoBase64(playlist[0].url.startsWith('data:') ? playlist[0].url : null)
@@ -1615,31 +1614,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       try {
         const segments = postData.segments || videoEdits?.segments || []
 
-        // Map each segment back to its playlist source with local time range
-        const ranges = []
-        let cumTime = 0
-        for (const p of videoPlaylist) {
-          ranges.push({ start: cumTime, end: cumTime + p.duration, url: p.url, isMirrored: p.isMirrored || false })
-          cumTime += p.duration
-        }
-
-        // Deduplicate playlist URLs and map to file indices
+        // Deduplicate playlist URLs and map to file indices for upload
         const uniqueUrls = [...new Set(videoPlaylist.map(p => p.url))]
         const urlToIndex = new Map(uniqueUrls.map((url, i) => [url, i]))
 
-        // Build segments with fileIndex references
-        const serverSegments = segments.map(seg => {
-          let rangeIdx = 0
-          for (let r = 0; r < ranges.length; r++) {
-            if (seg.start >= ranges[r].start - 0.001) rangeIdx = r
-          }
-          const range = ranges[rangeIdx]
-          return {
-            fileIndex: urlToIndex.get(range.url),
-            startTime: seg.start - range.start,
-            endTime: seg.end - range.start,
-          }
-        })
+        // Build segments with fileIndex from sourceIdx (segments use local times)
+        const serverSegments = segments.map(seg => ({
+          fileIndex: urlToIndex.get(videoPlaylist[seg.sourceIdx].url),
+          startTime: seg.start,
+          endTime: seg.end,
+        }))
 
         setCombineProgress(0.1) // Fetching blobs
 

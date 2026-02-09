@@ -41,23 +41,23 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       const playlist = playlistRef.current
       const t = vid.currentTime
 
-      if (playlist && segs && segs.length > 0) {
-        // ── PLAYLIST MODE: each segment = separate video source, time is local (0-based) ──
+      if (playlist && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+        // ── PLAYLIST MODE: each segment tracks its source via sourceIdx ──
         const idx = previewSegIdxRef.current
         const seg = segs[idx]
         if (seg) {
-          const segDuration = seg.end - seg.start
-          if (t >= segDuration - 0.05) {
+          if (t >= seg.end - 0.05) {
             const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
             previewSegIdxRef.current = nextIdx
-            const nextItem = playlist[nextIdx]
+            const nextSeg = segs[nextIdx]
+            const nextItem = playlist[nextSeg.sourceIdx]
             if (nextItem && vid.src !== nextItem.url) {
               playlistSwappingRef.current = true
               vid.src = nextItem.url
               vid.load()
               setPlaylistMirrored(nextItem.isMirrored || false)
             }
-            vid.currentTime = 0
+            vid.currentTime = nextSeg.start
             vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
           }
         }
@@ -120,14 +120,14 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
       previewSegIdxRef.current = 0
-      if (videoPlaylist && videoPlaylist.length > 0) {
-        // Playlist mode: ensure first source is loaded, start at time 0
-        const firstItem = videoPlaylist[0]
+      if (videoPlaylist && videoPlaylist.length > 0 && localSegments && localSegments.length > 0 && localSegments[0].sourceIdx != null) {
+        // Playlist mode: load first segment's source
+        const firstItem = videoPlaylist[localSegments[0].sourceIdx]
         if (firstItem) {
           videoRef.current.src = firstItem.url
           setPlaylistMirrored(firstItem.isMirrored || false)
         }
-        videoRef.current.currentTime = 0
+        videoRef.current.currentTime = localSegments[0].start
       } else {
         const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
         videoRef.current.currentTime = startTime
@@ -152,14 +152,14 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       // Resuming from VideoEditor — restart video from first segment
       if (videoRef.current && recordedVideoUrl) {
         previewSegIdxRef.current = 0
-        if (videoPlaylist && videoPlaylist.length > 0) {
-          const firstItem = videoPlaylist[0]
+        if (videoPlaylist && videoPlaylist.length > 0 && localSegments && localSegments.length > 0 && localSegments[0].sourceIdx != null) {
+          const firstItem = videoPlaylist[localSegments[0].sourceIdx]
           if (firstItem && videoRef.current.src !== firstItem.url) {
             videoRef.current.src = firstItem.url
             videoRef.current.load()
             setPlaylistMirrored(firstItem.isMirrored || false)
           }
-          videoRef.current.currentTime = 0
+          videoRef.current.currentTime = localSegments[0].start
         } else {
           const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)
           videoRef.current.currentTime = startTime
@@ -696,15 +696,16 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                 const vid = videoRef.current
                 if (!vid) return
                 previewSegIdxRef.current = 0
-                if (videoPlaylist && videoPlaylist.length > 0) {
-                  const firstItem = videoPlaylist[0]
+                const segs = previewStateRef.current.segments
+                if (videoPlaylist && videoPlaylist.length > 0 && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+                  const firstItem = videoPlaylist[segs[0].sourceIdx]
                   if (firstItem && vid.src !== firstItem.url) {
                     playlistSwappingRef.current = true
                     vid.src = firstItem.url
                     vid.load()
                     setPlaylistMirrored(firstItem.isMirrored || false)
                   }
-                  vid.currentTime = 0
+                  vid.currentTime = segs[0].start
                   vid.play().then(() => { playlistSwappingRef.current = false }).catch(() => { playlistSwappingRef.current = false })
                 } else {
                   const startTime = localSegments && localSegments.length > 0 ? localSegments[0].start : (localTrimStart || 0)

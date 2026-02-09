@@ -62,22 +62,22 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       const playlist = playlistRef.current
       const t = vid.currentTime
 
-      if (playlist && segs && segs.length > 0) {
-        // ── PLAYLIST MODE: each segment = separate video source ──
+      if (playlist && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+        // ── PLAYLIST MODE: each segment tracks its source via sourceIdx ──
         const idx = editPlaybackRef.current.segIdx
         const seg = segs[idx]
         if (seg) {
-          const segDuration = seg.end - seg.start
-          if (t >= segDuration - 0.05) {
+          if (t >= seg.end - 0.05) {
             const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
             editPlaybackRef.current.segIdx = nextIdx
-            const nextItem = playlist[nextIdx]
+            const nextSeg = segs[nextIdx]
+            const nextItem = playlist[nextSeg.sourceIdx]
             if (nextItem && vid.src !== nextItem.url) {
               vid.src = nextItem.url
               vid.load()
               setPlaylistMirrored(nextItem.isMirrored || false)
             }
-            vid.currentTime = 0
+            vid.currentTime = nextSeg.start
             vid.play().catch(() => {})
           }
         }
@@ -229,6 +229,16 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   useEffect(() => {
     if (videoRef.current && recordedVideoUrl) {
       const segs = videoEdits?.segments
+      const playlist = playlistRef.current
+      // In playlist mode, load the first segment's source
+      if (playlist && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+        const firstItem = playlist[segs[0].sourceIdx]
+        if (firstItem && videoRef.current.src !== firstItem.url) {
+          videoRef.current.src = firstItem.url
+          videoRef.current.load()
+        }
+        setPlaylistMirrored(firstItem?.isMirrored || false)
+      }
       const startTime = segs && segs.length > 0 ? segs[0].start : trimStart
       videoRef.current.currentTime = startTime
       editPlaybackRef.current.segIdx = 0
@@ -254,13 +264,14 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       if (videoRef.current && recordedVideoUrl) {
         const segs = videoEdits?.segments
         const playlist = playlistRef.current
-        // In playlist mode, reset to first source
-        if (playlist && playlist.length > 0) {
-          if (videoRef.current.src !== playlist[0].url) {
-            videoRef.current.src = playlist[0].url
+        // In playlist mode, reset to first segment's source
+        if (playlist && playlist.length > 0 && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+          const firstItem = playlist[segs[0].sourceIdx]
+          if (firstItem && videoRef.current.src !== firstItem.url) {
+            videoRef.current.src = firstItem.url
             videoRef.current.load()
           }
-          setPlaylistMirrored(playlist[0].isMirrored || false)
+          setPlaylistMirrored(firstItem?.isMirrored || false)
         }
         const startTime = segs && segs.length > 0 ? segs[0].start : trimStart
         videoRef.current.currentTime = startTime
@@ -290,12 +301,9 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           outputTime += segs[i].end - segs[i].start
         }
         if (segs[idx]) {
-          // In playlist mode, currentTime is local (0-based per source)
-          // In combined mode, currentTime is global (cumulative)
-          const localTime = playlistRef.current
-            ? video.currentTime
-            : Math.max(0, video.currentTime - segs[idx].start)
-          outputTime += localTime
+          // Elapsed time within the current segment (works for both playlist and combined mode)
+          const elapsed = Math.max(0, video.currentTime - segs[idx].start)
+          outputTime += elapsed
         }
         return outputTime
       } else {
@@ -1445,18 +1453,19 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               if (!vid) return
               const playlist = playlistRef.current
               const { segments: segs, trimStart: ts } = editStateRef.current
-              if (playlist && segs && segs.length > 0) {
-                // Playlist mode: swap to next source
+              if (playlist && segs && segs.length > 0 && segs[0].sourceIdx != null) {
+                // Playlist mode: swap to next source using sourceIdx
                 const idx = editPlaybackRef.current.segIdx
                 const nextIdx = idx < segs.length - 1 ? idx + 1 : 0
                 editPlaybackRef.current.segIdx = nextIdx
-                const nextItem = playlist[nextIdx]
+                const nextSeg = segs[nextIdx]
+                const nextItem = playlist[nextSeg.sourceIdx]
                 if (nextItem && vid.src !== nextItem.url) {
                   vid.src = nextItem.url
                   vid.load()
                   setPlaylistMirrored(nextItem.isMirrored || false)
                 }
-                vid.currentTime = 0
+                vid.currentTime = nextSeg.start
                 vid.play().catch(() => {})
               } else if (segs && segs.length > 0) {
                 const idx = editPlaybackRef.current.segIdx
