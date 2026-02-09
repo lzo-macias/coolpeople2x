@@ -1653,8 +1653,21 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
 
         videoUrl = result.data.videoUrl
         postDuration = result.data.duration
-        // FFmpeg stream copy doesn't alter mirroring — preserve source mirror state for the player
+        // FFmpeg doesn't alter mirroring — preserve source mirror state for the player
         postMirrored = videoPlaylist.every(p => p.isMirrored)
+
+        // Recalculate segments for the combined video: convert local source times
+        // to cumulative timestamps so ReelCard plays the single file correctly
+        let cumulative = 0
+        const combinedSegments = segments.map(seg => {
+          const dur = seg.end - seg.start
+          const newSeg = { start: cumulative, end: cumulative + dur }
+          cumulative += dur
+          return newSeg
+        })
+        postData.segments = combinedSegments
+        postData.trimStart = 0
+        postData.trimEnd = cumulative
       } catch (err) {
         console.error('Failed to combine playlist for post:', err)
         // Fall through with first video as fallback

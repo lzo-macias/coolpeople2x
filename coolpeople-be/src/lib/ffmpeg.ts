@@ -58,7 +58,10 @@ const getVideoDuration = async (filePath: string): Promise<number> => {
 };
 
 /**
- * Trim a single segment from a video file using stream copy.
+ * Trim a single segment from a video file.
+ * When re-encoding, places -ss after -i for frame-accurate seeking and
+ * normalises resolution to 1080x1920 so segments from different sources
+ * can be concatenated without glitches.
  */
 const trimSegment = async (
   inputPath: string,
@@ -67,16 +70,19 @@ const trimSegment = async (
   outputPath: string,
   reencode: boolean = false
 ): Promise<void> => {
-  const args = [
-    '-y',
-    '-ss', String(startTime),
-    '-t', String(duration),
-    '-i', inputPath,
-  ];
+  const args: string[] = ['-y'];
 
   if (reencode) {
-    args.push('-c:v', 'libvpx-vp9', '-b:v', '2M', '-c:a', 'libopus');
+    // Frame-accurate: decode from beginning, then seek
+    args.push('-i', inputPath, '-ss', String(startTime), '-t', String(duration));
+    // Scale + pad to 1080x1920 so all segments have matching dimensions
+    args.push(
+      '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black',
+      '-c:v', 'libvpx-vp9', '-b:v', '8M', '-c:a', 'libopus', '-ar', '48000', '-ac', '2',
+    );
   } else {
+    // Fast seek before input for stream copy (keyframe-aligned)
+    args.push('-ss', String(startTime), '-t', String(duration), '-i', inputPath);
     args.push('-c', 'copy');
   }
 
@@ -106,7 +112,7 @@ const concatFiles = async (
   ];
 
   if (reencode) {
-    args.push('-c:v', 'libvpx-vp9', '-b:v', '2M', '-c:a', 'libopus');
+    args.push('-c:v', 'libvpx-vp9', '-b:v', '8M', '-c:a', 'libopus', '-ar', '48000', '-ac', '2');
   } else {
     args.push('-c', 'copy');
   }
@@ -135,8 +141,14 @@ export const combineVideos = async (
   const trimmedPaths: string[] = [];
   const outputPath = tmpFile('.webm');
 
+  // Detect if segments reference multiple distinct source files.
+  // Different sources likely have different codecs/resolutions, so we must
+  // re-encode to produce a clean, glitch-free combined video.
+  const uniqueSources = new Set(segments.map((s) => s.filePath));
+  const forceReencode = uniqueSources.size > 1;
+
   // If only one segment with no trimming needed, just use the file directly
-  if (segments.length === 1) {
+  if (segments.length === 1 && !forceReencode) {
     const seg = segments[0];
     const dur = seg.endTime - seg.startTime;
 
@@ -149,35 +161,39 @@ export const combineVideos = async (
     }
   }
 
-  try {
-    // Step 1: Trim each segment
+  if (forceReencode) {
+    // Multi-source: always re-encode for frame-accurate trimming and
+    // consistent codec/resolution across all segments.
     for (const seg of segments) {
       const trimmedPath = tmpFile('.webm');
       trimmedPaths.push(trimmedPath);
       const duration = seg.endTime - seg.startTime;
-      await trimSegment(seg.filePath, seg.startTime, duration, trimmedPath);
-    }
-
-    // Step 2: Concatenate all trimmed segments
-    await concatFiles(trimmedPaths, outputPath);
-  } catch (err) {
-    // Fallback: re-encode if stream copy failed (codec mismatch)
-    console.warn('FFmpeg stream copy failed, falling back to re-encode:', err);
-
-    // Clean up any partial output
-    await fs.unlink(outputPath).catch(() => {});
-
-    // Re-trim with re-encoding
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const trimmedPath = trimmedPaths[i] || tmpFile('.webm');
-      if (!trimmedPaths[i]) trimmedPaths.push(trimmedPath);
-      const duration = seg.endTime - seg.startTime;
       await trimSegment(seg.filePath, seg.startTime, duration, trimmedPath, true);
     }
+    await concatFiles(trimmedPaths, outputPath, false); // concat demuxer with stream copy (already re-encoded to same format)
+  } else {
+    // Single source: try stream copy first, fall back to re-encode
+    try {
+      for (const seg of segments) {
+        const trimmedPath = tmpFile('.webm');
+        trimmedPaths.push(trimmedPath);
+        const duration = seg.endTime - seg.startTime;
+        await trimSegment(seg.filePath, seg.startTime, duration, trimmedPath);
+      }
+      await concatFiles(trimmedPaths, outputPath);
+    } catch (err) {
+      console.warn('FFmpeg stream copy failed, falling back to re-encode:', err);
+      await fs.unlink(outputPath).catch(() => {});
 
-    // Re-concat with re-encoding
-    await concatFiles(trimmedPaths, outputPath, true);
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const trimmedPath = trimmedPaths[i] || tmpFile('.webm');
+        if (!trimmedPaths[i]) trimmedPaths.push(trimmedPath);
+        const duration = seg.endTime - seg.startTime;
+        await trimSegment(seg.filePath, seg.startTime, duration, trimmedPath, true);
+      }
+      await concatFiles(trimmedPaths, outputPath, true);
+    }
   }
 
   // Clean up trimmed intermediates
