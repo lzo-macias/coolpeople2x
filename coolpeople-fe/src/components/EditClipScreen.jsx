@@ -885,6 +885,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       const segments = videoEdits?.segments || []
       const hasMultipleSegments = segments.length > 1
       const isPlaylistMode = videoPlaylist && videoPlaylist.length > 1
+      let videoCombined = false // Track if segments were baked into the video
 
       // Combine segments server-side via FFmpeg when there are multiple segments
       // (either from a multi-source playlist or a single video split into parts)
@@ -919,6 +920,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             const result = await reelsApi.combineVideos(formData)
             videoUrl = result.data.videoUrl
             storyDuration = result.data.duration
+            videoCombined = true
           } else {
             // Single video with multiple segments: upload the one source video
             const serverSegments = segments.map(seg => ({
@@ -940,6 +942,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             const result = await reelsApi.combineVideos(formData)
             videoUrl = result.data.videoUrl
             storyDuration = result.data.duration
+            videoCombined = true
           }
         } catch (err) {
           console.error('Failed to combine segments for story:', err)
@@ -1010,22 +1013,28 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       storyDuration = Math.max(1, Math.min(60, storyDuration))
 
       // Create story via backend API
+      // When video was combined server-side, segments/trim are already baked into
+      // the video file — don't pass them as metadata or the player will re-apply
+      // them on top of the already-edited video, causing wrong playback.
       await storiesApi.createStory({
         videoUrl,
         duration: storyDuration,
-        // Pass all edits as metadata so the story player can render them
         metadata: {
           isMirrored: isMirrored || false,
           ...(textOverlays && textOverlays.length > 0 && { textOverlays }),
-          trimStart: trimStart ?? 0,
-          trimEnd: trimEnd ?? null,
+          // Only pass trim/segment metadata when the video was NOT pre-combined
+          ...(videoCombined ? {} : {
+            trimStart: trimStart ?? 0,
+            trimEnd: trimEnd ?? null,
+          }),
           ...(videoEdits && {
             soundOffset: videoEdits.soundOffset,
             soundStartFrac: videoEdits.soundStartFrac ?? 0,
             soundEndFrac: videoEdits.soundEndFrac ?? 1,
             videoVolume: videoEdits.videoVolume,
             soundVolume: videoEdits.soundVolume,
-            segments: videoEdits.segments || null,
+            // Segments are baked into combined video — don't re-apply
+            ...(videoCombined ? {} : { segments: videoEdits.segments || null }),
           }),
           ...(selectedSound && {
             soundUrl: selectedSound.audioUrl,
