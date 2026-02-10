@@ -133,8 +133,9 @@ function AppContent() {
       if (!isAuthenticated) return
       try {
         const response = await storiesApi.getFeed()
-        if (response.data && response.data.length > 0) {
-          setUserStories(response.data)
+        const feedData = response.data?.storyFeed || response.data || []
+        if (Array.isArray(feedData) && feedData.length > 0) {
+          setUserStories(feedData)
         }
       } catch (error) {
         console.log('Using mock stories:', error.message)

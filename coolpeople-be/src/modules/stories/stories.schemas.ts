@@ -20,13 +20,14 @@ export const storyIdParamSchema = z.object({
 
 export const createStorySchema = z.object({
   body: z.object({
-    videoUrl: z.string().url('Invalid video URL'),
+    videoUrl: z.string(),
     thumbnailUrl: z.string().url('Invalid thumbnail URL').optional(),
     duration: z
       .number()
       .int()
       .min(1, 'Story must be at least 1 second')
       .max(60, 'Story must be at most 60 seconds'),
+    metadata: z.record(z.any()).optional(),
   }),
 });
 

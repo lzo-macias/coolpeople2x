@@ -77,6 +77,22 @@ router.post(
   usersController.grantMediaAccess
 );
 
+// POST /api/users/:id/contacts/sync - Sync device contacts from phone
+router.post(
+  '/:id/contacts/sync',
+  requireAuth,
+  validate(userIdParamSchema),
+  usersController.syncContacts
+);
+
+// GET /api/users/:id/contacts - Get synced device contacts
+router.get(
+  '/:id/contacts',
+  requireAuth,
+  validate(userIdParamSchema),
+  usersController.getContacts
+);
+
 // GET /api/users/:id/follow-requests - List pending follow requests
 router.get(
   '/:id/follow-requests',

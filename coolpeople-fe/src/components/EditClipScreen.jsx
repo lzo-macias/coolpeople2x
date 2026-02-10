@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import AddSound from './AddSound'
 import VideoEditor from './VideoEditor'
-import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, favoritesApi } from '../services/api'
+import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, favoritesApi, storiesApi, reelsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
@@ -52,6 +52,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [isPostingStory, setIsPostingStory] = useState(false)
   const searchTimeoutRef = useRef(null)
 
   // Video editor state — initialize from parent props (CreateScreen is source of truth)
@@ -873,6 +874,98 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       setIsSending(false)
     }
   }
+
+  const handleAddToStory = async () => {
+    if (isPostingStory) return
+    setIsPostingStory(true)
+    try {
+      let videoUrl = recordedVideoBase64 || recordedVideoUrl || ''
+      let storyDuration = 10
+
+      // If playlist mode, combine segments via FFmpeg on backend
+      if (videoPlaylist && videoPlaylist.length > 1) {
+        try {
+          const segments = videoEdits?.segments || []
+          const uniqueUrls = [...new Set(videoPlaylist.map(p => p.url))]
+          const urlToIndex = new Map(uniqueUrls.map((url, i) => [url, i]))
+
+          const serverSegments = segments.map(seg => ({
+            fileIndex: urlToIndex.get(videoPlaylist[seg.sourceIdx].url),
+            startTime: seg.start,
+            endTime: seg.end,
+          }))
+
+          const blobs = await Promise.all(
+            uniqueUrls.map(async (url) => {
+              const resp = await fetch(url)
+              return resp.blob()
+            })
+          )
+
+          const formData = new FormData()
+          blobs.forEach((blob, i) => {
+            formData.append('videos', blob, `video-${i}.webm`)
+          })
+          formData.append('segments', JSON.stringify(serverSegments))
+
+          const result = await reelsApi.combineVideos(formData)
+          videoUrl = result.data.videoUrl
+          storyDuration = result.data.duration
+        } catch (err) {
+          console.error('Failed to combine playlist for story:', err)
+        }
+      } else {
+        // Estimate duration from trim or video element
+        if (trimEnd && trimStart != null) {
+          storyDuration = Math.round(trimEnd - trimStart)
+        } else if (videoRef.current?.duration) {
+          storyDuration = Math.round(videoRef.current.duration)
+        }
+      }
+
+      // Clamp to story max (60s) and min (1s)
+      storyDuration = Math.max(1, Math.min(60, storyDuration))
+
+      // Create story via backend API
+      await storiesApi.createStory({
+        videoUrl,
+        duration: storyDuration,
+        // Pass all edits as metadata so the story player can render them
+        metadata: {
+          isMirrored: isMirrored || false,
+          ...(textOverlays && textOverlays.length > 0 && { textOverlays }),
+          trimStart: trimStart ?? 0,
+          trimEnd: trimEnd ?? null,
+          ...(videoEdits && {
+            soundOffset: videoEdits.soundOffset,
+            soundStartFrac: videoEdits.soundStartFrac ?? 0,
+            soundEndFrac: videoEdits.soundEndFrac ?? 1,
+            videoVolume: videoEdits.videoVolume,
+            soundVolume: videoEdits.soundVolume,
+            segments: videoEdits.segments || null,
+          }),
+          ...(selectedSound && {
+            soundUrl: selectedSound.audioUrl,
+            soundName: selectedSound.name,
+          }),
+          ...(mentionMeta.length > 0 && { mentions: mentionMeta }),
+          ...((isNominateMode || quotedReel) && showSelfieOverlay && selfieSize && {
+            showSelfieOverlay: true,
+            selfieSize,
+            selfiePosition: selfiePosition || { x: 16, y: 80 },
+          }),
+        },
+      })
+
+      // Close and show confirmation
+      onCompleteToScoreboard?.()
+    } catch (error) {
+      console.error('Failed to post story:', error)
+    } finally {
+      setIsPostingStory(false)
+    }
+  }
+
   const [pillPosition, setPillPosition] = useState({ x: 20, y: null }) // y: null means use default bottom position
   const [isDragging, setIsDragging] = useState(false)
   const raceInputRef = useRef(null)
@@ -911,6 +1004,9 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const [selectedMentionUser, setSelectedMentionUser] = useState(null)
   const [mentionMeta, setMentionMeta] = useState([]) // tracks {username, type: 'tag'|'nominate', userId}
   const mentionSearchTimeoutRef = useRef(null)
+  const [deviceContacts, setDeviceContacts] = useState([])
+  const [loadingDeviceContacts, setLoadingDeviceContacts] = useState(false)
+  const deviceContactsFetchedRef = useRef(false)
 
   // Reuse fetched platform users for mentions (users + parties)
   const mentionPlatformUsers = fetchedPlatformUsers.map(u => ({
@@ -921,14 +1017,80 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
     type: u.type || 'user',
   }))
 
-  const mentionContactUsers = []
+  // Device contacts synced from phone → stored on backend → fetched on all devices
+  const mentionContactUsers = deviceContacts
 
-  // Fetch users when mention picker opens
+  // On native mobile: read device contacts and sync to backend
+  const syncDeviceContactsToBackend = useCallback(async () => {
+    const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()
+    if (!isCapacitor || !authUser?.id) return
+
+    try {
+      const { Contacts } = await import('@capacitor-community/contacts')
+      const permResult = await Contacts.requestPermissions()
+      if (permResult.contacts !== 'granted' && permResult.contacts !== 'limited') return
+
+      const result = await Contacts.getContacts({
+        projection: { name: true, phones: true, image: false },
+      })
+      const toSync = (result.contacts || [])
+        .filter(c => c.name?.display || c.phones?.length)
+        .map(c => ({
+          name: c.name?.display || c.phones?.[0]?.number || 'Unknown',
+          phone: c.phones?.[0]?.number || null,
+        }))
+
+      if (toSync.length > 0) {
+        await usersApi.syncContacts(authUser.id, toSync)
+      }
+    } catch (e) {
+      console.warn('Failed to sync device contacts:', e)
+    }
+  }, [authUser?.id])
+
+  // Fetch contacts from backend API (works on all devices)
+  const fetchDeviceContacts = useCallback(async () => {
+    if (!authUser?.id || loadingDeviceContacts) return
+    setLoadingDeviceContacts(true)
+    try {
+      const res = await usersApi.getContacts(authUser.id)
+      const contacts = (res.data?.contacts || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone || null,
+        username: null,
+        avatar: null,
+        type: 'device-contact',
+      }))
+      setDeviceContacts(contacts)
+      deviceContactsFetchedRef.current = true
+    } catch (e) {
+      console.warn('Failed to fetch contacts:', e)
+    } finally {
+      setLoadingDeviceContacts(false)
+    }
+  }, [authUser?.id, loadingDeviceContacts])
+
+  // Fetch platform users when mention picker opens
   useEffect(() => {
     if (showMentionPicker && fetchedPlatformUsers.length === 0) {
       fetchPanelUsers()
     }
   }, [showMentionPicker, fetchedPlatformUsers.length, fetchPanelUsers])
+
+  // On mobile native: sync device contacts to backend when mention picker opens
+  useEffect(() => {
+    if (showMentionPicker) {
+      syncDeviceContactsToBackend()
+    }
+  }, [showMentionPicker, syncDeviceContactsToBackend])
+
+  // Fetch contacts from backend when user switches to contacts tab
+  useEffect(() => {
+    if (showMentionPicker && mentionSource === 'contacts' && !deviceContactsFetchedRef.current) {
+      fetchDeviceContacts()
+    }
+  }, [showMentionPicker, mentionSource, fetchDeviceContacts])
 
   // Debounced live search for mention picker - finds ANY user or party on the platform
   useEffect(() => {
@@ -1834,6 +1996,14 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                     {isMentionSearching && mentionQuery.trim() && (
                       <div className="mention-searching-indicator">Searching...</div>
                     )}
+                    {mentionSource === 'contacts' && loadingDeviceContacts && (
+                      <div className="mention-searching-indicator">Loading contacts...</div>
+                    )}
+                    {mentionSource === 'contacts' && !loadingDeviceContacts && deviceContacts.length === 0 && deviceContactsFetchedRef.current && (
+                      <div className="mention-no-results">
+                        Open CoolPeople on your phone to sync contacts
+                      </div>
+                    )}
                     {getFilteredMentionUsers().map(user => (
                       <div
                         key={`${user.type || 'user'}-${user.id}`}
@@ -1870,8 +2040,10 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                         </div>
                       </div>
                     ))}
-                    {!isMentionSearching && mentionQuery.trim() && getFilteredMentionUsers().length === 0 && (
-                      <div className="mention-no-results">No users or parties found</div>
+                    {!isMentionSearching && !loadingDeviceContacts && mentionQuery.trim() && getFilteredMentionUsers().length === 0 && (
+                      <div className="mention-no-results">
+                        {mentionSource === 'contacts' ? 'No contacts match' : 'No users or parties found'}
+                      </div>
                     )}
                   </div>
                   <button className="mention-picker-close" onClick={() => { setShowMentionPicker(false); setSelectedMentionUser(null) }}>
@@ -1975,16 +2147,16 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               <span>drafts</span>
             </button>
             <button
-              className={`edit-clip-story-btn ${!canProceed ? 'disabled' : ''}`}
-              disabled={!canProceed}
-              onClick={() => onCompleteToScoreboard?.()}
+              className={`edit-clip-story-btn ${!canProceed || isPostingStory ? 'disabled' : ''}`}
+              disabled={!canProceed || isPostingStory}
+              onClick={handleAddToStory}
             >
               <img
-                src="https://i.pravatar.cc/40?img=3"
+                src={authUser?.avatarUrl || 'https://i.pravatar.cc/40?img=3'}
                 alt="Profile"
                 className="edit-clip-story-avatar"
               />
-              <span>your story</span>
+              <span>{isPostingStory ? 'posting...' : 'your story'}</span>
             </button>
             <button className="edit-clip-send-friends-btn" onClick={() => setShowUserPanel(true)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -670,6 +670,10 @@
   object-fit: cover;
 }
 
+.story-content video.mirrored {
+  transform: scaleX(-1);
+}
+
 .story-tagged-user {
   position: absolute;
   bottom: 100px;

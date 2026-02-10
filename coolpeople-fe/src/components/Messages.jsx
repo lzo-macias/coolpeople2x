@@ -278,7 +278,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           id: story.id,
           userId: story.user.id,
           username: story.user.username || story.user.displayName,
-          avatar: story.user.avatarUrl,
+          avatar: story.user.party?.avatarUrl || story.user.avatarUrl,
           hasUnread: true,
           party: story.user.party,
           stories: [story],
@@ -608,11 +608,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       }
 
       try {
-        // Fetch stories
+        // Fetch stories feed (grouped by user)
         const storiesRes = await storiesApi.getFeed()
-        if (storiesRes.data) {
-          const validStories = filterExpiredStories(storiesRes.data)
-          setStories(validStories)
+        const feedData = storiesRes.data?.storyFeed || storiesRes.data || []
+        if (Array.isArray(feedData) && feedData.length > 0) {
+          setStories(feedData)
         }
       } catch (error) {
         console.log('Failed to fetch stories:', error.message)
@@ -1317,26 +1317,66 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
   }
 
-  // Get stories users (excluding 'add'), including user's own stories
-  const userStoryItems = (userStories || []).map((story, idx) => ({
-    id: `user-story-${idx}`,
-    username: 'Your Story',
-    avatar: story.image,
-    hasUnread: false,
-    party: story.party,
-    isOwnStory: true,
-    stories: [{
-      id: story.id,
-      image: story.videoUrl || story.image,
-      videoUrl: story.videoUrl,
-      timestamp: 'Just now',
-      taggedUser: story.taggedUser,
-    }]
-  }))
+  // Build story users list from API feed data
+  // 1st slot: logged-in user's own story (from stories state or null)
+  // Remaining: followed + favorited users' stories, most recent first
+  const buildStoryUsers = () => {
+    const feedGroups = stories || []
+    const ownUserId = currentUser?.id
 
-  // Combine user stories with mock stories
-  const allStoryUsers = [...userStoryItems, ...mockStories.filter(s => !s.isAdd)]
-  const storyUsers = allStoryUsers
+    // Find logged-in user's own stories in the feed (they won't be there from the API,
+    // since the feed only returns followed/favorited users' stories)
+    // We fetch own stories separately via userStories prop (which is the full feed from App.jsx)
+    // OR from the stories state if the user follows themselves (unlikely)
+    let ownGroup = feedGroups.find(g => (g.userId || g.user?.id) === ownUserId)
+
+    // Also check userStories prop for own stories (App.jsx fetches the full feed into this)
+    if (!ownGroup && userStories && userStories.length > 0) {
+      const ownFromProp = userStories.find(g => (g.userId || g.user?.id) === ownUserId)
+      if (ownFromProp) ownGroup = ownFromProp
+    }
+
+    // Build the logged-in user's story item (always first)
+    const ownStoryItem = {
+      id: 'own-story',
+      username: 'Your Story',
+      avatar: userParty?.photo || userParty?.avatarUrl || currentUser?.avatar || currentUser?.avatarUrl || '',
+      hasUnread: false,
+      isOwnStory: true,
+      hasStory: !!ownGroup,
+      stories: ownGroup
+        ? (ownGroup.stories || []).map(s => ({
+            id: s.id,
+            image: s.videoUrl || s.thumbnailUrl,
+            videoUrl: s.videoUrl,
+            metadata: s.metadata || null,
+            timestamp: s.createdAt ? new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+          }))
+        : [],
+    }
+
+    // Other users' stories (exclude own)
+    const otherGroups = feedGroups
+      .filter(g => (g.userId || g.user?.id) !== ownUserId)
+      .map(g => ({
+        id: g.user?.id || g.userId,
+        username: g.user?.username || g.user?.displayName || 'User',
+        avatar: g.user?.party?.avatarUrl || g.user?.avatarUrl || g.avatar || '',
+        hasUnread: g.hasUnviewed ?? g.hasUnread ?? false,
+        isOwnStory: false,
+        stories: (g.stories || []).map(s => ({
+          id: s.id,
+          image: s.videoUrl || s.thumbnailUrl,
+          videoUrl: s.videoUrl,
+          metadata: s.metadata || null,
+          timestamp: s.createdAt ? new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        })),
+      }))
+
+    return [ownStoryItem, ...otherGroups]
+  }
+
+  const storyUsers = buildStoryUsers()
 
   // Story navigation handlers
   const openStory = (userIndex, e) => {
@@ -1657,6 +1697,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           {currentStory.videoUrl ? (
             <video
               src={currentStory.videoUrl}
+              className={currentStory.metadata?.isMirrored ? 'mirrored' : ''}
               autoPlay
               loop
               playsInline
@@ -2205,31 +2246,48 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           <button className="messages-see-all">See all</button>
         </div>
         <div className="messages-stories-row">
-          {/* Add story button */}
-          <div
-            className="messages-story-item"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setShowLivePhoto(true)
-            }}
-          >
-            <div className="messages-story-add">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+          {/* 1st slot: logged-in user's story (empty add graphic or filled) */}
+          {storyUsers.length > 0 && storyUsers[0].isOwnStory && (
+            <div
+              className="messages-story-item"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (storyUsers[0].hasStory && storyUsers[0].stories.length > 0) {
+                  openStory(0, e)
+                } else {
+                  setShowLivePhoto(true)
+                }
+              }}
+            >
+              {storyUsers[0].hasStory ? (
+                <div className="messages-story-avatar own-story has-unread">
+                  <img src={storyUsers[0].avatar} alt="Your Story" />
+                </div>
+              ) : (
+                <div className="messages-story-add">
+                  <img
+                    src={currentUser?.avatar || currentUser?.avatarUrl || ''}
+                    alt="Your Story"
+                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', opacity: 0.5 }}
+                  />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ position: 'absolute' }}>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+              )}
+              <span className="messages-story-name">Your Story</span>
             </div>
-            <span className="messages-story-name">Add Story</span>
-          </div>
+          )}
 
-          {/* User stories and other stories */}
-          {storyUsers.map((story, index) => (
+          {/* Other users' stories (followed + favorited, most recent first) */}
+          {storyUsers.slice(1).map((story, index) => (
             <div
               key={story.id}
               className="messages-story-item"
-              onClick={(e) => openStory(index, e)}
+              onClick={(e) => openStory(index + 1, e)}
             >
-              <div className={`messages-story-avatar ${story.hasUnread ? 'has-unread' : ''} ${story.isOwnStory ? 'own-story' : ''}`}>
+              <div className={`messages-story-avatar ${story.hasUnread ? 'has-unread' : ''}`}>
                 <img src={story.avatar} alt={story.username} />
               </div>
               <span className="messages-story-name">{story.username}</span>

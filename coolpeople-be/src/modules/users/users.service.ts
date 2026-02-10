@@ -340,6 +340,50 @@ export const grantMediaAccess = async (userId: string): Promise<{ mediaAccessGra
 };
 
 // -----------------------------------------------------------------------------
+// Sync Device Contacts (from phone/iMessage)
+// Upserts contacts by phone number so re-syncing is idempotent
+// -----------------------------------------------------------------------------
+
+export const syncDeviceContacts = async (
+  userId: string,
+  contacts: { name: string; phone?: string | null }[]
+): Promise<{ synced: number }> => {
+  let synced = 0;
+  for (const contact of contacts) {
+    if (!contact.phone) continue;
+    await prisma.deviceContact.upsert({
+      where: { userId_phone: { userId, phone: contact.phone } },
+      create: { userId, name: contact.name, phone: contact.phone },
+      update: { name: contact.name },
+    });
+    synced++;
+  }
+  // Also insert contacts without phone numbers (name-only)
+  const nameOnly = contacts.filter(c => !c.phone && c.name);
+  if (nameOnly.length > 0) {
+    await prisma.deviceContact.createMany({
+      data: nameOnly.map(c => ({ userId, name: c.name, phone: null })),
+      skipDuplicates: true,
+    });
+    synced += nameOnly.length;
+  }
+  return { synced };
+};
+
+// -----------------------------------------------------------------------------
+// Get Device Contacts
+// Returns all synced device contacts for a user
+// -----------------------------------------------------------------------------
+
+export const getDeviceContacts = async (userId: string) => {
+  return prisma.deviceContact.findMany({
+    where: { userId },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, phone: true },
+  });
+};
+
+// -----------------------------------------------------------------------------
 // Toggle Privacy (Participants Only)
 // -----------------------------------------------------------------------------
 

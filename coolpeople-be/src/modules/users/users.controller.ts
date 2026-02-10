@@ -102,6 +102,44 @@ export const grantMediaAccess = async (req: Request, res: Response): Promise<voi
 };
 
 // -----------------------------------------------------------------------------
+// POST /api/users/:id/contacts/sync
+// -----------------------------------------------------------------------------
+
+export const syncContacts = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+
+  if (req.user?.userId !== id) {
+    res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'You can only sync your own contacts' },
+    });
+    return;
+  }
+
+  const result = await usersService.syncDeviceContacts(id, req.body.contacts);
+  sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/users/:id/contacts
+// -----------------------------------------------------------------------------
+
+export const getContacts = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+
+  if (req.user?.userId !== id) {
+    res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'You can only view your own contacts' },
+    });
+    return;
+  }
+
+  const contacts = await usersService.getDeviceContacts(id);
+  sendSuccess(res, { contacts });
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/users/:id/follow-requests
 // -----------------------------------------------------------------------------
 

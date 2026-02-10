@@ -153,6 +153,14 @@ export const usersApi = {
   grantMediaAccess: (userId) => apiFetch(`/api/users/${userId}/media-access`, {
     method: 'POST',
   }),
+
+  // Device contacts (synced from phone)
+  getContacts: (userId) => apiFetch(`/api/users/${userId}/contacts`),
+
+  syncContacts: (userId, contacts) => apiFetch(`/api/users/${userId}/contacts/sync`, {
+    method: 'POST',
+    body: JSON.stringify({ contacts }),
+  }),
 };
 
 // =============================================================================

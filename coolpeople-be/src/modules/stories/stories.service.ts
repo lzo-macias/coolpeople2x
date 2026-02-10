@@ -20,10 +20,16 @@ const formatStory = (story: any, viewerId?: string): StoryResponse => {
       username: story.user.username,
       displayName: story.user.displayName,
       avatarUrl: story.user.avatarUrl,
+      party: story.user.party ? {
+        id: story.user.party.id,
+        name: story.user.party.name,
+        avatarUrl: story.user.party.avatarUrl,
+      } : null,
     },
     videoUrl: story.videoUrl,
     thumbnailUrl: story.thumbnailUrl,
     duration: story.duration,
+    metadata: story.metadata ?? null,
     viewCount: story._count?.views ?? 0,
     isViewed: viewerId
       ? story.views?.some((v: any) => v.userId === viewerId)
@@ -36,7 +42,10 @@ const formatStory = (story: any, viewerId?: string): StoryResponse => {
 // Story includes
 const storyIncludes = (viewerId?: string) => ({
   user: {
-    select: { id: true, username: true, displayName: true, avatarUrl: true },
+    select: {
+      id: true, username: true, displayName: true, avatarUrl: true,
+      party: { select: { id: true, name: true, avatarUrl: true } },
+    },
   },
   _count: { select: { views: true } },
   ...(viewerId && {
@@ -61,6 +70,7 @@ export const createStory = async (
       videoUrl: data.videoUrl,
       thumbnailUrl: data.thumbnailUrl,
       duration: data.duration,
+      metadata: data.metadata ?? undefined,
       expiresAt,
     },
     include: storyIncludes(userId),
@@ -78,6 +88,11 @@ export const createStory = async (
       username: story.user.username,
       displayName: story.user.displayName ?? undefined,
       avatarUrl: story.user.avatarUrl ?? undefined,
+      party: story.user.party ? {
+        id: story.user.party.id,
+        name: story.user.party.name,
+        avatarUrl: story.user.party.avatarUrl,
+      } : null,
     },
   }).catch(() => {}); // Fire and forget
 
@@ -131,16 +146,16 @@ export const getStoryFeed = async (
 ): Promise<StoryFeedGroup[]> => {
   const now = new Date();
 
-  // Get all active stories from followed users
+  // Get all active stories from: own, followed users, and favorited users
   const stories = await prisma.story.findMany({
     where: {
       deletedAt: null,
       expiresAt: { gt: now },
-      user: {
-        followers: {
-          some: { followerId: userId },
-        },
-      },
+      OR: [
+        { userId },
+        { user: { followers: { some: { followerId: userId } } } },
+        { user: { favoritedBy: { some: { userId } } } },
+      ],
     },
     orderBy: { createdAt: 'desc' },
     include: storyIncludes(userId),
