@@ -4,8 +4,8 @@
  * using Canvas + MediaRecorder. Returns a blob URL and segment boundaries.
  */
 
-const CANVAS_W = 1080
-const CANVAS_H = 1920
+const DEFAULT_W = 1080
+const DEFAULT_H = 1920
 const FPS = 30
 const IMAGE_DURATION = 5 // seconds per image
 const VIDEO_BITRATE = 16_000_000 // 16 Mbps for high quality output
@@ -27,17 +27,17 @@ function getSupportedMime() {
 
 // Draw media to fill canvas (cover mode — crops to fill, centered)
 // If mirrored, flips horizontally before drawing
-function drawCover(ctx, source, srcW, srcH, mirrored) {
+function drawCover(ctx, source, srcW, srcH, mirrored, canvasW, canvasH) {
   if (mirrored) {
     ctx.save()
-    ctx.translate(CANVAS_W, 0)
+    ctx.translate(canvasW, 0)
     ctx.scale(-1, 1)
   }
-  const scale = Math.max(CANVAS_W / srcW, CANVAS_H / srcH)
+  const scale = Math.max(canvasW / srcW, canvasH / srcH)
   const dw = srcW * scale
   const dh = srcH * scale
-  const dx = (CANVAS_W - dw) / 2
-  const dy = (CANVAS_H - dh) / 2
+  const dx = (canvasW - dw) / 2
+  const dy = (canvasH - dh) / 2
   ctx.drawImage(source, dx, dy, dw, dh)
   if (mirrored) {
     ctx.restore()
@@ -66,7 +66,11 @@ function probeDuration(video) {
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    img.crossOrigin = 'anonymous'
+    // Only set crossOrigin for remote URLs — blob/data URLs are same-origin
+    // and crossOrigin can taint the canvas in Safari, breaking captureStream
+    if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => resolve(img)
     img.onerror = reject
     img.src = url
@@ -77,7 +81,11 @@ function loadImage(url) {
 function loadVideo(url) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
+    // Only set crossOrigin for remote URLs — blob/data URLs are same-origin
+    // and crossOrigin can taint the canvas in Safari, breaking captureStream
+    if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+      video.crossOrigin = 'anonymous'
+    }
     video.preload = 'auto'
     video.muted = true
     video.playsInline = true
@@ -98,15 +106,22 @@ function loadVideo(url) {
 /**
  * Render a single image to the canvas for IMAGE_DURATION seconds.
  * Draws static frames to the canvas while the MediaRecorder captures.
+ * Uses explicit requestFrame() to guarantee each draw is captured.
  */
-function renderImage(ctx, img, durationSec, mirrored, onProgress, progressBase, progressSpan) {
+function renderImage(ctx, img, durationSec, mirrored, onProgress, progressBase, progressSpan, canvasW, canvasH, videoTrack) {
   return new Promise((resolve) => {
     const totalFrames = durationSec * FPS
     let frame = 0
 
     const interval = setInterval(() => {
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
-      drawCover(ctx, img, img.naturalWidth, img.naturalHeight, mirrored)
+      ctx.clearRect(0, 0, canvasW, canvasH)
+      drawCover(ctx, img, img.naturalWidth, img.naturalHeight, mirrored, canvasW, canvasH)
+
+      // Explicitly tell captureStream to grab this frame
+      if (videoTrack && videoTrack.requestFrame) {
+        videoTrack.requestFrame()
+      }
+
       frame++
 
       if (onProgress) {
@@ -126,7 +141,7 @@ function renderImage(ctx, img, durationSec, mirrored, onProgress, progressBase, 
  * Plays the video and draws frames via requestAnimationFrame.
  * Routes audio through AudioContext → destination for MediaRecorder.
  */
-function renderVideo(ctx, videoEl, duration, mirrored, audioCtx, dest, onProgress, progressBase, progressSpan, startTime = 0) {
+function renderVideo(ctx, videoEl, duration, mirrored, audioCtx, dest, onProgress, progressBase, progressSpan, startTime = 0, canvasW = DEFAULT_W, canvasH = DEFAULT_H, videoTrack = null) {
   return new Promise((resolve) => {
     let source = null
     try {
@@ -156,8 +171,13 @@ function renderVideo(ctx, videoEl, duration, mirrored, audioCtx, dest, onProgres
 
     const draw = () => {
       if (videoEl.ended || videoEl.paused) return
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
-      drawCover(ctx, videoEl, videoEl.videoWidth || CANVAS_W, videoEl.videoHeight || CANVAS_H, mirrored)
+      ctx.clearRect(0, 0, canvasW, canvasH)
+      drawCover(ctx, videoEl, videoEl.videoWidth || canvasW, videoEl.videoHeight || canvasH, mirrored, canvasW, canvasH)
+
+      // Explicitly tell captureStream to grab this frame
+      if (videoTrack && videoTrack.requestFrame) {
+        videoTrack.requestFrame()
+      }
 
       if (onProgress && duration > 0) {
         const elapsed = videoEl.currentTime - startTime
@@ -231,22 +251,58 @@ export async function combineMediaItems(items, onProgress, options = {}) {
   }
 
   const totalDuration = loaded.reduce((sum, l) => sum + l.duration, 0)
+  const hasVideo = loaded.some(l => l.type === 'video')
+
+  // Determine canvas dimensions from the first item, capped to max 1920 on longest side
+  const first = loaded[0]
+  let canvasW, canvasH
+  if (first.type === 'video') {
+    canvasW = first.video.videoWidth || DEFAULT_W
+    canvasH = first.video.videoHeight || DEFAULT_H
+  } else {
+    canvasW = first.img.naturalWidth || DEFAULT_W
+    canvasH = first.img.naturalHeight || DEFAULT_H
+  }
+  const maxDim = 1920
+  if (canvasW > maxDim || canvasH > maxDim) {
+    const scale = maxDim / Math.max(canvasW, canvasH)
+    canvasW = Math.round(canvasW * scale)
+    canvasH = Math.round(canvasH * scale)
+  }
 
   // Phase 2: Set up Canvas + AudioContext + MediaRecorder
   const canvas = document.createElement('canvas')
-  canvas.width = CANVAS_W
-  canvas.height = CANVAS_H
+  canvas.width = canvasW
+  canvas.height = canvasH
   const ctx = canvas.getContext('2d')
 
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-  const dest = audioCtx.createMediaStreamDestination()
+  // Use captureStream(0) — only captures when we explicitly call requestFrame()
+  // This is more reliable than captureStream(FPS) which depends on Chrome detecting
+  // canvas changes (unreliable for static images redrawn via setInterval)
+  const canvasStream = canvas.captureStream(0)
+  const videoTrack = canvasStream.getVideoTracks()[0]
 
-  // Combine canvas video stream with audio stream
-  const canvasStream = canvas.captureStream(FPS)
-  const combinedStream = new MediaStream([
-    ...canvasStream.getVideoTracks(),
-    ...dest.stream.getAudioTracks(),
-  ])
+  // Build the stream for MediaRecorder
+  let combinedStream
+  let audioCtx = null
+  let dest = null
+
+  if (hasVideo) {
+    // Only add audio track when there are actual videos with audio
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    // Ensure AudioContext is running (may be suspended if user gesture expired)
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume()
+    }
+    dest = audioCtx.createMediaStreamDestination()
+    combinedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...dest.stream.getAudioTracks(),
+    ])
+  } else {
+    // Images only — video-only stream, no audio needed
+    combinedStream = canvasStream
+  }
 
   const chunks = []
   const recorder = new MediaRecorder(combinedStream, {
@@ -260,6 +316,14 @@ export async function combineMediaItems(items, onProgress, options = {}) {
   const recordingStopped = new Promise((resolve) => {
     recorder.onstop = () => resolve()
   })
+
+  // Draw first frame before starting recorder so it has initial content
+  if (loaded[0].type === 'image') {
+    drawCover(ctx, loaded[0].img, loaded[0].img.naturalWidth, loaded[0].img.naturalHeight, loaded[0].mirrored, canvasW, canvasH)
+  }
+  if (videoTrack && videoTrack.requestFrame) {
+    videoTrack.requestFrame()
+  }
 
   recorder.start(100)
 
@@ -275,22 +339,32 @@ export async function combineMediaItems(items, onProgress, options = {}) {
     segments.push({ start: currentTime, end: currentTime + item.duration })
 
     if (item.type === 'image') {
-      await renderImage(ctx, item.img, item.duration, item.mirrored, onProgress, progressBase, progressSpan)
+      await renderImage(ctx, item.img, item.duration, item.mirrored, onProgress, progressBase, progressSpan, canvasW, canvasH, videoTrack)
     } else {
-      await renderVideo(ctx, item.video, item.duration, item.mirrored, audioCtx, dest, onProgress, progressBase, progressSpan, item.startTime)
+      await renderVideo(ctx, item.video, item.duration, item.mirrored, audioCtx, dest, onProgress, progressBase, progressSpan, item.startTime, canvasW, canvasH, videoTrack)
     }
 
     currentTime += item.duration
   }
 
   // Phase 4: Stop recording and produce output
+  // IMPORTANT: Stop recorder first, then wait for it to flush all data,
+  // THEN stop the canvas stream tracks. Stopping tracks before the recorder
+  // finishes causes data loss (empty/broken blob).
   recorder.stop()
-  canvasStream.getTracks().forEach((t) => t.stop())
   await recordingStopped
+  canvasStream.getTracks().forEach((t) => t.stop())
 
-  await audioCtx.close()
+  if (audioCtx) {
+    await audioCtx.close()
+  }
 
   const blob = new Blob(chunks, { type: mimeType })
+
+  if (blob.size === 0) {
+    throw new Error('Recording produced empty output — no frames were captured')
+  }
+
   const blobUrl = URL.createObjectURL(blob)
 
   if (onProgress) onProgress(1)

@@ -1038,13 +1038,17 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         } else if (media.identifier && isCapacitor) {
           const path = await resolveCapacitorMediaPath(media)
           if (path) url = window.Capacitor?.convertFileSrc?.(path) || path
+        } else if (media.blob) {
+          url = URL.createObjectURL(media.blob)
         } else if (media.type === 'image') {
           url = media.thumbnail
         } else {
           url = media.videoUrl
         }
         if (url) {
-          items.push({ type: media.type, url, isMirrored: media.isMirrored || false })
+          // Detect actual type — drafts always say 'video' but may contain images
+          const actualType = (url.startsWith('data:image/') || media.type === 'image') ? 'image' : media.type
+          items.push({ type: actualType, url, isMirrored: media.isMirrored || false })
         }
       }
 
@@ -1094,12 +1098,13 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         const result = await combineMediaItems(items, (p) => setCombineProgress(p))
         setRecordedVideoUrl(result.blobUrl)
         setRecordedVideoBase64(null)
+        // Convert to base64 in background (non-blocking) so edit screen opens immediately
         try {
-          const resp = await fetch(result.blobUrl)
-          const blob = await resp.blob()
-          const reader = new FileReader()
-          reader.onloadend = () => setRecordedVideoBase64(reader.result)
-          reader.readAsDataURL(blob)
+          fetch(result.blobUrl).then(resp => resp.blob()).then(blob => {
+            const reader = new FileReader()
+            reader.onloadend = () => setRecordedVideoBase64(reader.result)
+            reader.readAsDataURL(blob)
+          }).catch(() => {})
         } catch { /* blob URL still works for this session */ }
         setRecordedWithFrontCamera(false)
         setVideoPlaylist(null)
@@ -1123,6 +1128,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       // Reset multi-select and open editor
       setMultiSelectMode(false)
       setSelectedMediaItems([])
+      setIsFromDeviceMedia(false)
+      setDeviceMediaType(null)
       setShowMediaPanel(false)
       setShowClipConfirm(false)
       setShowEditClipScreen(true)

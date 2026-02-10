@@ -1471,11 +1471,11 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
         ) : recordedVideoUrl && (recordedVideoUrl.startsWith('data:image/') || deviceMediaType === 'image') ? (
           <img
             src={recordedVideoUrl}
-            className={`edit-clip-video${isFromDeviceMedia ? ' device-media' : ''}`}
+            className={`edit-clip-video${(isFromDeviceMedia || isFromDraft) && !lockedDimensions ? ' device-media' : ''}`}
             style={lockedDimensions ? getLockedMediaStyle() : undefined}
             alt=""
             onLoad={(e) => {
-              if (!lockedDimensions && isFromDeviceMedia) {
+              if (!lockedDimensions && (isFromDeviceMedia || isFromDraft)) {
                 setLockedDimensions({ width: e.target.naturalWidth, height: e.target.naturalHeight })
               }
             }}
@@ -1484,13 +1484,13 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           <video
             ref={videoRef}
             src={recordedVideoUrl}
-            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}${(isFromDeviceMedia || videoPlaylist) && !lockedDimensions ? ' device-media' : ''}`}
+            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}${(isFromDeviceMedia || videoPlaylist || isFromDraft) && !lockedDimensions ? ' device-media' : ''}`}
             style={lockedDimensions ? getLockedMediaStyle() : undefined}
             autoPlay
             playsInline
             crossOrigin="anonymous"
             onLoadedMetadata={(e) => {
-              if (!lockedDimensions && (isFromDeviceMedia || videoPlaylist)) {
+              if (!lockedDimensions && (isFromDeviceMedia || videoPlaylist || isFromDraft)) {
                 setLockedDimensions({ width: e.target.videoWidth, height: e.target.videoHeight })
               }
             }}
