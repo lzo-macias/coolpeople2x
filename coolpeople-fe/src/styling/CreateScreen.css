@@ -1753,3 +1753,88 @@
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
 }
+
+/* ─── Posting Loading Overlay ─── */
+.posting-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: posting-fade-in 0.25s ease;
+}
+
+@keyframes posting-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.posting-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.posting-ring {
+  width: 60px;
+  height: 60px;
+}
+
+.posting-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.posting-ring-arc {
+  transform-origin: center;
+  animation: posting-spin 1s linear infinite;
+}
+
+@keyframes posting-spin {
+  to { transform: rotate(360deg); }
+}
+
+.posting-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.posting-step {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.2);
+  transition: color 0.4s ease, transform 0.3s ease;
+  letter-spacing: 0.02em;
+}
+
+.posting-step.active {
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.posting-step.done {
+  color: rgba(255, 255, 255, 0.35);
+  transform: scale(1);
+}
+
+.posting-step.active:not(.done)::after {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  background: #00F2EA;
+  border-radius: 50%;
+  margin-left: 8px;
+  vertical-align: middle;
+  animation: posting-dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes posting-dot-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}

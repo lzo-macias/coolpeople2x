@@ -28,6 +28,10 @@
   object-fit: cover;
 }
 
+.edit-clip-video.device-media {
+  object-fit: contain;
+}
+
 .edit-clip-video.mirrored {
   transform: scaleX(-1);
 }

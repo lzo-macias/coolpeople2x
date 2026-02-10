@@ -6,14 +6,35 @@ import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
 
-function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded }) {
+function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded, isFromDeviceMedia, deviceMediaType }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
   const freezeCanvasRef = useRef(null)
   const soundAudioRef = useRef(null)
+  const previewRef = useRef(null)
+  const [lockedDimensions, setLockedDimensions] = useState(null)
   const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // Compute inline styles that lock the media element to the first clip's aspect ratio
+  const getLockedMediaStyle = () => {
+    if (!lockedDimensions || !previewRef.current) return undefined
+    const cw = previewRef.current.clientWidth
+    const ch = previewRef.current.clientHeight
+    const ar = lockedDimensions.width / lockedDimensions.height
+    const car = cw / ch
+    let w, h
+    if (ar > car) { w = cw; h = cw / ar } else { h = ch; w = ch * ar }
+    return {
+      width: `${w}px`,
+      height: `${h}px`,
+      objectFit: 'cover',
+      position: 'absolute',
+      top: `${(ch - h) / 2}px`,
+      left: `${(cw - w) / 2}px`,
+    }
+  }
 
   // Freeze last frame on canvas before swapping playlist sources to prevent flash
   const freezeFrame = (vid) => {
@@ -1426,7 +1447,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   return (
     <div className="edit-clip-screen">
       {/* Video Preview */}
-      <div className="edit-clip-preview">
+      <div className="edit-clip-preview" ref={previewRef}>
         {/* Main Video */}
         {quotedReel?.videoUrl ? (
           <video
@@ -1447,20 +1468,32 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               height: '100%'
             }}
           />
-        ) : recordedVideoUrl && recordedVideoUrl.startsWith('data:image/') ? (
+        ) : recordedVideoUrl && (recordedVideoUrl.startsWith('data:image/') || deviceMediaType === 'image') ? (
           <img
             src={recordedVideoUrl}
-            className={`edit-clip-video`}
+            className={`edit-clip-video${isFromDeviceMedia ? ' device-media' : ''}`}
+            style={lockedDimensions ? getLockedMediaStyle() : undefined}
             alt=""
+            onLoad={(e) => {
+              if (!lockedDimensions && isFromDeviceMedia) {
+                setLockedDimensions({ width: e.target.naturalWidth, height: e.target.naturalHeight })
+              }
+            }}
           />
         ) : recordedVideoUrl ? (
           <video
             ref={videoRef}
             src={recordedVideoUrl}
-            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}`}
+            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}${(isFromDeviceMedia || videoPlaylist) && !lockedDimensions ? ' device-media' : ''}`}
+            style={lockedDimensions ? getLockedMediaStyle() : undefined}
             autoPlay
             playsInline
             crossOrigin="anonymous"
+            onLoadedMetadata={(e) => {
+              if (!lockedDimensions && (isFromDeviceMedia || videoPlaylist)) {
+                setLockedDimensions({ width: e.target.videoWidth, height: e.target.videoHeight })
+              }
+            }}
             onPlay={() => { setEditIsPlaying(true); unfreezeFrame() }}
             onPause={() => setEditIsPlaying(false)}
             onEnded={() => {
@@ -1508,7 +1541,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
         )}
 
         {/* Freeze-frame canvas: holds last frame during playlist source swap */}
-        <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 2 }} />
+        <canvas ref={freezeCanvasRef} style={{ display: 'none', pointerEvents: 'none', zIndex: 2, ...(lockedDimensions ? getLockedMediaStyle() : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }) }} />
 
         {/* Selfie Overlay - shows in nominate mode or when there's a quoted reel */}
         {(isNominateMode || quotedReel) && recordedVideoUrl && showSelfieOverlay && (
@@ -1534,7 +1567,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
             </div>
-            {recordedVideoUrl.startsWith('data:image/') ? (
+            {(recordedVideoUrl.startsWith('data:image/') || deviceMediaType === 'image') ? (
               <img src={recordedVideoUrl} className="edit-clip-selfie-video" alt="" />
             ) : (
               <video

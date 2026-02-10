@@ -103,6 +103,10 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // Combining state for post-time rendering
   const [isCombiningForPost, setIsCombiningForPost] = useState(false)
 
+  // Posting loading state
+  const [isPosting, setIsPosting] = useState(false)
+  const [postingStep, setPostingStep] = useState(0) // 0=preparing, 1=combining, 2=uploading, 3=finishing
+
   // Filter out drafts older than 30 days
   const filterExpiredDrafts = (draftsArray) => {
     const thirtyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 30
@@ -455,12 +459,27 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   }
 
   // Process files into media items (shared by all access methods)
+  // Determine media type from MIME or extension fallback (browsers often
+  // report an empty file.type for .mov, .heic, .mkv, .avi, .m4v etc.)
+  const classifyMediaFile = (file) => {
+    if (file.type.startsWith('video/')) return 'video'
+    if (file.type.startsWith('image/')) return 'image'
+    // Fallback: match by extension
+    const name = (file.name || '').toLowerCase()
+    const videoExts = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v', '.3gp', '.ogv']
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.bmp', '.svg']
+    if (videoExts.some(ext => name.endsWith(ext))) return 'video'
+    if (imageExts.some(ext => name.endsWith(ext))) return 'image'
+    return null
+  }
+
   const processFilesIntoMedia = async (files) => {
     const newMedia = []
     for (const file of files) {
-      const isVideo = file.type.startsWith('video/')
-      const isImage = file.type.startsWith('image/')
-      if (!isVideo && !isImage) continue
+      const mediaType = classifyMediaFile(file)
+      if (!mediaType) continue
+      const isVideo = mediaType === 'video'
+      const isImage = mediaType === 'image'
 
       const id = `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       let thumbnailBlob = null
@@ -855,6 +874,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   // State for loaded quote nomination draft
   const [loadedQuotedReel, setLoadedQuotedReel] = useState(null)
   const [isLoadedFromDraft, setIsLoadedFromDraft] = useState(false)
+  const [isFromDeviceMedia, setIsFromDeviceMedia] = useState(false)
+  const [deviceMediaType, setDeviceMediaType] = useState(null) // 'image' or 'video'
 
   // Load draft into editor
   const loadDraft = (draft) => {
@@ -912,6 +933,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       setVideoTrimEnd(null)
     }
     setIsLoadedFromDraft(true)
+    setIsFromDeviceMedia(false)
+    setDeviceMediaType(null)
     setShowMediaPanel(false)
     setShowClipConfirm(false)
     setShowEditClipScreen(true)
@@ -928,6 +951,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         // Capacitor file paths need to be converted to web-viewable URLs
         url = window.Capacitor?.convertFileSrc?.(path) || path
       }
+    } else if (media.blob) {
+      // Create a fresh blob URL so revoking old ones doesn't break reopen
+      url = URL.createObjectURL(media.blob)
     } else if (media.type === 'image') {
       url = media.thumbnail
     } else {
@@ -950,6 +976,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setVideoEdits(null)
     setVideoTrimStart(0)
     setVideoTrimEnd(null)
+    setIsFromDeviceMedia(true)
+    setDeviceMediaType(media.type || 'video')
     setShowMediaPanel(false)
     setShowClipConfirm(false)
     setShowEditClipScreen(true)
@@ -1503,6 +1531,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setShowTagFlow(false)
     setLoadedQuotedReel(null)
     setIsLoadedFromDraft(false)
+    setIsFromDeviceMedia(false)
+    setDeviceMediaType(null)
 
     // Reset sound selection and stop audio
     setSelectedSound(null)
@@ -1584,6 +1614,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     setTextOverlays([])
     setLoadedQuotedReel(null)
     setIsLoadedFromDraft(false)
+    setIsFromDeviceMedia(false)
+    setDeviceMediaType(null)
 
     // Reset sound selection and stop audio
     setSelectedSound(null)
@@ -1603,12 +1635,16 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const handlePost = async (postData) => {
     console.log('Posting:', postData)
 
+    setIsPosting(true)
+    setPostingStep(0)
+
     let videoUrl = recordedVideoBase64 || recordedVideoUrl
     let postDuration = recordedDuration || 10
     let postMirrored = recordedWithFrontCamera
 
     // If playlist mode, combine all segments server-side via FFmpeg
     if (videoPlaylist && videoPlaylist.length > 1) {
+      setPostingStep(1)
       setIsCombiningForPost(true)
       setCombineProgress(0)
       try {
@@ -1685,29 +1721,36 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
     // Check if creating a new race (race mode with name but no existing race selected)
     const isCreatingNewRace = selectedMode === 'race' && raceName && !selectedExistingRace
 
+    setPostingStep(2)
+
     // Create the post with video and all data
     if (onPostCreated) {
-      onPostCreated({
-        ...postData,
-        videoUrl,
-        duration: postDuration,
-        isMirrored: postMirrored,
-        targetRace: finalTargetRace,
-        isNomination: selectedMode === 'nominate',
-        taggedUser: selectedTag,
-        textOverlays: textOverlays,
-        // Selfie overlay data (only for nominate/quote mode)
-        selfieSize: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfieSize : undefined,
-        selfiePosition: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfiePosition : undefined,
-        showSelfieOverlay: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay,
-        // Race creation data
-        isCreatingNewRace,
-        selectedExistingRace,
-        raceDeadline: isCreatingNewRace ? raceDeadline : null,
-        raceType: isCreatingNewRace ? raceType : null,
-        winMethod: isCreatingNewRace ? winMethod : null,
-      })
+      try {
+        await onPostCreated({
+          ...postData,
+          videoUrl,
+          duration: postDuration,
+          isMirrored: postMirrored,
+          targetRace: finalTargetRace,
+          isNomination: selectedMode === 'nominate',
+          taggedUser: selectedTag,
+          textOverlays: textOverlays,
+          // Selfie overlay data (only for nominate/quote mode)
+          selfieSize: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfieSize : undefined,
+          selfiePosition: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay ? selfiePosition : undefined,
+          showSelfieOverlay: (selectedMode === 'nominate' || !!loadedQuotedReel) && showSelfieOverlay,
+          // Race creation data
+          isCreatingNewRace,
+          selectedExistingRace,
+          raceDeadline: isCreatingNewRace ? raceDeadline : null,
+          raceType: isCreatingNewRace ? raceType : null,
+          winMethod: isCreatingNewRace ? winMethod : null,
+        })
+      } finally {
+        setIsPosting(false)
+      }
     } else {
+      setIsPosting(false)
       setShowPostScreen(false)
       onClose()
     }
@@ -2302,7 +2345,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*,video/*,.mov,.mp4,.webm,.avi,.mkv,.m4v,.heic,.heif"
         multiple
         style={{ display: 'none' }}
         onChange={handleDeviceFilesSelected}
@@ -2725,6 +2768,8 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           onModeChange={setSelectedMode}
           quotedReel={loadedQuotedReel}
           isFromDraft={isLoadedFromDraft}
+          isFromDeviceMedia={isFromDeviceMedia}
+          deviceMediaType={deviceMediaType}
           selfieSize={selfieSize}
           setSelfieSize={setSelfieSize}
           selfiePosition={selfiePosition}
@@ -2769,19 +2814,29 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         />
       )}
 
-      {/* Combining overlay for playlist post rendering */}
-      {isCombiningForPost && (
-        <div className="media-combine-overlay">
-          <div className="media-combine-modal">
-            <div className="media-loading-spinner" />
-            <p>Uploading & combining video...</p>
-            <div className="media-combine-progress-bar">
-              <div
-                className="media-combine-progress-fill"
-                style={{ width: `${Math.round(combineProgress * 100)}%` }}
-              />
+      {/* Posting loading overlay */}
+      {isPosting && (
+        <div className="posting-overlay">
+          <div className="posting-overlay-content">
+            <div className="posting-ring">
+              <svg viewBox="0 0 60 60">
+                <circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                <circle cx="30" cy="30" r="26" fill="none" stroke="url(#posting-grad)" strokeWidth="3" strokeLinecap="round" strokeDasharray="120 164" className="posting-ring-arc" />
+                <defs>
+                  <linearGradient id="posting-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#00F2EA" />
+                    <stop offset="100%" stopColor="#FF2A55" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
-            <span className="media-combine-percent">{Math.round(combineProgress * 100)}%</span>
+            <div className="posting-steps">
+              <span className={`posting-step ${postingStep >= 0 ? 'active' : ''} ${postingStep > 0 ? 'done' : ''}`}>Preparing</span>
+              {videoPlaylist && videoPlaylist.length > 1 && (
+                <span className={`posting-step ${postingStep >= 1 ? 'active' : ''} ${postingStep > 1 ? 'done' : ''}`}>Combining clips</span>
+              )}
+              <span className={`posting-step ${postingStep >= 2 ? 'active' : ''} ${postingStep > 2 ? 'done' : ''}`}>Publishing</span>
+            </div>
           </div>
         </div>
       )}
