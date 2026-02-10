@@ -81,6 +81,8 @@ export const createStory = async (
     id: story.id,
     videoUrl: story.videoUrl,
     thumbnailUrl: story.thumbnailUrl ?? undefined,
+    duration: story.duration,
+    metadata: story.metadata ?? null,
     createdAt: story.createdAt,
     expiresAt: story.expiresAt,
     user: {

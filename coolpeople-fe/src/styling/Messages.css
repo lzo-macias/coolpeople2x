@@ -661,6 +661,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 .story-content img,
@@ -685,6 +686,120 @@
   color: #fff;
   font-size: 14px;
   font-weight: 500;
+}
+
+/* Story selfie overlay */
+.story-selfie-overlay {
+  position: absolute;
+  z-index: 2;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: #1a1a1a;
+}
+
+.story-selfie-overlay video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-selfie-overlay video.mirrored {
+  transform: scaleX(-1);
+}
+
+/* Story text overlays */
+.story-text-overlay {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.story-text-content {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  white-space: pre-wrap;
+}
+
+.story-text-content .mention-tag {
+  font-weight: 800;
+  color: #fff;
+}
+
+.story-text-content .mention-nominate {
+  font-weight: 800;
+  background: linear-gradient(90deg, #00F2EA, #FF2A55);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Story race pill */
+.story-race-pill {
+  position: absolute;
+  bottom: 120px;
+  left: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: #3D2A1A;
+  color: #E8A855;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 4;
+}
+
+.story-race-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E8A855;
+}
+
+/* Story sound marquee */
+.story-sound-marquee {
+  position: absolute;
+  bottom: 80px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 0 16px 4px;
+  z-index: 4;
+}
+
+.story-sound-icon {
+  color: #fff;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+.story-sound-marquee-track {
+  overflow: hidden;
+  flex: 1;
+  mask-image: linear-gradient(to right, transparent, #000 4px, #000 calc(100% - 8px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 4px, #000 calc(100% - 8px), transparent);
+}
+
+.story-sound-marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  animation: storySoundMarquee 8s linear infinite;
+  padding-left: 25%;
+}
+
+@keyframes storySoundMarquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
 
 .messages-story-avatar.own-story {

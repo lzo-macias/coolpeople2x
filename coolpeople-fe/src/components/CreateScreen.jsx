@@ -1683,7 +1683,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         // Build FormData
         const formData = new FormData()
         blobs.forEach((blob, i) => {
-          formData.append('videos', blob, `video-${i}.webm`)
+          const mime = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
+          const e = mime.includes('webm') ? '.webm' : mime.includes('quicktime') ? '.mov' : '.mp4'
+          formData.append('videos', new File([blob], `video-${i}${e}`, { type: mime }))
         })
         formData.append('segments', JSON.stringify(serverSegments))
 
@@ -1716,6 +1718,47 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         // Fall through with first video as fallback
       } finally {
         setIsCombiningForPost(false)
+      }
+    }
+
+    // Upload blob/data URLs to server to get a persistent URL
+    // (device media uses blob URLs which are ephemeral and won't survive page reload)
+    if (videoUrl && (videoUrl.startsWith('blob:') || videoUrl.startsWith('data:video/'))) {
+      try {
+        const resp = await fetch(videoUrl)
+        const blob = await resp.blob()
+
+        // Probe duration from the blob if we don't have one
+        let probedDuration = postDuration
+        if (!probedDuration || probedDuration <= 1) {
+          probedDuration = await new Promise((resolve) => {
+            const probe = document.createElement('video')
+            probe.preload = 'metadata'
+            probe.onloadedmetadata = () => {
+              resolve(probe.duration && isFinite(probe.duration) ? probe.duration : 30)
+              URL.revokeObjectURL(probe.src)
+            }
+            probe.onerror = () => { resolve(30); URL.revokeObjectURL(probe.src) }
+            probe.src = URL.createObjectURL(blob)
+          })
+        }
+
+        const start = postData.trimStart ?? 0
+        const end = postData.trimEnd ?? probedDuration
+        const serverSegments = [{ fileIndex: 0, startTime: start, endTime: end }]
+        const mimeType = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
+        const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('quicktime') ? '.mov' : '.mp4'
+        const videoFile = new File([blob], `video-0${ext}`, { type: mimeType })
+
+        const formData = new FormData()
+        formData.append('videos', videoFile)
+        formData.append('segments', JSON.stringify(serverSegments))
+
+        const result = await reelsApi.combineVideos(formData)
+        videoUrl = result.data.videoUrl
+        postDuration = result.data.duration
+      } catch (err) {
+        console.error('Failed to upload video for post:', err)
       }
     }
 

@@ -154,10 +154,18 @@ export const combineVideos = async (
 
     // Check if we need to trim at all (segment spans entire file)
     if (seg.startTime < 0.1 && dur > 0) {
-      // Still trim to get the exact time range
-      await trimSegment(seg.filePath, seg.startTime, dur, outputPath);
-      const duration = await getVideoDuration(outputPath);
-      return { outputPath, duration: duration || dur };
+      // Try stream copy first, fall back to re-encode (needed for mp4→webm)
+      try {
+        await trimSegment(seg.filePath, seg.startTime, dur, outputPath);
+        const duration = await getVideoDuration(outputPath);
+        return { outputPath, duration: duration || dur };
+      } catch (err) {
+        console.warn('Stream copy failed for single segment, re-encoding:', err);
+        await fs.unlink(outputPath).catch(() => {});
+        await trimSegment(seg.filePath, seg.startTime, dur, outputPath, true);
+        const duration = await getVideoDuration(outputPath);
+        return { outputPath, duration: duration || dur };
+      }
     }
   }
 

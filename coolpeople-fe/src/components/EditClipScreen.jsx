@@ -882,44 +882,127 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       let videoUrl = recordedVideoBase64 || recordedVideoUrl || ''
       let storyDuration = 10
 
-      // If playlist mode, combine segments via FFmpeg on backend
-      if (videoPlaylist && videoPlaylist.length > 1) {
+      const segments = videoEdits?.segments || []
+      const hasMultipleSegments = segments.length > 1
+      const isPlaylistMode = videoPlaylist && videoPlaylist.length > 1
+
+      // Combine segments server-side via FFmpeg when there are multiple segments
+      // (either from a multi-source playlist or a single video split into parts)
+      if (isPlaylistMode || hasMultipleSegments) {
         try {
-          const segments = videoEdits?.segments || []
-          const uniqueUrls = [...new Set(videoPlaylist.map(p => p.url))]
-          const urlToIndex = new Map(uniqueUrls.map((url, i) => [url, i]))
+          if (isPlaylistMode) {
+            // Multi-source playlist: upload each unique source video
+            const uniqueUrls = [...new Set(videoPlaylist.map(p => p.url))]
+            const urlToIndex = new Map(uniqueUrls.map((url, i) => [url, i]))
 
-          const serverSegments = segments.map(seg => ({
-            fileIndex: urlToIndex.get(videoPlaylist[seg.sourceIdx].url),
-            startTime: seg.start,
-            endTime: seg.end,
-          }))
+            const serverSegments = segments.map(seg => ({
+              fileIndex: urlToIndex.get(videoPlaylist[seg.sourceIdx].url),
+              startTime: seg.start,
+              endTime: seg.end,
+            }))
 
-          const blobs = await Promise.all(
-            uniqueUrls.map(async (url) => {
-              const resp = await fetch(url)
-              return resp.blob()
+            const blobs = await Promise.all(
+              uniqueUrls.map(async (url) => {
+                const resp = await fetch(url)
+                return resp.blob()
+              })
+            )
+
+            const formData = new FormData()
+            blobs.forEach((blob, i) => {
+              const mime = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
+              const e = mime.includes('webm') ? '.webm' : mime.includes('quicktime') ? '.mov' : '.mp4'
+              formData.append('videos', new File([blob], `video-${i}${e}`, { type: mime }))
             })
-          )
+            formData.append('segments', JSON.stringify(serverSegments))
 
-          const formData = new FormData()
-          blobs.forEach((blob, i) => {
-            formData.append('videos', blob, `video-${i}.webm`)
-          })
-          formData.append('segments', JSON.stringify(serverSegments))
+            const result = await reelsApi.combineVideos(formData)
+            videoUrl = result.data.videoUrl
+            storyDuration = result.data.duration
+          } else {
+            // Single video with multiple segments: upload the one source video
+            const serverSegments = segments.map(seg => ({
+              fileIndex: 0,
+              startTime: seg.start,
+              endTime: seg.end,
+            }))
 
-          const result = await reelsApi.combineVideos(formData)
-          videoUrl = result.data.videoUrl
-          storyDuration = result.data.duration
+            const resp = await fetch(videoUrl)
+            const blob = await resp.blob()
+            const mimeType = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
+            const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('quicktime') ? '.mov' : '.mp4'
+            const videoFile = new File([blob], `video-0${ext}`, { type: mimeType })
+
+            const formData = new FormData()
+            formData.append('videos', videoFile)
+            formData.append('segments', JSON.stringify(serverSegments))
+
+            const result = await reelsApi.combineVideos(formData)
+            videoUrl = result.data.videoUrl
+            storyDuration = result.data.duration
+          }
         } catch (err) {
-          console.error('Failed to combine playlist for story:', err)
+          console.error('Failed to combine segments for story:', err)
         }
       } else {
-        // Estimate duration from trim or video element
-        if (trimEnd && trimStart != null) {
-          storyDuration = Math.round(trimEnd - trimStart)
-        } else if (videoRef.current?.duration) {
-          storyDuration = Math.round(videoRef.current.duration)
+        // Single segment or no edits
+        const needsUpload = videoUrl.startsWith('blob:') || videoUrl.startsWith('data:video/')
+
+        if (needsUpload) {
+          // Blob/data URLs are ephemeral — upload via combineVideos to get a persistent server URL
+          try {
+            const resp = await fetch(videoUrl)
+            const blob = await resp.blob()
+
+            // Probe duration from video element or by loading a temporary one
+            let videoDuration = videoRef.current?.duration
+            if (!videoDuration || !isFinite(videoDuration)) {
+              videoDuration = await new Promise((resolve) => {
+                const probe = document.createElement('video')
+                probe.preload = 'metadata'
+                probe.onloadedmetadata = () => {
+                  resolve(probe.duration && isFinite(probe.duration) ? probe.duration : 30)
+                  URL.revokeObjectURL(probe.src)
+                }
+                probe.onerror = () => {
+                  resolve(30)
+                  URL.revokeObjectURL(probe.src)
+                }
+                probe.src = URL.createObjectURL(blob)
+              })
+            }
+
+            const start = trimStart ?? 0
+            const end = trimEnd ?? videoDuration
+            const serverSegments = [{ fileIndex: 0, startTime: start, endTime: end }]
+
+            // Ensure blob has a valid video MIME type (blob URLs often lose type info)
+            const mimeType = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
+            const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('quicktime') ? '.mov' : '.mp4'
+            const videoFile = new File([blob], `video-0${ext}`, { type: mimeType })
+
+            const formData = new FormData()
+            formData.append('videos', videoFile)
+            formData.append('segments', JSON.stringify(serverSegments))
+
+            const result = await reelsApi.combineVideos(formData)
+            videoUrl = result.data.videoUrl
+            storyDuration = result.data.duration
+          } catch (err) {
+            console.error('Failed to upload video for story:', err)
+            if (trimEnd && trimStart != null) {
+              storyDuration = Math.round(trimEnd - trimStart)
+            } else if (videoRef.current?.duration) {
+              storyDuration = Math.round(videoRef.current.duration)
+            }
+          }
+        } else {
+          // Already a persistent URL (http/https) — just estimate duration
+          if (trimEnd && trimStart != null) {
+            storyDuration = Math.round(trimEnd - trimStart)
+          } else if (videoRef.current?.duration) {
+            storyDuration = Math.round(videoRef.current.duration)
+          }
         }
       }
 
@@ -954,6 +1037,10 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             selfieSize,
             selfiePosition: selfiePosition || { x: 16, y: 80 },
           }),
+          ...(raceName && { raceName }),
+          ...(raceName && pillPosition && { pillPosition }),
+          ...(taggedUser && { taggedUser }),
+          ...(isNominateMode && { isNomination: true }),
         },
       })
 

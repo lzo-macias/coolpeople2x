@@ -55,6 +55,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const storyTimerRef = useRef(null)
   const [storyProgress, setStoryProgress] = useState(0)
   const touchStartX = useRef(0)
+  const storyVideoRef = useRef(null)
+  const storySoundRef = useRef(null)
   const activeConversationRef = useRef(null) // Ref to track active conversation for socket handler
   const currentUsername = currentUser?.username || 'User'
 
@@ -1349,6 +1351,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             id: s.id,
             image: s.videoUrl || s.thumbnailUrl,
             videoUrl: s.videoUrl,
+            duration: s.duration || null,
             metadata: s.metadata || null,
             timestamp: s.createdAt ? new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
           }))
@@ -1368,6 +1371,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           id: s.id,
           image: s.videoUrl || s.thumbnailUrl,
           videoUrl: s.videoUrl,
+          duration: s.duration || null,
           metadata: s.metadata || null,
           timestamp: s.createdAt ? new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
         })),
@@ -1390,6 +1394,10 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const closeStory = () => {
     if (storyTimerRef.current) clearInterval(storyTimerRef.current)
+    if (storySoundRef.current) {
+      storySoundRef.current.pause()
+      storySoundRef.current = null
+    }
     setViewingStory(null)
     setStoryProgress(0)
   }
@@ -1420,19 +1428,57 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
   }
 
-  // Story auto-advance timer
+  // Story auto-advance timer — use actual story duration
   useEffect(() => {
     if (viewingStory) {
+      const currentUser = storyUsers[viewingStory.userIndex]
+      const story = currentUser?.stories[viewingStory.storyIndex]
+      const durationSec = story?.duration || 10 // fallback 10s
+      const intervalMs = 100
+      const increment = (intervalMs / (durationSec * 1000)) * 100
+
       storyTimerRef.current = setInterval(() => {
         setStoryProgress(prev => {
           if (prev >= 100) {
             nextStory()
             return 0
           }
-          return prev + 2
+          return prev + increment
         })
-      }, 100)
+      }, intervalMs)
       return () => clearInterval(storyTimerRef.current)
+    }
+  }, [viewingStory?.userIndex, viewingStory?.storyIndex])
+
+  // Story sound + volume setup when story changes
+  useEffect(() => {
+    // Clean up previous sound
+    if (storySoundRef.current) {
+      storySoundRef.current.pause()
+      storySoundRef.current = null
+    }
+    if (!viewingStory) return
+
+    const currentUser = storyUsers[viewingStory.userIndex]
+    if (!currentUser) return
+    const story = currentUser.stories[viewingStory.storyIndex]
+    if (!story?.metadata) return
+
+    const meta = story.metadata
+
+    // Set up sound track if present
+    if (meta.soundUrl) {
+      const audio = new Audio(meta.soundUrl)
+      audio.loop = true
+      const soundVol = meta.soundVolume != null ? meta.soundVolume / 100 : 1
+      audio.volume = Math.max(0, Math.min(1, soundVol))
+
+      // Apply sound offset/trim
+      const soundOffset = meta.soundOffset || 0
+      const soundStartFrac = meta.soundStartFrac ?? 0
+      audio.currentTime = soundOffset + (audio.duration || 0) * soundStartFrac || soundOffset
+      audio.play().catch(() => {})
+      storySoundRef.current = audio
     }
   }, [viewingStory?.userIndex, viewingStory?.storyIndex])
 
@@ -1645,6 +1691,28 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   console.log('>>> RENDERING MESSAGES LIST (no active conversation)')
 
+  // Helper to render text with @mention styling for story overlays
+  const renderStoryTextWithMentions = (text, mentions) => {
+    if (!mentions || mentions.length === 0) return text
+    const parts = []
+    let remaining = text
+    for (const mention of mentions) {
+      const marker = `@${mention.username}`
+      const idx = remaining.indexOf(marker)
+      if (idx === -1) continue
+      if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: 'plain' })
+      parts.push({ text: marker, type: mention.type })
+      remaining = remaining.slice(idx + marker.length)
+    }
+    if (remaining) parts.push({ text: remaining, type: 'plain' })
+    if (parts.length === 0) return text
+    return parts.map((part, i) => {
+      if (part.type === 'nominate') return <span key={i} className="mention-nominate">{part.text}</span>
+      if (part.type === 'tag') return <span key={i} className="mention-tag">{part.text}</span>
+      return <span key={i}>{part.text}</span>
+    })
+  }
+
   // Render Story Viewer as a portal
   const renderStoryViewer = () => {
     if (!viewingStory) return null
@@ -1696,16 +1764,116 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         <div className="story-content">
           {currentStory.videoUrl ? (
             <video
+              ref={storyVideoRef}
               src={currentStory.videoUrl}
-              className={currentStory.metadata?.isMirrored ? 'mirrored' : ''}
+              style={currentStory.metadata?.isMirrored ? { transform: 'scaleX(-1)' } : undefined}
               autoPlay
               loop
               playsInline
-              muted
+              muted={!currentStory.metadata?.videoVolume}
+              onLoadedMetadata={(e) => {
+                const vid = e.target
+                const meta = currentStory.metadata
+                if (!meta) return
+                // Apply trim start
+                const start = meta.trimStart || 0
+                if (start > 0) vid.currentTime = start
+                // Apply video volume
+                if (meta.videoVolume != null) {
+                  vid.volume = Math.max(0, Math.min(1, meta.videoVolume / 100))
+                  vid.muted = meta.videoVolume === 0
+                }
+                // Start sound at correct offset now that we know audio duration
+                if (storySoundRef.current && meta.soundUrl) {
+                  const snd = storySoundRef.current
+                  const offset = meta.soundOffset || 0
+                  const startFrac = meta.soundStartFrac ?? 0
+                  if (snd.duration && !isNaN(snd.duration)) {
+                    snd.currentTime = offset + snd.duration * startFrac
+                  }
+                  snd.play().catch(() => {})
+                }
+              }}
+              onTimeUpdate={(e) => {
+                const vid = e.target
+                const meta = currentStory.metadata
+                if (!meta) return
+                const start = meta.trimStart || 0
+                const end = meta.trimEnd
+                if (end && vid.currentTime >= end) {
+                  vid.currentTime = start
+                }
+              }}
             />
           ) : (
             <img src={currentStory.image} alt="Story" />
           )}
+
+          {/* Selfie video overlay */}
+          {currentStory.metadata?.showSelfieOverlay && currentStory.metadata?.selfieSize && currentStory.videoUrl && (
+            <div
+              className="story-selfie-overlay"
+              style={{
+                width: currentStory.metadata.selfieSize.w,
+                height: currentStory.metadata.selfieSize.h,
+                left: currentStory.metadata.selfiePosition?.x || 16,
+                top: currentStory.metadata.selfiePosition?.y || 80,
+              }}
+            >
+              <video
+                src={currentStory.videoUrl}
+                style={currentStory.metadata?.isMirrored ? { transform: 'scaleX(-1)' } : undefined}
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            </div>
+          )}
+
+          {/* Text overlays */}
+          {currentStory.metadata?.textOverlays?.map((textItem, idx) => (
+            <div
+              key={`story-text-${textItem.id || idx}-${idx}`}
+              className="story-text-overlay"
+              style={{ left: textItem.x, top: textItem.y }}
+            >
+              <span className="story-text-content">
+                {renderStoryTextWithMentions(textItem.text, textItem.mentions)}
+              </span>
+            </div>
+          ))}
+
+          {/* Race pill */}
+          {currentStory.metadata?.raceName && (
+            <div
+              className="story-race-pill"
+              style={currentStory.metadata.pillPosition ? {
+                left: currentStory.metadata.pillPosition.x,
+                ...(currentStory.metadata.pillPosition.y != null ? { top: currentStory.metadata.pillPosition.y } : {}),
+              } : undefined}
+            >
+              <span className="story-race-pill-dot"></span>
+              {currentStory.metadata.raceName}
+            </div>
+          )}
+
+          {/* Sound name marquee */}
+          {currentStory.metadata?.soundName && (
+            <div className="story-sound-marquee">
+              <svg className="story-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              <div className="story-sound-marquee-track">
+                <span className="story-sound-marquee-text">
+                  {currentStory.metadata.soundName}
+                </span>
+              </div>
+            </div>
+          )}
+
           {currentStory.taggedUser && (
             <div className="story-tagged-user">
               @{currentStory.taggedUser.username || currentStory.taggedUser.name || currentStory.taggedUser.phone}
