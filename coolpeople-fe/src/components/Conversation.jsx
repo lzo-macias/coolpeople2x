@@ -1288,7 +1288,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                     <div className="shared-reel-video">
                       <video
                         src={getMessageVideoUrl(msg)}
-                        className={`shared-reel-preview ${msg.isMirrored || msg.metadata?.isMirrored ? 'mirrored' : ''}`}
+                        className="shared-reel-preview"
                         autoPlay
                         loop
                         muted

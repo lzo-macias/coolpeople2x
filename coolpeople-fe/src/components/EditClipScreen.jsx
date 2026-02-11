@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
 
-function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded, isFromDeviceMedia, deviceMediaType }) {
+function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded, isFromDeviceMedia, deviceMediaType, isStoryMode, sourceReel }) {
   const { user: authUser } = useAuth()
   const [showAddSound, setShowAddSound] = useState(false)
   const videoRef = useRef(null)
@@ -156,9 +156,23 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const selfieResizeRef = useRef(null)
   const selfieDragRef = useRef(null)
 
-  // Reset undo stack when video URL changes (new draft loaded)
+  // Pinch-to-zoom state & refs
+  const videoDefaultScale = isStoryMode ? 0.8 : 1
+  const [videoScale, setVideoScale] = useState(videoDefaultScale)
+  const [videoTranslateX, setVideoTranslateX] = useState(0)
+  const [videoTranslateY, setVideoTranslateY] = useState(0)
+  const videoPinchRef = useRef(null)
+  const videoLastPanRef = useRef(null)
+  const videoCornerRef = useRef(null)
+  const VIDEO_MIN_SCALE = videoDefaultScale
+  const VIDEO_MAX_SCALE = 3
+
+  // Reset undo stack and zoom when video URL changes (new draft loaded)
   useEffect(() => {
     setUndoStack([])
+    setVideoScale(videoDefaultScale)
+    setVideoTranslateX(0)
+    setVideoTranslateY(0)
   }, [recordedVideoUrl])
 
   // Undo history for reversible actions
@@ -1054,6 +1068,10 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           ...(raceName && pillPosition && { pillPosition }),
           ...(taggedUser && { taggedUser }),
           ...(isNominateMode && { isNomination: true }),
+          // Preserve video scale/position for contained playback with black background
+          ...(videoScale !== 1 && { videoScale, videoTranslateX, videoTranslateY }),
+          // Link back to source reel when story was shared from a reel
+          ...(sourceReel?.id && { sourceReel }),
         },
       })
 
@@ -1695,6 +1713,129 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
     }
   }, [draggingTextId])
 
+  // --- Pinch-to-zoom gesture handlers ---
+  const handleVideoTouchStart = (e) => {
+    // Ignore touches on overlay elements (selfie, text, race pill, top/bottom controls)
+    const tag = e.target.closest('.edit-clip-selfie-overlay, .edit-clip-text-overlay, .edit-clip-race-pill-wrapper, .edit-clip-top, .edit-clip-bottom, .edit-clip-tag-display, .edit-clip-quoted-user, .added-sound-pill, .video-corner-handle')
+    if (tag) return
+
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      const t0 = e.touches[0], t1 = e.touches[1]
+      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+      const midX = (t0.clientX + t1.clientX) / 2
+      const midY = (t0.clientY + t1.clientY) / 2
+      videoPinchRef.current = { startDist: dist, startScale: videoScale, startMidX: midX, startMidY: midY, startTx: videoTranslateX, startTy: videoTranslateY }
+      videoLastPanRef.current = null
+    } else if (e.touches.length === 1 && videoScale > videoDefaultScale) {
+      videoLastPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      videoPinchRef.current = null
+    }
+  }
+
+  const handleVideoTouchMove = (e) => {
+    if (videoPinchRef.current && e.touches.length === 2) {
+      e.preventDefault()
+      const t0 = e.touches[0], t1 = e.touches[1]
+      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+      const ratio = dist / videoPinchRef.current.startDist
+      const newScale = Math.min(VIDEO_MAX_SCALE, Math.max(VIDEO_MIN_SCALE, videoPinchRef.current.startScale * ratio))
+      const midX = (t0.clientX + t1.clientX) / 2
+      const midY = (t0.clientY + t1.clientY) / 2
+      const dx = midX - videoPinchRef.current.startMidX
+      const dy = midY - videoPinchRef.current.startMidY
+      setVideoScale(newScale)
+      setVideoTranslateX(videoPinchRef.current.startTx + dx / newScale)
+      setVideoTranslateY(videoPinchRef.current.startTy + dy / newScale)
+    } else if (videoLastPanRef.current && e.touches.length === 1 && videoScale > videoDefaultScale) {
+      const dx = e.touches[0].clientX - videoLastPanRef.current.x
+      const dy = e.touches[0].clientY - videoLastPanRef.current.y
+      videoLastPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      setVideoTranslateX(prev => prev + dx / videoScale)
+      setVideoTranslateY(prev => prev + dy / videoScale)
+    }
+  }
+
+  const handleVideoTouchEnd = () => {
+    videoPinchRef.current = null
+    videoLastPanRef.current = null
+    if (videoScale < videoDefaultScale + 0.05) {
+      setVideoScale(videoDefaultScale)
+      setVideoTranslateX(0)
+      setVideoTranslateY(0)
+    }
+  }
+
+  const handleVideoWheel = (e) => {
+    if (e.ctrlKey) {
+      e.preventDefault()
+      const delta = -e.deltaY * 0.01
+      setVideoScale(prev => {
+        const next = Math.min(VIDEO_MAX_SCALE, Math.max(VIDEO_MIN_SCALE, prev + delta))
+        if (next <= videoDefaultScale + 0.05) {
+          setVideoTranslateX(0)
+          setVideoTranslateY(0)
+          return videoDefaultScale
+        }
+        return next
+      })
+    } else if (videoScale > videoDefaultScale) {
+      setVideoTranslateX(prev => prev - e.deltaX / videoScale)
+      setVideoTranslateY(prev => prev - e.deltaY / videoScale)
+    }
+  }
+
+  // When loading an existing reel (story mode) that was recorded mirrored, apply scaleX(-1) to un-mirror
+  const unMirrorTransform = isStoryMode && isMirrored ? 'scaleX(-1) ' : ''
+  const videoZoomStyle = {
+    objectFit: 'contain',
+    transform: `${unMirrorTransform}scale(${videoScale}) translate(${videoTranslateX}px, ${videoTranslateY}px)`,
+    transformOrigin: 'center center',
+    transition: (videoPinchRef.current || videoCornerRef.current) ? 'none' : 'transform 0.15s ease-out',
+  }
+
+  // --- Corner-drag resize for story mode ---
+  const handleCornerStart = (clientX, clientY) => {
+    const container = previewRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const startDist = Math.hypot(clientX - centerX, clientY - centerY)
+    videoCornerRef.current = { startDist, startScale: videoScale, centerX, centerY }
+  }
+
+  const handleCornerMove = (clientX, clientY) => {
+    if (!videoCornerRef.current) return
+    const { startDist, startScale, centerX, centerY } = videoCornerRef.current
+    const currentDist = Math.hypot(clientX - centerX, clientY - centerY)
+    const ratio = currentDist / startDist
+    const newScale = Math.min(VIDEO_MAX_SCALE, Math.max(VIDEO_MIN_SCALE, startScale * ratio))
+    setVideoScale(newScale)
+  }
+
+  const handleCornerEnd = () => { videoCornerRef.current = null }
+
+  const handleCornerMouseDown = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    handleCornerStart(e.clientX, e.clientY)
+    const onMove = (ev) => handleCornerMove(ev.clientX, ev.clientY)
+    const onUp = () => { handleCornerEnd(); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const handleCornerTouchStart = (e) => {
+    e.stopPropagation()
+    const touch = e.touches[0]
+    handleCornerStart(touch.clientX, touch.clientY)
+    const onMove = (ev) => { const t = ev.touches[0]; handleCornerMove(t.clientX, t.clientY) }
+    const onEnd = () => { handleCornerEnd(); window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onEnd) }
+    window.addEventListener('touchmove', onMove, { passive: true })
+    window.addEventListener('touchend', onEnd)
+  }
+
   const canProceed = !isRaceMode || selectedExistingRace || (raceName?.trim()?.length > 0 && raceDeadline)
 
   // Debug logging for quote nomination rendering
@@ -1709,13 +1850,13 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   return (
     <div className="edit-clip-screen">
       {/* Video Preview */}
-      <div className="edit-clip-preview" ref={previewRef}>
+      <div className="edit-clip-preview" ref={previewRef} onTouchStart={handleVideoTouchStart} onTouchMove={handleVideoTouchMove} onTouchEnd={handleVideoTouchEnd} onWheel={handleVideoWheel}>
         {/* Main Video */}
         {quotedReel?.videoUrl ? (
           <video
             ref={quotedVideoRef}
             src={quotedReel.videoUrl}
-            className={`edit-clip-video quoted-main ${quotedReel.isMirrored ? 'mirrored' : ''}`}
+            className="edit-clip-video quoted-main"
             autoPlay
             playsInline
             muted
@@ -1743,7 +1884,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           <img
             src={recordedVideoUrl}
             className={`edit-clip-video${(isFromDeviceMedia || isFromDraft) && !lockedDimensions ? ' device-media' : ''}`}
-            style={lockedDimensions ? getLockedMediaStyle() : undefined}
+            style={{ ...(lockedDimensions ? getLockedMediaStyle() : {}), ...videoZoomStyle }}
             alt=""
             onLoad={(e) => {
               if (!lockedDimensions && (isFromDeviceMedia || isFromDraft)) {
@@ -1755,8 +1896,8 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           <video
             ref={videoRef}
             src={recordedVideoUrl}
-            className={`edit-clip-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}${(isFromDeviceMedia || videoPlaylist || isFromDraft) && !lockedDimensions ? ' device-media' : ''}`}
-            style={lockedDimensions ? getLockedMediaStyle() : undefined}
+            className={`edit-clip-video${(isFromDeviceMedia || videoPlaylist || isFromDraft) && !lockedDimensions ? ' device-media' : ''}`}
+            style={{ ...(lockedDimensions ? getLockedMediaStyle() : {}), ...videoZoomStyle }}
             autoPlay
             playsInline
             crossOrigin="anonymous"
@@ -1812,7 +1953,23 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
         )}
 
         {/* Freeze-frame canvas: holds last frame during playlist source swap */}
-        <canvas ref={freezeCanvasRef} style={{ display: 'none', pointerEvents: 'none', zIndex: 2, ...(lockedDimensions ? getLockedMediaStyle() : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }) }} />
+        <canvas ref={freezeCanvasRef} style={{ display: 'none', pointerEvents: 'none', zIndex: 2, ...(lockedDimensions ? getLockedMediaStyle() : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }), ...videoZoomStyle }} />
+
+        {/* Corner resize handles for story mode */}
+        {isStoryMode && [
+          { key: 'tl', top: `${(1 - videoScale) / 2 * 100}%`, left: `${(1 - videoScale) / 2 * 100}%` },
+          { key: 'tr', top: `${(1 - videoScale) / 2 * 100}%`, left: `${(1 + videoScale) / 2 * 100}%` },
+          { key: 'bl', top: `${(1 + videoScale) / 2 * 100}%`, left: `${(1 - videoScale) / 2 * 100}%` },
+          { key: 'br', top: `${(1 + videoScale) / 2 * 100}%`, left: `${(1 + videoScale) / 2 * 100}%` },
+        ].map(({ key, top, left }) => (
+          <div
+            key={key}
+            className="video-corner-handle"
+            style={{ position: 'absolute', top, left, transform: 'translate(-50%, -50%)' }}
+            onMouseDown={handleCornerMouseDown}
+            onTouchStart={handleCornerTouchStart}
+          />
+        ))}
 
         {/* Selfie Overlay - shows in nominate mode or when there's a quoted reel */}
         {(isNominateMode || quotedReel) && recordedVideoUrl && showSelfieOverlay && (
@@ -2232,7 +2389,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       )}
 
       {/* Bottom */}
-      <div className="edit-clip-bottom">
+      <div className={`edit-clip-bottom ${isStoryMode ? 'story-mode' : ''}`}>
         {isConversationMode ? (
           <>
             <button
@@ -2249,6 +2406,35 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
+            </button>
+          </>
+        ) : isStoryMode ? (
+          <>
+            <button className="edit-clip-drafts-btn" onClick={() => {
+              if (onSaveDraft) {
+                onSaveDraft()
+              } else {
+                onClose()
+              }
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>drafts</span>
+            </button>
+            <button
+              className={`edit-clip-story-btn ${isPostingStory ? 'disabled' : ''}`}
+              disabled={isPostingStory}
+              onClick={handleAddToStory}
+            >
+              <img
+                src={authUser?.avatarUrl || 'https://i.pravatar.cc/40?img=3'}
+                alt="Profile"
+                className="edit-clip-story-avatar"
+              />
+              <span>{isPostingStory ? 'posting...' : 'your story'}</span>
             </button>
           </>
         ) : (

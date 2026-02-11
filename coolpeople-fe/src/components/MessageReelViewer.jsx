@@ -146,7 +146,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const videoUrl = getVideoUrl()
   const thumbnail = getThumbnail()
   const user = getUser()
-  const isMirrored = currentMessage.isMirrored || currentMessage.metadata?.isMirrored || currentMessage.metadata?.introVideoMirrored
+  const isMirrored = isSharedReel ? false : (currentMessage.isMirrored || currentMessage.metadata?.isMirrored || currentMessage.metadata?.introVideoMirrored)
 
   // --- Edit-aware playback for message videos ---
   const msgEditMeta = currentMessage?.metadata || {}

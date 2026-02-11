@@ -58,6 +58,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const storyVideoRef = useRef(null)
   const storySoundRef = useRef(null)
   const storySegIdxRef = useRef(0)
+  const [storyReelPopup, setStoryReelPopup] = useState(null) // { reelId, userId, username }
+  const [storyReturnState, setStoryReturnState] = useState(null) // saved viewingStory to return to
   const activeConversationRef = useRef(null) // Ref to track active conversation for socket handler
   const currentUsername = currentUser?.username || 'User'
 
@@ -1400,6 +1402,8 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       storySoundRef.current.pause()
       storySoundRef.current = null
     }
+    setStoryReelPopup(null)
+    setStoryReturnState(null)
     setViewingStory(null)
     setStoryProgress(0)
     storySegIdxRef.current = 0
@@ -1408,6 +1412,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const nextStory = () => {
     if (!viewingStory) return
     storySegIdxRef.current = 0
+    setStoryReelPopup(null)
     const currentUser = storyUsers[viewingStory.userIndex]
     if (viewingStory.storyIndex < currentUser.stories.length - 1) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex + 1 })
@@ -1423,6 +1428,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const prevStory = () => {
     if (!viewingStory) return
     storySegIdxRef.current = 0
+    setStoryReelPopup(null)
     if (viewingStory.storyIndex > 0) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex - 1 })
       setStoryProgress(0)
@@ -1771,7 +1777,17 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             <video
               ref={storyVideoRef}
               src={currentStory.videoUrl}
-              style={currentStory.metadata?.isMirrored ? { transform: 'scaleX(-1)' } : undefined}
+              style={{
+                ...(currentStory.metadata?.videoScale || currentStory.metadata?.isMirrored ? {
+                  objectFit: currentStory.metadata?.videoScale ? 'contain' : undefined,
+                  transform: [
+                    currentStory.metadata?.isMirrored ? 'scaleX(-1)' : '',
+                    currentStory.metadata?.videoScale ? `scale(${currentStory.metadata.videoScale})` : '',
+                    currentStory.metadata?.videoTranslateX || currentStory.metadata?.videoTranslateY ? `translate(${currentStory.metadata.videoTranslateX || 0}px, ${currentStory.metadata.videoTranslateY || 0}px)` : '',
+                  ].filter(Boolean).join(' ') || undefined,
+                  transformOrigin: 'center center',
+                } : {}),
+              }}
               autoPlay
               loop={!(currentStory.metadata?.segments?.length > 1)}
               playsInline
@@ -1921,11 +1937,57 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           )}
         </div>
 
+        {/* Source reel badge */}
+        {currentStory.metadata?.sourceReel && (
+          <button className="story-reel-badge" onClick={() => setStoryReelPopup(currentStory.metadata.sourceReel)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span>from @{currentStory.metadata.sourceReel.username}'s reel</span>
+          </button>
+        )}
+
         {/* Navigation zones */}
         <div className="story-nav-zones">
           <div className="story-nav-left" onClick={prevStory} />
           <div className="story-nav-right" onClick={nextStory} />
         </div>
+
+        {/* Reel source popup */}
+        {storyReelPopup && (
+          <div className="story-reel-popup-overlay" onClick={() => setStoryReelPopup(null)}>
+            <div className="story-reel-popup" onClick={(e) => e.stopPropagation()}>
+              <button className="story-reel-popup-btn" onClick={() => {
+                const saved = { ...viewingStory }
+                setStoryReturnState(saved)
+                setStoryReelPopup(null)
+                setViewingStory(null)
+                onOpenProfile?.({ id: storyReelPopup.userId, username: storyReelPopup.username })
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span>See {storyReelPopup.username}'s profile</span>
+              </button>
+              <button className="story-reel-popup-btn" onClick={() => {
+                const saved = { ...viewingStory }
+                setStoryReturnState(saved)
+                setStoryReelPopup(null)
+                setViewingStory(null)
+                onViewReel?.({ id: storyReelPopup.id })
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                <span>See reel</span>
+              </button>
+              <button className="story-reel-popup-btn cancel" onClick={() => setStoryReelPopup(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Story actions */}
         <div className="story-actions">
@@ -2411,6 +2473,20 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   return (
     <>
       {renderStoryViewer()}
+      {/* Back to story floating button — portal so it shows on any page */}
+      {storyReturnState && !viewingStory && createPortal(
+        <button className="story-return-btn" onClick={() => {
+          setViewingStory(storyReturnState)
+          setStoryReturnState(null)
+          setStoryProgress(0)
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span>Back to story</span>
+        </button>,
+        document.body
+      )}
       {renderActivityScreen()}
       {renderComposeScreen()}
       {renderLivePhotoScreen()}

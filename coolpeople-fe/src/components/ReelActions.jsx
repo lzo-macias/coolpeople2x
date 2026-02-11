@@ -4,6 +4,7 @@ import '../styling/ReelActions.css'
 import { getPartyColor } from '../data/mockData'
 import { reelsApi, usersApi, messagesApi, groupchatsApi, searchApi, reportsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import EditClipScreen from './EditClipScreen'
 
 // Helper to format "active" time from lastMessageAt
 const formatActiveTime = (dateString) => {
@@ -356,6 +357,58 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
       }
     } catch (error) {
       console.error('Share error:', error.message, error)
+    }
+  }
+
+  const [sending, setSending] = useState(false)
+  const [showStoryEditor, setShowStoryEditor] = useState(false)
+
+  const handleSendToContacts = async () => {
+    if (selectedContacts.length === 0 || sending) return
+    setSending(true)
+
+    const reelMeta = {
+      type: 'reel',
+      reelId: apiReelId || reel?.id,
+      videoUrl: reel?.videoUrl || null,
+      thumbnailUrl: reel?.thumbnailUrl || reel?.thumbnail || null,
+      soundName: reel?.sound?.name || reel?.soundName || reel?.metadata?.soundName || null,
+      caption: reel?.caption || reel?.description || '',
+      username: reel?.user?.username || user?.username || '',
+      userId: reel?.user?.id || user?.id || '',
+    }
+
+    // Resolve full contact objects for each selected ID
+    const allContacts = [...recentContacts, ...searchResults]
+
+    try {
+      const sends = selectedContacts.map(contactId => {
+        const contact = allContacts.find(c => c.id === contactId)
+        if (!contact) return Promise.resolve()
+
+        if (contact.type === 'group') {
+          return groupchatsApi.sendMessage(contact.odId, 'Sent a reel', reelMeta)
+        } else {
+          return messagesApi.sendMessage({
+            receiverId: contact.odId,
+            content: 'Sent a reel',
+            metadata: reelMeta,
+          })
+        }
+      })
+
+      await Promise.all(sends)
+
+      // Increment share count on the reel
+      if (apiReelId) {
+        reelsApi.shareReel(apiReelId).catch(() => {})
+      }
+    } catch (err) {
+      console.error('Failed to send reel:', err)
+    } finally {
+      setSending(false)
+      setSelectedContacts([])
+      setShowShareSheet(false)
     }
   }
 
@@ -860,7 +913,10 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
 
             {/* Bottom actions */}
             <div className="share-actions-row">
-              <button className="share-action-item">
+              <button className="share-action-item" onClick={() => {
+                setShowShareSheet(false)
+                setShowStoryEditor(true)
+              }}>
                 <div className="share-action-icon">
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 5v14M5 12h14" />
@@ -933,12 +989,28 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
             {/* Send button */}
             <button
               className={`share-send-btn ${selectedContacts.length > 0 ? 'active' : ''}`}
-              onClick={() => selectedContacts.length > 0 && setShowShareSheet(false)}
+              onClick={handleSendToContacts}
+              disabled={sending || selectedContacts.length === 0}
             >
-              {createGroupExpanded ? 'Send together' : 'Send'}
+              {sending ? 'Sending...' : createGroupExpanded ? 'Send together' : 'Send'}
             </button>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* Story Editor - opened from "Add to story" in share sheet */}
+      {showStoryEditor && createPortal(
+        <EditClipScreen
+          recordedVideoUrl={reel?.videoUrl}
+          isMirrored={reel?.isMirrored || false}
+          isStoryMode
+          sourceReel={{ id: reel?.id, userId: reel?.user?.id, username: reel?.user?.username || user?.username }}
+          onClose={() => setShowStoryEditor(false)}
+          onCompleteToScoreboard={() => setShowStoryEditor(false)}
+          textOverlays={[]}
+          setTextOverlays={() => {}}
+        />,
         document.body
       )}
     </div>

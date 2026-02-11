@@ -10,7 +10,7 @@
   background: #fff;
   display: flex;
   flex-direction: column;
-  z-index: 70;
+  z-index: 110;
 }
 
 .post-back-btn {
