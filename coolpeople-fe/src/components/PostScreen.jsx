@@ -218,7 +218,8 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
     while (takenNames.has(`${baseName} ${num}`)) num++
     return `${baseName} ${num}`
   }
-  const [soundName, setSoundName] = useState(() => getDefaultSoundName(['Your Feed'], new Set()))
+  const isExistingSound = selectedSound && typeof selectedSound.id === 'string' && selectedSound.id.includes('-')
+  const [soundName, setSoundName] = useState(() => isExistingSound ? selectedSound.name : getDefaultSoundName(['Your Feed'], new Set()))
   const [hasEditedSoundName, setHasEditedSoundName] = useState(false)
   const [selectedSendTo, setSelectedSendTo] = useState([])
   const [selectedSendToUsers, setSelectedSendToUsers] = useState([]) // Users/chats selected from picker
@@ -539,7 +540,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, soundName, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd, ...(localVideoEdits && { soundOffset: localVideoEdits.soundOffset, soundStartFrac: localVideoEdits.soundStartFrac ?? 0, soundEndFrac: localVideoEdits.soundEndFrac ?? 1, videoVolume: localVideoEdits.videoVolume, soundVolume: localVideoEdits.soundVolume }), ...(selectedSound && { soundUrl: selectedSound.audioUrl, ...(selectedSound.id && typeof selectedSound.id === 'string' && selectedSound.id.includes('-') ? { soundId: selectedSound.id } : {}) }) })
+    onPost?.({ title, caption, soundName: isExistingSound ? selectedSound.name : soundName, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd, ...(localVideoEdits && { soundOffset: localVideoEdits.soundOffset, soundStartFrac: localVideoEdits.soundStartFrac ?? 0, soundEndFrac: localVideoEdits.soundEndFrac ?? 1, videoVolume: localVideoEdits.videoVolume, soundVolume: localVideoEdits.soundVolume }), ...(selectedSound && { soundUrl: selectedSound.audioUrl, ...(isExistingSound ? { soundId: selectedSound.id } : {}) }) })
   }
 
   const handleSaveDraft = () => {
@@ -821,11 +822,14 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           <input
             type="text"
             className="post-sound-name-input"
-            value={soundName}
+            value={isExistingSound ? selectedSound.name : soundName}
             onChange={(e) => {
-              setSoundName(e.target.value)
-              setHasEditedSoundName(true)
+              if (!isExistingSound) {
+                setSoundName(e.target.value)
+                setHasEditedSoundName(true)
+              }
             }}
+            readOnly={isExistingSound}
             placeholder="original audio"
           />
         </div>

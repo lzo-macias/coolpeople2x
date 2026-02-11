@@ -243,6 +243,10 @@ export const reelsApi = {
   combineVideos: (formData) => apiUpload('/api/reels/combine-videos', formData),
 
   // Sound endpoints
+  listSounds: (tab = 'foryou', cursor) => apiFetch(`/api/reels/sounds?tab=${tab}${cursor ? `&cursor=${cursor}` : ''}`),
+
+  checkSoundSaved: (soundId) => apiFetch(`/api/reels/sounds/${soundId}/save`),
+
   saveSound: (soundId) => apiFetch(`/api/reels/sounds/${soundId}/save`, {
     method: 'POST',
   }),

@@ -201,3 +201,38 @@
   font-weight: 500;
   text-transform: capitalize;
 }
+
+/* Save/Bookmark Button */
+.add-sound-save-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: color 0.2s, transform 0.15s;
+}
+
+.add-sound-save-btn:active {
+  transform: scale(0.85);
+}
+
+.add-sound-save-btn.saved {
+  color: #FF2A55;
+}
+
+/* Loading & Empty States */
+.add-sound-loading,
+.add-sound-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  color: #666;
+  font-size: 15px;
+}

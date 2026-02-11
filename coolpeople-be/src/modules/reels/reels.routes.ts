@@ -99,11 +99,25 @@ router.post(
 // Sounds (must be before /:id to avoid route conflict)
 // -----------------------------------------------------------------------------
 
+// GET /api/reels/sounds - List sounds (for you / trending / saved)
+router.get(
+  '/sounds',
+  requireAuth,
+  reelsController.listSounds
+);
+
 // GET /api/reels/sound/:soundId - Get reels using a specific sound
 router.get(
   '/sound/:soundId',
   optionalAuth,
   reelsController.getReelsBySound
+);
+
+// GET /api/reels/sounds/:soundId/save - Check if sound is saved
+router.get(
+  '/sounds/:soundId/save',
+  requireAuth,
+  reelsController.checkSoundSaved
 );
 
 // POST /api/reels/sounds/:soundId/save - Save a sound

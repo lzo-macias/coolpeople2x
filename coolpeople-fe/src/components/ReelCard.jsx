@@ -383,7 +383,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const [soundReelsTotal, setSoundReelsTotal] = useState(0)
   const [loadingSoundReels, setLoadingSoundReels] = useState(false)
 
-  // Fetch reels using this sound when panel opens
+  // Fetch reels using this sound + check saved state when panel opens
   useEffect(() => {
     if (!showSoundPanel) return
     const sid = (reel || {}).soundId || (reel || {}).metadata?.soundId
@@ -391,12 +391,20 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     setLoadingSoundReels(true)
     reelsApi.getReelsBySound(sid)
       .then(res => {
-        const data = res.data || res
-        setSoundReels(data.reels || [])
-        setSoundReelsTotal(data.total || 0)
+        const d = res.data || res
+        setSoundReels(d.reels || [])
+        setSoundReelsTotal(d.total || 0)
       })
       .catch(() => {})
       .finally(() => setLoadingSoundReels(false))
+
+    // Check if user has saved this sound
+    reelsApi.checkSoundSaved(sid)
+      .then(res => {
+        const saved = res?.data?.saved ?? res?.saved ?? false
+        setSoundSaved(saved)
+      })
+      .catch(() => {})
   }, [showSoundPanel])
 
   // Race modal state
@@ -858,7 +866,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             </div>
           )}
           {/* Sound name marquee - clickable to open sound detail */}
-          {(data.soundName || data.metadata?.soundName) && (
+          {(data.sound?.name || data.soundName || data.metadata?.soundName) && (
             <div className="reel-sound-marquee" onClick={() => { pauseVideo(); setShowSoundPanel(true) }}>
               <svg className="reel-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 18V5l12-2v13" />
@@ -867,7 +875,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               </svg>
               <div className="reel-sound-marquee-track">
                 <span className="reel-sound-marquee-text">
-                  {data.soundName || data.metadata?.soundName}
+                  {data.sound?.name || data.soundName || data.metadata?.soundName}
                 </span>
               </div>
             </div>
@@ -1772,8 +1780,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 )}
               </div>
               <div className="sound-panel-info">
-                <div className="sound-panel-name">{data.soundName || data.metadata?.soundName}</div>
-                <div className="sound-panel-artist">{data.user?.username || 'Original Audio'}</div>
+                <div className="sound-panel-name">{data.sound?.name || data.soundName || data.metadata?.soundName}</div>
+                <div className="sound-panel-artist">{data.sound?.artistName || data.user?.username || 'Original Audio'}</div>
               </div>
               <button className="sound-panel-close" onClick={() => { setShowSoundPanel(false); if (soundPreviewRef.current) { soundPreviewRef.current.pause() }; resumeVideo() }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1828,15 +1836,19 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 <span>Use audio</span>
               </button>
 
-              <button className={`sound-panel-action-btn save-audio ${soundSaved ? 'saved' : ''}`} onClick={() => {
-                setSoundSaved(!soundSaved)
+              <button className={`sound-panel-action-btn save-audio ${soundSaved ? 'saved' : ''}`} onClick={async () => {
                 const sid = data.soundId || data.metadata?.soundId
-                if (sid) {
-                  if (!soundSaved) {
-                    reelsApi.saveSound(sid).catch(() => {})
+                if (!sid) return
+                const wasSaved = soundSaved
+                setSoundSaved(!wasSaved)
+                try {
+                  if (!wasSaved) {
+                    await reelsApi.saveSound(sid)
                   } else {
-                    reelsApi.unsaveSound(sid).catch(() => {})
+                    await reelsApi.unsaveSound(sid)
                   }
+                } catch {
+                  setSoundSaved(wasSaved)
                 }
               }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill={soundSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">

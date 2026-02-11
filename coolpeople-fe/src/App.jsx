@@ -794,6 +794,8 @@ function AppContent() {
         taggedUser: postData.taggedUser || null,
         isNomination: postData.isNomination || false,
         soundName: postData.soundName || null,
+        soundId: postData.soundId || null,
+        sound: postData.soundId ? { id: postData.soundId, name: postData.soundName, audioUrl: postData.soundUrl } : null,
         isPartyPost: isPartyOnlyPost, // Flag for ReelCard to render party-style (only when party-only)
         partyId: isPostingToPartyFeed ? effectiveParty.id : null, // Set for any party post (including both feeds)
         metadata: {
@@ -813,6 +815,7 @@ function AppContent() {
           segments: postData.segments || null,
           soundUrl: postData.soundUrl || null,
           soundName: postData.soundName || null,
+          soundId: postData.soundId || null,
           quotedReelId: postData.quotedReelId || null,
           quotedReelVideoUrl: postData.quotedReelVideoUrl || null,
           quotedReelUser: postData.quotedReelUser || null,

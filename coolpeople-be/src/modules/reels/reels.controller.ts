@@ -306,6 +306,16 @@ export const unsaveSound = async (req: Request, res: Response): Promise<void> =>
 };
 
 // -----------------------------------------------------------------------------
+// GET /api/reels/sounds/:soundId/save
+// -----------------------------------------------------------------------------
+
+export const checkSoundSaved = async (req: Request, res: Response): Promise<void> => {
+  const soundId = req.params.soundId as string;
+  const saved = await reelsService.checkSoundSaved(soundId, req.user!.userId);
+  sendSuccess(res, { saved });
+};
+
+// -----------------------------------------------------------------------------
 // GET /api/reels/sound/:soundId
 // -----------------------------------------------------------------------------
 
@@ -314,4 +324,25 @@ export const getReelsBySound = async (req: Request, res: Response): Promise<void
   const cursor = req.query.cursor as string | undefined;
   const result = await reelsService.getReelsBySound(soundId, req.user?.userId, cursor);
   sendSuccess(res, result);
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/reels/sounds
+// -----------------------------------------------------------------------------
+
+export const listSounds = async (req: Request, res: Response): Promise<void> => {
+  const { tab, cursor, limit } = req.query as { tab?: string; cursor?: string; limit?: string };
+  const lim = parseInt(limit || '') || 30;
+
+  if (tab === 'trending') {
+    const result = await reelsService.getTrendingSounds(lim);
+    sendSuccess(res, result);
+  } else if (tab === 'saved') {
+    const result = await reelsService.getSavedSounds(req.user!.userId, cursor, lim);
+    sendSuccess(res, result);
+  } else {
+    // Default: "for you"
+    const result = await reelsService.getSoundsForYou(cursor, lim);
+    sendSuccess(res, result);
+  }
 };

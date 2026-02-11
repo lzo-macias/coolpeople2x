@@ -1080,6 +1080,16 @@ export const unsaveSound = async (
   await prisma.savedSound.delete({ where: { id: existing.id } });
 };
 
+export const checkSoundSaved = async (
+  soundId: string,
+  userId: string
+): Promise<boolean> => {
+  const existing = await prisma.savedSound.findUnique({
+    where: { userId_soundId: { userId, soundId } },
+  });
+  return !!existing;
+};
+
 // -----------------------------------------------------------------------------
 // Get Reels by Sound
 // -----------------------------------------------------------------------------
@@ -1109,5 +1119,94 @@ export const getReelsBySound = async (
     reels: results.map((r) => formatReel(r, viewerId)),
     nextCursor,
     total: await prisma.reel.count({ where: { soundId, deletedAt: null } }),
+  };
+};
+
+// -----------------------------------------------------------------------------
+// List Sounds (For You / Trending / Saved)
+// -----------------------------------------------------------------------------
+
+const formatSound = (sound: any, useCount?: number, totalViews?: number) => ({
+  id: sound.id,
+  name: sound.name,
+  artistName: sound.artistName,
+  audioUrl: sound.audioUrl,
+  duration: sound.duration,
+  useCount: useCount ?? sound._count?.reels ?? 0,
+  totalViews: totalViews ?? 0,
+  createdAt: sound.createdAt,
+});
+
+/**
+ * "For You" — recent sounds, newest first
+ */
+export const getSoundsForYou = async (
+  cursor?: string,
+  limit: number = 30
+) => {
+  const sounds = await prisma.sound.findMany({
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: { _count: { select: { reels: true } } },
+  });
+
+  const hasMore = sounds.length > limit;
+  const results = hasMore ? sounds.slice(0, -1) : sounds;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return { sounds: results.map((s) => formatSound(s)), nextCursor };
+};
+
+/**
+ * "Trending" — sounds ranked by total views + post count (last 30 days)
+ */
+export const getTrendingSounds = async (
+  limit: number = 30
+) => {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Rank by total views from reels using this sound, plus post count as tiebreaker
+  const trending: any[] = await prisma.$queryRaw`
+    SELECT s.id, s.name, s."artistName", s."audioUrl", s.duration, s."createdAt",
+           COUNT(r.id)::int as "useCount",
+           COALESCE(SUM(r."viewCount"), 0)::int as "totalViews"
+    FROM "Sound" s
+    JOIN "Reel" r ON r."soundId" = s.id AND r."deletedAt" IS NULL AND r."createdAt" > ${thirtyDaysAgo}
+    GROUP BY s.id
+    ORDER BY "totalViews" DESC, "useCount" DESC, s."createdAt" DESC
+    LIMIT ${limit}
+  `;
+
+  return { sounds: trending.map((s) => formatSound(s, s.useCount, s.totalViews)) };
+};
+
+/**
+ * "Saved" — sounds the user has saved
+ */
+export const getSavedSounds = async (
+  userId: string,
+  cursor?: string,
+  limit: number = 30
+) => {
+  const saved = await prisma.savedSound.findMany({
+    where: { userId },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      sound: {
+        include: { _count: { select: { reels: true } } },
+      },
+    },
+  });
+
+  const hasMore = saved.length > limit;
+  const results = hasMore ? saved.slice(0, -1) : saved;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return {
+    sounds: results.map((s) => formatSound(s.sound)),
+    nextCursor,
   };
 };
