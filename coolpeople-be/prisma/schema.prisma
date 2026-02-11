@@ -257,6 +257,9 @@ model User {
   // Device contacts (synced from phone)
   deviceContacts  DeviceContact[]
 
+  // Saved sounds
+  savedSounds     SavedSound[]
+
   @@index([email])
   @@index([username])
   @@index([userType])
@@ -1219,9 +1222,25 @@ model Sound {
 
   createdAt DateTime @default(now())
 
-  reels     Reel[]
+  reels       Reel[]
+  savedBy     SavedSound[]
 
   @@index([name])
+}
+
+model SavedSound {
+  id        String   @id @default(uuid())
+  userId    String
+  soundId   String
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sound     Sound    @relation(fields: [soundId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, soundId])
+  @@index([userId])
+  @@index([soundId])
 }
 
 model Location {

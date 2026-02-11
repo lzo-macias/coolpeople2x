@@ -284,3 +284,34 @@ export const combineVideos = async (req: Request, res: Response): Promise<void> 
   const result = await reelsService.combineVideoSegments(files, segments);
   sendCreated(res, result);
 };
+
+// -----------------------------------------------------------------------------
+// POST /api/reels/sounds/:soundId/save
+// -----------------------------------------------------------------------------
+
+export const saveSound = async (req: Request, res: Response): Promise<void> => {
+  const soundId = req.params.soundId as string;
+  await reelsService.saveSound(soundId, req.user!.userId);
+  sendSuccess(res, { saved: true });
+};
+
+// -----------------------------------------------------------------------------
+// DELETE /api/reels/sounds/:soundId/save
+// -----------------------------------------------------------------------------
+
+export const unsaveSound = async (req: Request, res: Response): Promise<void> => {
+  const soundId = req.params.soundId as string;
+  await reelsService.unsaveSound(soundId, req.user!.userId);
+  sendSuccess(res, { saved: false });
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/reels/sound/:soundId
+// -----------------------------------------------------------------------------
+
+export const getReelsBySound = async (req: Request, res: Response): Promise<void> => {
+  const soundId = req.params.soundId as string;
+  const cursor = req.query.cursor as string | undefined;
+  const result = await reelsService.getReelsBySound(soundId, req.user?.userId, cursor);
+  sendSuccess(res, result);
+};

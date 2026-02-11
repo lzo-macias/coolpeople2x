@@ -539,7 +539,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
   }
 
   const handlePost = () => {
-    onPost?.({ title, caption, soundName, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd, ...(localVideoEdits && { soundOffset: localVideoEdits.soundOffset, soundStartFrac: localVideoEdits.soundStartFrac ?? 0, soundEndFrac: localVideoEdits.soundEndFrac ?? 1, videoVolume: localVideoEdits.videoVolume, soundVolume: localVideoEdits.soundVolume }), ...(selectedSound && { soundUrl: selectedSound.audioUrl }) })
+    onPost?.({ title, caption, soundName, postTo: selectedPostTo, sendTo: selectedSendTo, sendToUsers: selectedSendToUsers, sendTogether, location: selectedLocation, shareTo: selectedSocials, targetRace: selectedTarget, isMirrored, wantToCompete: isRaceMode ? wantToCompete : undefined, selfieSize, selfiePosition, showSelfieOverlay, segments: localSegments, trimStart: localTrimStart, trimEnd: localTrimEnd, ...(localVideoEdits && { soundOffset: localVideoEdits.soundOffset, soundStartFrac: localVideoEdits.soundStartFrac ?? 0, soundEndFrac: localVideoEdits.soundEndFrac ?? 1, videoVolume: localVideoEdits.videoVolume, soundVolume: localVideoEdits.soundVolume }), ...(selectedSound && { soundUrl: selectedSound.audioUrl, ...(selectedSound.id && typeof selectedSound.id === 'string' && selectedSound.id.includes('-') ? { soundId: selectedSound.id } : {}) }) })
   }
 
   const handleSaveDraft = () => {

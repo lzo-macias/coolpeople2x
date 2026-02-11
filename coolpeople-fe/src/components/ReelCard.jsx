@@ -322,18 +322,24 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         if (idx < segs.length - 1) { segIdxRef.current = idx + 1; vid.currentTime = segs[idx + 1].start }
         else { segIdxRef.current = 0; vid.currentTime = segs[0].start }
       }
-      // Sync sound (apply soundStartFrac so trim matches edit screen)
+      // Sync sound (match VideoEditor logic: soundStartFrac/soundEndFrac are fractions of output timeline)
       const audio = soundAudioRef.current
       if (audio && audio.src) {
+        const total = segs.reduce((sum, s) => sum + (s.end - s.start), 0)
         let outputTime = 0
         for (let i = 0; i < segIdxRef.current; i++) outputTime += segs[i].end - segs[i].start
         const curSeg = segs[segIdxRef.current]
         if (curSeg) outputTime += Math.max(0, vid.currentTime - curSeg.start)
-        const startFrac = ed.soundStartFrac ?? 0
-        const sndStart = audio.duration ? startFrac * audio.duration : 0
-        const targetAudioTime = sndStart + (ed.soundOffset ?? 0) + outputTime
-        if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
-        if (audio.paused) audio.play().catch(() => {})
+        const soundStart = (ed.soundStartFrac ?? 0) * total
+        const soundEnd = (ed.soundEndFrac ?? 1) * total
+        if (outputTime >= soundStart && outputTime <= soundEnd) {
+          const targetAudioTime = (ed.soundOffset ?? 0) + (outputTime - soundStart)
+          if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
+          audio.volume = (ed.soundVolume ?? 100) / 100
+          if (audio.paused) audio.play().catch(() => {})
+        } else {
+          if (!audio.paused) audio.pause()
+        }
       }
       rafRef.current = requestAnimationFrame(tick)
     }
@@ -368,6 +374,30 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
+
+  // Sound detail panel state
+  const [showSoundPanel, setShowSoundPanel] = useState(false)
+  const [soundSaved, setSoundSaved] = useState(false)
+  const soundPreviewRef = useRef(null)
+  const [soundReels, setSoundReels] = useState([])
+  const [soundReelsTotal, setSoundReelsTotal] = useState(0)
+  const [loadingSoundReels, setLoadingSoundReels] = useState(false)
+
+  // Fetch reels using this sound when panel opens
+  useEffect(() => {
+    if (!showSoundPanel) return
+    const sid = (reel || {}).soundId || (reel || {}).metadata?.soundId
+    if (!sid) return
+    setLoadingSoundReels(true)
+    reelsApi.getReelsBySound(sid)
+      .then(res => {
+        const data = res.data || res
+        setSoundReels(data.reels || [])
+        setSoundReelsTotal(data.total || 0)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSoundReels(false))
+  }, [showSoundPanel])
 
   // Race modal state
   const [showRaceModal, setShowRaceModal] = useState(false)
@@ -827,9 +857,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
               </button>
             </div>
           )}
-          {/* Sound name marquee */}
+          {/* Sound name marquee - clickable to open sound detail */}
           {(data.soundName || data.metadata?.soundName) && (
-            <div className="reel-sound-marquee">
+            <div className="reel-sound-marquee" onClick={() => { pauseVideo(); setShowSoundPanel(true) }}>
               <svg className="reel-sound-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 18V5l12-2v13" />
                 <circle cx="6" cy="18" r="3" />
@@ -1717,6 +1747,134 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
           userRacesFollowing={userRacesFollowing}
           userRacesCompeting={userRacesCompeting}
         />
+      )}
+
+      {/* Sound Detail Slide-up Panel */}
+      {showSoundPanel && createPortal(
+        <>
+          <div className="sound-panel-backdrop" onClick={() => { setShowSoundPanel(false); if (soundPreviewRef.current) { soundPreviewRef.current.pause() }; resumeVideo() }} />
+          <div className="sound-panel">
+            <div className="sound-panel-handle" />
+
+            {/* Sound artwork + info */}
+            <div className="sound-panel-header">
+              <div className="sound-panel-art">
+                {data.videoUrl && !data.videoUrl.startsWith('data:image/') && !isImageUrl(data.videoUrl) ? (
+                  <video src={data.videoUrl} muted playsInline className="sound-panel-art-media" />
+                ) : (data.videoUrl || data.thumbnail) ? (
+                  <img src={data.videoUrl || data.thumbnail} alt="" className="sound-panel-art-media" />
+                ) : (
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(255,255,255,0.8)">
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                  </svg>
+                )}
+              </div>
+              <div className="sound-panel-info">
+                <div className="sound-panel-name">{data.soundName || data.metadata?.soundName}</div>
+                <div className="sound-panel-artist">{data.user?.username || 'Original Audio'}</div>
+              </div>
+              <button className="sound-panel-close" onClick={() => { setShowSoundPanel(false); if (soundPreviewRef.current) { soundPreviewRef.current.pause() }; resumeVideo() }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Waveform / play preview */}
+            {editMeta.soundUrl && (
+              <button className="sound-panel-play-row" onClick={() => {
+                if (!soundPreviewRef.current) {
+                  soundPreviewRef.current = new Audio(editMeta.soundUrl)
+                  soundPreviewRef.current.volume = 0.8
+                }
+                if (soundPreviewRef.current.paused) {
+                  soundPreviewRef.current.play().catch(() => {})
+                } else {
+                  soundPreviewRef.current.pause()
+                }
+              }}>
+                <div className="sound-panel-play-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5,3 19,12 5,21" />
+                  </svg>
+                </div>
+                <div className="sound-panel-waveform">
+                  {Array.from({ length: 30 }, (_, i) => (
+                    <div key={i} className="sound-panel-bar" style={{ height: `${12 + Math.sin(i * 0.8) * 10 + Math.random() * 8}px` }} />
+                  ))}
+                </div>
+              </button>
+            )}
+
+            {/* Action buttons */}
+            <div className="sound-panel-actions">
+              <button className="sound-panel-action-btn use-audio" onClick={() => {
+                setShowSoundPanel(false)
+                if (soundPreviewRef.current) soundPreviewRef.current.pause()
+                // Use the canonical Sound record (audioUrl from Sound table) — not the post's mixed metadata audio
+                const canonicalSound = data.sound || null
+                const soundPayload = canonicalSound
+                  ? { id: canonicalSound.id, audioUrl: canonicalSound.audioUrl, name: canonicalSound.name, artistName: canonicalSound.artistName, duration: canonicalSound.duration }
+                  : { audioUrl: editMeta.soundUrl, name: data.soundName || data.metadata?.soundName }
+                onTrackActivity?.('useAudio', { sound: soundPayload, reel: data })
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 18V5l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
+                <span>Use audio</span>
+              </button>
+
+              <button className={`sound-panel-action-btn save-audio ${soundSaved ? 'saved' : ''}`} onClick={() => {
+                setSoundSaved(!soundSaved)
+                const sid = data.soundId || data.metadata?.soundId
+                if (sid) {
+                  if (!soundSaved) {
+                    reelsApi.saveSound(sid).catch(() => {})
+                  } else {
+                    reelsApi.unsaveSound(sid).catch(() => {})
+                  }
+                }
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill={soundSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>{soundSaved ? 'Saved' : 'Save audio'}</span>
+              </button>
+            </div>
+
+            {/* Reels using this sound */}
+            <div className="sound-panel-reels-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="2" width="20" height="20" rx="2" />
+                <path d="M10 8l6 4-6 4V8z" />
+              </svg>
+              <span>{loadingSoundReels ? 'Loading...' : `${soundReelsTotal} Reel${soundReelsTotal !== 1 ? 's' : ''} with this audio`}</span>
+            </div>
+            {soundReels.length > 0 && (
+              <div className="sound-panel-reels-grid">
+                {soundReels.slice(0, 6).map(sr => (
+                  <div key={sr.id} className="sound-panel-reel-thumb" onClick={() => {
+                    setShowSoundPanel(false)
+                    if (soundPreviewRef.current) soundPreviewRef.current.pause()
+                    onUsernameClick?.(sr.user)
+                  }}>
+                    {sr.videoUrl && !sr.videoUrl.startsWith('data:image/') && !isImageUrl(sr.videoUrl) ? (
+                      <video src={sr.videoUrl} muted playsInline className="sound-panel-reel-media" />
+                    ) : (
+                      <img src={sr.thumbnailUrl || sr.videoUrl} alt="" className="sound-panel-reel-media" />
+                    )}
+                    <span className="sound-panel-reel-user">@{sr.user?.username || 'user'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>,
+        document.body
       )}
     </div>
   )

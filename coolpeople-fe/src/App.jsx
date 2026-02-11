@@ -46,6 +46,7 @@ function AppContent() {
   const [isOwnParticipantProfile, setIsOwnParticipantProfile] = useState(false)
   const [isInConversation, setIsInConversation] = useState(false)
   const [showCreateScreen, setShowCreateScreen] = useState(false)
+  const [createScreenSound, setCreateScreenSound] = useState(null)
   const [hasBallotNotification, setHasBallotNotification] = useState(true)
   const [userParty, setUserParty] = useState(null) // User's created party
   const [canEnterPartyInRaces, setCanEnterPartyInRaces] = useState(false) // Whether user can enter their party into races (leader/admin)
@@ -541,6 +542,13 @@ function AppContent() {
 
   // Function to track user activity (likes, comments, nominations, etc.)
   const trackActivity = (type, video) => {
+    // Special handling: "Use Audio" opens CreateScreen with sound pre-selected
+    if (type === 'useAudio' && video?.sound) {
+      setCreateScreenSound(video.sound)
+      setShowCreateScreen(true)
+      return
+    }
+
     const activity = {
       id: `act-${Date.now()}`,
       type,
@@ -889,6 +897,7 @@ function AppContent() {
           isPartyPost: isPartyOnlyPost, // True = party-only (shows only in party feed), False = user post (may also show in party feed)
           duration: postData.duration || 30,
           isMirrored: postData.isMirrored || false, // Track front camera mirror state
+          soundId: postData.soundId || undefined,
           metadata: {
             textOverlays: postData.textOverlays || [],
             selfieSize: postData.selfieSize || null,
@@ -901,6 +910,8 @@ function AppContent() {
             trimStart: postData.trimStart ?? 0,
             trimEnd: postData.trimEnd ?? null,
             soundOffset: postData.soundOffset ?? 0,
+            soundStartFrac: postData.soundStartFrac ?? 0,
+            soundEndFrac: postData.soundEndFrac ?? 1,
             videoVolume: postData.videoVolume ?? 100,
             soundVolume: postData.soundVolume ?? 100,
             segments: postData.segments || null,
@@ -1954,7 +1965,8 @@ function AppContent() {
       {showCreateScreen && (
         <div className="create-screen-container">
           <CreateScreen
-            onClose={() => setShowCreateScreen(false)}
+            onClose={() => { setShowCreateScreen(false); setCreateScreenSound(null) }}
+            initialSound={createScreenSound}
             onPartyCreated={async (partyData) => {
               try {
                 // Create party in backend - this persists the party and updates user's affiliation

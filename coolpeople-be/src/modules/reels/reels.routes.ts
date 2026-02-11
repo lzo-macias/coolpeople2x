@@ -96,6 +96,31 @@ router.post(
 );
 
 // -----------------------------------------------------------------------------
+// Sounds (must be before /:id to avoid route conflict)
+// -----------------------------------------------------------------------------
+
+// GET /api/reels/sound/:soundId - Get reels using a specific sound
+router.get(
+  '/sound/:soundId',
+  optionalAuth,
+  reelsController.getReelsBySound
+);
+
+// POST /api/reels/sounds/:soundId/save - Save a sound
+router.post(
+  '/sounds/:soundId/save',
+  requireAuth,
+  reelsController.saveSound
+);
+
+// DELETE /api/reels/sounds/:soundId/save - Unsave a sound
+router.delete(
+  '/sounds/:soundId/save',
+  requireAuth,
+  reelsController.unsaveSound
+);
+
+// -----------------------------------------------------------------------------
 // Video Combine (must be before /:id to avoid route conflict)
 // -----------------------------------------------------------------------------
 

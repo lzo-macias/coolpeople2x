@@ -85,6 +85,17 @@ export interface ReelResponse {
   repostedAt?: Date;
   originalReelId?: string;
 
+  // Sound
+  soundId: string | null;
+  sound: {
+    id: string;
+    name: string;
+    artistName: string | null;
+    audioUrl: string;
+    duration: number;
+  } | null;
+  soundName: string | null;
+
   // Tags
   hashtags: string[];
   mentions: { id: string; username: string }[];

@@ -241,6 +241,17 @@ export const reelsApi = {
   }),
 
   combineVideos: (formData) => apiUpload('/api/reels/combine-videos', formData),
+
+  // Sound endpoints
+  saveSound: (soundId) => apiFetch(`/api/reels/sounds/${soundId}/save`, {
+    method: 'POST',
+  }),
+
+  unsaveSound: (soundId) => apiFetch(`/api/reels/sounds/${soundId}/save`, {
+    method: 'DELETE',
+  }),
+
+  getReelsBySound: (soundId, cursor) => apiFetch(`/api/reels/sound/${soundId}${cursor ? `?cursor=${cursor}` : ''}`),
 };
 
 // =============================================================================

@@ -10,6 +10,7 @@ import { recordReelEngagementPoints } from '../points/points.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { combineVideos, cleanupFiles, type VideoSegment } from '../../lib/ffmpeg.js';
 import { getStorage, generateStorageKey } from '../../lib/storage.js';
+import { resolveLocalVideoPath, extractAudio } from '../../lib/audio.js';
 import type { ReelResponse, CreateReelRequest, FeedReel, CombineSegment, CombineVideosResponse } from './reels.types.js';
 
 // -----------------------------------------------------------------------------
@@ -95,6 +96,11 @@ const formatReel = (
     mentions: reel.mentions?.map((m: any) => ({ id: m.user.id, username: m.user.username })) ?? [],
     raceTargets: reel.raceTargets?.map((t: any) => ({ id: t.race.id, title: t.race.title })) ?? [],
     targetRace: reel.raceTargets?.[0]?.race?.title ?? null,
+    soundId: reel.soundId ?? null,
+    sound: reel.sound
+      ? { id: reel.sound.id, name: reel.sound.name, artistName: reel.sound.artistName, audioUrl: reel.sound.audioUrl, duration: reel.sound.duration }
+      : null,
+    soundName: reel.sound?.name ?? (reel.metadata as any)?.soundName ?? null,
     quoteParent: reel.quoteParent
       ? {
           id: reel.quoteParent.id,
@@ -133,6 +139,9 @@ const reelIncludes = (viewerId?: string) => ({
   raceTargets: {
     include: { race: { select: { id: true, title: true } } },
   },
+  sound: {
+    select: { id: true, name: true, artistName: true, audioUrl: true, duration: true },
+  },
   quoteParent: {
     include: {
       user: { select: { id: true, username: true } },
@@ -144,6 +153,78 @@ const reelIncludes = (viewerId?: string) => ({
     reposts: { where: { userId: viewerId }, take: 1 },
   }),
 });
+
+// -----------------------------------------------------------------------------
+// Create Sound record for a reel (fire-and-forget after reel creation)
+// Extracts audio from the reel video, optionally mixing with overlay sound,
+// creates a Sound record, and links it to the reel.
+// -----------------------------------------------------------------------------
+
+const createSoundForReel = async (
+  reelId: string,
+  userId: string,
+  videoUrl: string,
+  duration: number,
+  metadata: Record<string, any> | null
+): Promise<void> => {
+  const videoPath = await resolveLocalVideoPath(videoUrl);
+  if (!videoPath) {
+    console.warn('createSoundForReel: Could not resolve local video path for', videoUrl);
+    return;
+  }
+
+  const overlayUrl = metadata?.soundUrl || null;
+  const videoVolume = metadata?.videoVolume ?? 100;
+  const soundVolume = metadata?.soundVolume ?? 100;
+  const soundOffset = metadata?.soundOffset ?? 0;
+
+  const { audioPath, durationSeconds } = await extractAudio({
+    videoPath,
+    duration,
+    overlayUrl,
+    videoVolume,
+    soundVolume,
+    soundOffset,
+  });
+
+  try {
+    // Upload the extracted audio to storage
+    const audioBuffer = await fs.readFile(audioPath);
+    const storage = getStorage();
+    const storageKey = generateStorageKey('sounds', 'audio.mp3');
+    const audioUrl = await storage.upload(audioBuffer, storageKey, 'audio/mpeg');
+
+    // Get the user's username for artistName
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+
+    // Determine sound name
+    const soundName = metadata?.soundName
+      || `original sound - ${user?.username || 'unknown'}`;
+
+    // Create Sound record and link to reel
+    const sound = await prisma.sound.create({
+      data: {
+        name: soundName,
+        artistName: user?.username || null,
+        audioUrl,
+        duration: Math.round(durationSeconds),
+      },
+    });
+
+    await prisma.reel.update({
+      where: { id: reelId },
+      data: { soundId: sound.id },
+    });
+
+    console.log(`Sound created for reel ${reelId}: ${sound.id}`);
+  } finally {
+    // Clean up temp audio file
+    await fs.unlink(audioPath).catch(() => {});
+  }
+};
 
 // -----------------------------------------------------------------------------
 // Create Reel
@@ -261,6 +342,12 @@ export const createReel = async (
     },
     include: reelIncludes(userId),
   });
+
+  // Fire-and-forget: extract audio and create Sound record if no soundId was provided
+  if (!data.soundId) {
+    createSoundForReel(reel.id, userId, data.videoUrl, data.duration, data.metadata ?? null)
+      .catch((err) => console.error('Sound extraction failed for reel', reel.id, err));
+  }
 
   return formatReel(reel, userId);
 };
@@ -960,4 +1047,67 @@ export const combineVideoSegments = async (
     // Clean up all temp files (uploaded + output)
     await cleanupFiles(filesToCleanup);
   }
+};
+
+// -----------------------------------------------------------------------------
+// Save / Unsave Sound
+// -----------------------------------------------------------------------------
+
+export const saveSound = async (
+  soundId: string,
+  userId: string
+): Promise<void> => {
+  const sound = await prisma.sound.findUnique({ where: { id: soundId } });
+  if (!sound) throw new NotFoundError('Sound');
+
+  try {
+    await prisma.savedSound.create({ data: { userId, soundId } });
+  } catch (err: any) {
+    if (err?.code === 'P2002') throw new ConflictError('Already saved');
+    throw err;
+  }
+};
+
+export const unsaveSound = async (
+  soundId: string,
+  userId: string
+): Promise<void> => {
+  const existing = await prisma.savedSound.findUnique({
+    where: { userId_soundId: { userId, soundId } },
+  });
+  if (!existing) throw new NotFoundError('SavedSound');
+
+  await prisma.savedSound.delete({ where: { id: existing.id } });
+};
+
+// -----------------------------------------------------------------------------
+// Get Reels by Sound
+// -----------------------------------------------------------------------------
+
+export const getReelsBySound = async (
+  soundId: string,
+  viewerId?: string,
+  cursor?: string,
+  limit: number = 20
+) => {
+  const sound = await prisma.sound.findUnique({ where: { id: soundId } });
+  if (!sound) throw new NotFoundError('Sound');
+
+  const reels = await prisma.reel.findMany({
+    where: { soundId, deletedAt: null },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: reelIncludes(viewerId),
+  });
+
+  const hasMore = reels.length > limit;
+  const results = hasMore ? reels.slice(0, -1) : reels;
+  const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+  return {
+    reels: results.map((r) => formatReel(r, viewerId)),
+    nextCursor,
+    total: await prisma.reel.count({ where: { soundId, deletedAt: null } }),
+  };
 };

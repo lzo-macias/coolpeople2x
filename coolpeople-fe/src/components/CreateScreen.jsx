@@ -19,7 +19,7 @@ const mockContacts = [
   { id: 106, phone: '+1 (555) 678-9012', name: 'Work - John', isOnPlatform: false },
 ]
 
-function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, currentUserId }) {
+function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToConversation, onPartyCreated, onPostCreated, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, currentUserId, initialSound }) {
   const { user: authUser } = useAuth()
   const [selectedDuration, setSelectedDuration] = useState('PHOTO')
   const [selectedMode, setSelectedMode] = useState('record') // 'record', 'nominate', 'race', or 'party'
@@ -67,6 +67,13 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [videoTrimStart, setVideoTrimStart] = useState(0)
   const [videoTrimEnd, setVideoTrimEnd] = useState(null)
   const [videoEdits, setVideoEdits] = useState(null) // soundOffset, videoVolume, soundVolume, segments
+
+  // Pre-select sound when opened from "Use Audio" button
+  useEffect(() => {
+    if (initialSound) {
+      setSelectedSound(initialSound)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Callback for child screens to sync video edits back to CreateScreen
   const handleVideoEditsChange = useCallback((edits) => {
