@@ -7,6 +7,7 @@ import '../styling/CreateScreen.css'
 import { messagesApi, usersApi, partiesApi, searchApi, reelsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { combineMediaItems } from '../utils/combineMedia'
+import { loadDraftBlob, cleanExpiredDraftBlobs } from '../utils/draftBlobStore'
 
 // Mock phone contacts
 const mockContacts = [
@@ -130,7 +131,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   })
 
   // Reload drafts from localStorage (used when returning from PostScreen)
-  const reloadDraftsFromStorage = () => {
+  const reloadDraftsFromStorage = async () => {
     try {
       const saved = localStorage.getItem('coolpeople-drafts')
       if (!saved) {
@@ -139,21 +140,73 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
       }
       const parsed = JSON.parse(saved)
       const filtered = filterExpiredDrafts(parsed)
-      // Save back if any were removed
       if (filtered.length !== parsed.length) {
         localStorage.setItem('coolpeople-drafts', JSON.stringify(filtered))
       }
-      setDrafts(filtered)
+      // Hydrate idb-draft: references
+      const hydrated = await Promise.all(filtered.map(async (draft) => {
+        if (!draft.videoUrl?.startsWith('idb-draft:') && !draft.selfieVideoUrl?.startsWith('idb-draft:')) {
+          return draft
+        }
+        const blobUrl = await loadDraftBlob(draft.id).catch(() => null)
+        if (!blobUrl) return draft
+        return {
+          ...draft,
+          videoUrl: draft.videoUrl?.startsWith('idb-draft:') ? blobUrl : draft.videoUrl,
+          selfieVideoUrl: draft.selfieVideoUrl?.startsWith('idb-draft:') ? blobUrl : draft.selfieVideoUrl,
+          _hydratedBlobUrl: blobUrl
+        }
+      }))
+      setDrafts(hydrated)
     } catch {
       // Keep current state if parse fails
     }
   }
 
+  // Hydrate idb-draft: references from IndexedDB into blob URLs
+  useEffect(() => {
+    const hydrateDrafts = async (draftsToHydrate) => {
+      const needsHydration = draftsToHydrate.some(d =>
+        d.videoUrl?.startsWith('idb-draft:') || d.selfieVideoUrl?.startsWith('idb-draft:')
+      )
+      if (!needsHydration) return
+
+      // Clean up expired blobs from IndexedDB
+      cleanExpiredDraftBlobs(draftsToHydrate.map(d => d.id)).catch(() => {})
+
+      const hydrated = await Promise.all(draftsToHydrate.map(async (draft) => {
+        if (!draft.videoUrl?.startsWith('idb-draft:') && !draft.selfieVideoUrl?.startsWith('idb-draft:')) {
+          return draft
+        }
+        const blobUrl = await loadDraftBlob(draft.id).catch(() => null)
+        if (!blobUrl) return draft
+        return {
+          ...draft,
+          videoUrl: draft.videoUrl?.startsWith('idb-draft:') ? blobUrl : draft.videoUrl,
+          selfieVideoUrl: draft.selfieVideoUrl?.startsWith('idb-draft:') ? blobUrl : draft.selfieVideoUrl,
+          _hydratedBlobUrl: blobUrl
+        }
+      }))
+      setDrafts(hydrated)
+    }
+    hydrateDrafts(drafts)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Save drafts to localStorage when they change
   useEffect(() => {
     const saveDraftsToStorage = (draftsToSave) => {
       try {
-        localStorage.setItem('coolpeople-drafts', JSON.stringify(draftsToSave))
+        // Restore idb-draft: references before saving (don't persist blob URLs)
+        const toStore = draftsToSave.map(d => {
+          if (!d._hydratedBlobUrl) return d
+          const { _hydratedBlobUrl, ...rest } = d
+          return {
+            ...rest,
+            videoUrl: rest.videoUrl === _hydratedBlobUrl ? `idb-draft:${d.id}` : rest.videoUrl,
+            selfieVideoUrl: rest.selfieVideoUrl === _hydratedBlobUrl ? `idb-draft:${d.id}` : rest.selfieVideoUrl
+          }
+        })
+        localStorage.setItem('coolpeople-drafts', JSON.stringify(toStore))
         return true
       } catch (e) {
         if (e.name === 'QuotaExceededError' && draftsToSave.length > 1) {
@@ -878,11 +931,17 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
   const [deviceMediaType, setDeviceMediaType] = useState(null) // 'image' or 'video'
 
   // Load draft into editor
-  const loadDraft = (draft) => {
+  const loadDraft = async (draft) => {
     // For quote nominations, use selfieVideoUrl if available, otherwise videoUrl
-    const videoToLoad = draft.isQuoteNomination
+    let videoToLoad = draft.isQuoteNomination
       ? (draft.selfieVideoUrl || draft.videoUrl)
       : draft.videoUrl
+
+    // Resolve idb-draft: reference if not yet hydrated
+    if (videoToLoad?.startsWith('idb-draft:')) {
+      const blobUrl = await loadDraftBlob(draft.id).catch(() => null)
+      if (blobUrl) videoToLoad = blobUrl
+    }
 
     console.log('Loading draft:', {
       isQuoteNomination: draft.isQuoteNomination,
@@ -1743,9 +1802,21 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
           })
         }
 
-        const start = postData.trimStart ?? 0
-        const end = postData.trimEnd ?? probedDuration
-        const serverSegments = [{ fileIndex: 0, startTime: start, endTime: end }]
+        const editedSegments = postData.segments
+        let serverSegments
+        if (editedSegments && editedSegments.length > 0) {
+          // Use the edited segments (split/rearranged) from the video editor
+          serverSegments = editedSegments.map(seg => ({
+            fileIndex: 0,
+            startTime: seg.start,
+            endTime: seg.end,
+          }))
+        } else {
+          // Fallback: single segment spanning the full trim range
+          const start = postData.trimStart ?? 0
+          const end = postData.trimEnd ?? probedDuration
+          serverSegments = [{ fileIndex: 0, startTime: start, endTime: end }]
+        }
         const mimeType = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4'
         const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('quicktime') ? '.mov' : '.mp4'
         const videoFile = new File([blob], `video-0${ext}`, { type: mimeType })
@@ -1757,6 +1828,22 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
         const result = await reelsApi.combineVideos(formData)
         videoUrl = result.data.videoUrl
         postDuration = result.data.duration
+
+        // Recalculate segments for the combined video (same as playlist path):
+        // FFmpeg produces a single file with segments played sequentially,
+        // so update metadata to reflect cumulative timestamps
+        if (editedSegments && editedSegments.length > 1) {
+          let cumulative = 0
+          const combinedSegments = editedSegments.map(seg => {
+            const dur = seg.end - seg.start
+            const newSeg = { start: cumulative, end: cumulative + dur }
+            cumulative += dur
+            return newSeg
+          })
+          postData.segments = combinedSegments
+          postData.trimStart = 0
+          postData.trimEnd = cumulative
+        }
       } catch (err) {
         console.error('Failed to upload video for post:', err)
       }
@@ -2635,9 +2722,9 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                       >
                         {/* Main content - thumbnail or video fallback */}
                         {mainThumbnail ? (
-                          <img src={mainThumbnail} alt="" />
+                          <img src={mainThumbnail} alt="" className={draft.isQuoteNomination && draft.quotedReel?.isMirrored ? 'mirrored' : ''} />
                         ) : mainVideo ? (
-                          <video src={mainVideo} autoPlay loop muted playsInline className="media-grid-video" />
+                          <video src={mainVideo} autoPlay loop muted playsInline className={`media-grid-video ${draft.isMirrored ? 'mirrored' : ''}`} />
                         ) : (
                           <div className="media-grid-placeholder" />
                         )}

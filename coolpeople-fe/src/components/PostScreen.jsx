@@ -650,13 +650,13 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
       <div className="post-content">
         {/* Video Preview */}
         <div className="post-video-preview">
-          {isQuoteNomination && quotedReel ? (
-            /* Quote Nomination Mode: Quoted reel as main + selfie overlay */
+          {quotedReel ? (
+            /* Quote Mode: Quoted reel as main background + selfie overlay */
             <>
               {quotedReel.videoUrl ? (
                 <video
-                  ref={videoRef}
                   src={quotedReel.videoUrl}
+                  className={quotedReel.isMirrored ? 'mirrored' : ''}
                   autoPlay
                   loop
                   muted
@@ -742,7 +742,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 1 }} />
 
           {/* Selfie Cam inside preview - for nominate mode (non-quote) */}
-          {isNominateMode && !isQuoteNomination && showSelfieCam && showSelfieOverlay && recordedVideoUrl && (
+          {isNominateMode && !quotedReel && !isQuoteNomination && showSelfieCam && showSelfieOverlay && recordedVideoUrl && (
             <div
               className="post-selfie-cam"
               style={scaledSelfie ? {
@@ -1156,6 +1156,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
           showSelfieOverlay={showSelfieOverlay}
           selfieSize={selfieSize}
           selfiePosition={selfiePosition}
+          quotedReel={quotedReel}
           onDone={({ trimStart: ts, trimEnd: te, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments: segs }) => {
             setLocalTrimStart(ts)
             setLocalTrimEnd(te)

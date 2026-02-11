@@ -2,15 +2,16 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import EditClipScreen from './EditClipScreen'
 import PostScreen from './PostScreen'
+import { saveDraftBlob } from '../utils/draftBlobStore'
+import { reelsApi } from '../services/api'
 import '../styling/QuoteNominateScreen.css'
 
-function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteMode = false }) {
+function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteMode = false, onPostCreated, conversations = {}, userParty, currentUser, userRacesFollowing = [], userRacesCompeting = [] }) {
+  const [isPosting, setIsPosting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [hasRecorded, setHasRecorded] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState(null)
   const [recordedUrl, setRecordedUrl] = useState(null)
-  const [recordedVideoBase64, setRecordedVideoBase64] = useState(null) // For persistent storage
-  const [isBase64Ready, setIsBase64Ready] = useState(false) // Track if base64 conversion is complete
 
   // Flow states - skip clip-inline-actions and tag-flow, go straight to edit
   const [showEditClipScreen, setShowEditClipScreen] = useState(false)
@@ -20,6 +21,16 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
   const [raceName, setRaceName] = useState('')
   const [raceDeadline, setRaceDeadline] = useState(null)
   const [textOverlays, setTextOverlays] = useState([])
+
+  // Selfie overlay state (same as CreateScreen — passed to EditClipScreen)
+  const [selfieSize, setSelfieSize] = useState({ w: 120, h: 160 })
+  const [selfiePosition, setSelfiePosition] = useState({ x: 16, y: 80 })
+  const [showSelfieOverlay, setShowSelfieOverlay] = useState(true)
+
+  // Video edit state (synced from EditClipScreen for PostScreen)
+  const [videoTrimStart, setVideoTrimStart] = useState(0)
+  const [videoTrimEnd, setVideoTrimEnd] = useState(null)
+  const [videoEdits, setVideoEdits] = useState(null)
 
   // Camera refs
   const videoRef = useRef(null)
@@ -91,16 +102,6 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
       setRecordedBlob(blob)
       setRecordedUrl(url)
       setHasRecorded(true)
-      setIsBase64Ready(false) // Reset while converting
-
-      // Convert blob to base64 for persistent storage in drafts
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setRecordedVideoBase64(reader.result)
-        setIsBase64Ready(true)
-        console.log('Base64 conversion complete, length:', reader.result?.length)
-      }
-      reader.readAsDataURL(blob)
     }
 
     mediaRecorder.start()
@@ -126,10 +127,40 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
     setShowEditClipScreen(true)
   }
 
-  const handleSaveDraft = () => {
-    // TODO: Implement draft saving
-    console.log('Saving draft...')
+  const handleSaveDraft = async () => {
+    try {
+      const draftId = `draft-${Date.now()}`
+
+      // Store video blob in IndexedDB (no localStorage size limit)
+      if (recordedBlob) {
+        await saveDraftBlob(draftId, recordedBlob)
+      }
+
+      const existingDrafts = JSON.parse(localStorage.getItem('coolpeople-drafts') || '[]')
+      const newDraft = {
+        id: draftId,
+        type: 'video',
+        videoUrl: `idb-draft:${draftId}`,
+        selfieVideoUrl: `idb-draft:${draftId}`,
+        thumbnail: reel.thumbnail,
+        isMirrored: true,
+        timestamp: Date.now(),
+        mode: currentMode,
+        raceName: raceName || null,
+        raceDeadline: raceDeadline || null,
+        taggedUser: reel.user || null,
+        textOverlays: [...textOverlays],
+        quotedReel: reel,
+        isQuoteNomination: true,
+        hasSelfieOverlay: true
+      }
+      localStorage.setItem('coolpeople-drafts', JSON.stringify([newDraft, ...existingDrafts]))
+      console.log('Draft saved to IndexedDB + localStorage')
+    } catch (e) {
+      console.error('Failed to save draft:', e)
+    }
     handleDeleteClip()
+    onClose?.()
   }
 
   const handleNextFromEditClip = () => {
@@ -137,15 +168,113 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
     setShowPostScreen(true)
   }
 
-  const handlePost = (postData) => {
-    console.log('Quote Nomination Posted:', {
-      ...postData,
-      race: selectedRace,
-      quotedUser: reel.user,
-      quotedReel: reel
-    })
+  const handlePost = async (postData) => {
+    if (isPosting) return
+    setIsPosting(true)
+
+    let videoUrl = recordedUrl
+    let duration = 10
+
+    // Upload selfie video blob to server (mirrors CreateScreen.handlePost)
+    if (videoUrl && (videoUrl.startsWith('blob:') || videoUrl.startsWith('data:video/'))) {
+      try {
+        const resp = await fetch(videoUrl)
+        const blob = await resp.blob()
+
+        // Probe duration
+        let probedDuration = duration
+        try {
+          probedDuration = await new Promise((resolve) => {
+            const probe = document.createElement('video')
+            probe.preload = 'metadata'
+            probe.onloadedmetadata = () => {
+              resolve(probe.duration && isFinite(probe.duration) ? probe.duration : 30)
+              URL.revokeObjectURL(probe.src)
+            }
+            probe.onerror = () => { resolve(30); URL.revokeObjectURL(probe.src) }
+            probe.src = URL.createObjectURL(blob)
+          })
+        } catch {} // eslint-disable-line no-empty
+
+        const editedSegments = postData.segments
+        let serverSegments
+        if (editedSegments && editedSegments.length > 0) {
+          serverSegments = editedSegments.map(seg => ({
+            fileIndex: 0,
+            startTime: seg.start,
+            endTime: seg.end,
+          }))
+        } else {
+          const start = postData.trimStart ?? 0
+          const end = postData.trimEnd ?? probedDuration
+          serverSegments = [{ fileIndex: 0, startTime: start, endTime: end }]
+        }
+
+        const mimeType = blob.type && blob.type.startsWith('video/') ? blob.type : 'video/webm'
+        const ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('quicktime') ? '.mov' : '.mp4'
+        const videoFile = new File([blob], `video-0${ext}`, { type: mimeType })
+
+        const formData = new FormData()
+        formData.append('videos', videoFile)
+        formData.append('segments', JSON.stringify(serverSegments))
+
+        const result = await reelsApi.combineVideos(formData)
+        videoUrl = result.data.videoUrl
+        duration = result.data.duration || probedDuration
+
+        // Recalculate segments for combined video
+        if (editedSegments && editedSegments.length > 1) {
+          let cumulative = 0
+          const combinedSegments = editedSegments.map(seg => {
+            const dur = seg.end - seg.start
+            const newSeg = { start: cumulative, end: cumulative + dur }
+            cumulative += dur
+            return newSeg
+          })
+          postData.segments = combinedSegments
+          postData.trimStart = 0
+          postData.trimEnd = cumulative
+        }
+      } catch (err) {
+        console.error('Failed to upload video for quote post:', err)
+      }
+    }
+
+    duration = Math.max(1, Math.round(duration))
+
+    // Call the same onPostCreated used by CreateScreen (handles reel creation, sending, etc.)
+    // Main videoUrl = quoted reel (background), selfieVideoUrl = uploaded selfie (overlay)
+    if (onPostCreated) {
+      try {
+        await onPostCreated({
+          ...postData,
+          videoUrl: reel.videoUrl,
+          selfieVideoUrl: videoUrl,
+          duration,
+          isMirrored: reel.isMirrored || false,
+          isNomination: currentMode === 'nominate',
+          taggedUser: reel.user,
+          textOverlays,
+          selfieSize: showSelfieOverlay ? selfieSize : undefined,
+          selfiePosition: showSelfieOverlay ? selfiePosition : undefined,
+          showSelfieOverlay,
+          selfieIsMirrored: true,
+          quotedReelId: reel.id || null,
+          quotedReelVideoUrl: reel.videoUrl || null,
+          quotedReelUser: reel.user || null,
+        })
+
+        // Quoting a reel counts as a repost — increment repost count on the original
+        if (reel.id) {
+          reelsApi.repostReel(reel.id).catch(err => console.warn('Failed to repost quoted reel:', err))
+        }
+      } catch (err) {
+        console.error('Post creation failed:', err)
+      }
+    }
+
+    setIsPosting(false)
     setShowPostScreen(false)
-    // Return to the reel we quoted
     onComplete?.()
   }
 
@@ -158,116 +287,127 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
       recordedUrl: !!recordedUrl
     })
     return createPortal(
-      <EditClipScreen
-        onClose={() => {
-          setShowEditClipScreen(false)
-          setHasRecorded(false)
-          setRecordedBlob(null)
-          setRecordedUrl(null)
-        }}
-        onNext={handleNextFromEditClip}
-        selectedSound={selectedSound}
-        onSelectSound={setSelectedSound}
-        recordedVideoUrl={recordedUrl}
-        quotedReel={reel}
-        isNominateMode={currentMode === 'nominate'}
-        isRaceMode={currentMode === 'race'}
-        isQuoteMode={currentMode === 'quote'}
-        taggedUser={reel.user}
-        isMirrored={true}
-        currentMode={currentMode}
-        onModeChange={setCurrentMode}
-        raceName={raceName}
-        onRaceNameChange={setRaceName}
-        raceDeadline={raceDeadline}
-        onRaceDeadlineChange={setRaceDeadline}
-        textOverlays={textOverlays}
-        setTextOverlays={setTextOverlays}
-        onCompleteToScoreboard={() => {
-          setShowEditClipScreen(false)
-          onComplete?.()
-        }}
-        onSaveDraft={() => {
-          // Save draft to localStorage
-          try {
-            // Check if base64 is ready
-            if (!isBase64Ready && !recordedVideoBase64) {
-              console.warn('Base64 conversion not complete yet, using blob URL (will not persist)')
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99995 }}>
+        <EditClipScreen
+          onClose={() => {
+            setShowEditClipScreen(false)
+            setHasRecorded(false)
+            setRecordedBlob(null)
+            setRecordedUrl(null)
+          }}
+          onNext={handleNextFromEditClip}
+          selectedSound={selectedSound}
+          onSelectSound={setSelectedSound}
+          recordedVideoUrl={recordedUrl}
+          quotedReel={reel}
+          isNominateMode={currentMode === 'nominate'}
+          isRaceMode={currentMode === 'race'}
+          isQuoteMode={currentMode === 'quote'}
+          taggedUser={reel.user}
+          isMirrored={true}
+          currentMode={currentMode}
+          onModeChange={setCurrentMode}
+          raceName={raceName}
+          onRaceNameChange={setRaceName}
+          raceDeadline={raceDeadline}
+          onRaceDeadlineChange={setRaceDeadline}
+          textOverlays={textOverlays}
+          setTextOverlays={setTextOverlays}
+          selfieSize={selfieSize}
+          setSelfieSize={setSelfieSize}
+          selfiePosition={selfiePosition}
+          setSelfiePosition={setSelfiePosition}
+          showSelfieOverlay={showSelfieOverlay}
+          setShowSelfieOverlay={setShowSelfieOverlay}
+          onVideoEditsChange={(edits) => {
+            if (edits) {
+              setVideoTrimStart(edits.trimStart ?? 0)
+              setVideoTrimEnd(edits.trimEnd ?? null)
+              setVideoEdits(edits)
             }
+          }}
+          onCompleteToScoreboard={() => {
+            setShowEditClipScreen(false)
+            onComplete?.()
+          }}
+          onSaveDraft={async () => {
+            try {
+              const draftId = `draft-${Date.now()}`
 
-            const existingDrafts = JSON.parse(localStorage.getItem('coolpeople-drafts') || '[]')
-            // Use base64 data for persistent storage (blob URLs become invalid after session)
-            // Explicitly save selfie video separately from quoted reel
-            const selfieVideo = recordedVideoBase64 || recordedUrl
+              if (recordedBlob) {
+                await saveDraftBlob(draftId, recordedBlob)
+              }
 
-            // Validate we have proper data
-            const isBase64 = selfieVideo?.startsWith('data:')
-            console.log('Saving quote nomination draft:', {
-              isBase64Ready,
-              isBase64Video: isBase64,
-              hasSelfie: !!selfieVideo,
-              hasQuotedReel: !!reel,
-              selfieLength: selfieVideo?.length,
-              quotedReelVideo: !!reel?.videoUrl,
-              quotedReelThumb: !!reel?.thumbnail
-            })
-
-            if (!isBase64) {
-              console.error('WARNING: Saving blob URL instead of base64. Draft selfie will not persist!')
+              const existingDrafts = JSON.parse(localStorage.getItem('coolpeople-drafts') || '[]')
+              const newDraft = {
+                id: draftId,
+                type: 'video',
+                videoUrl: `idb-draft:${draftId}`,
+                selfieVideoUrl: `idb-draft:${draftId}`,
+                thumbnail: reel.thumbnail,
+                isMirrored: true,
+                timestamp: Date.now(),
+                mode: currentMode,
+                raceName: raceName || null,
+                raceDeadline: raceDeadline || null,
+                taggedUser: reel.user || null,
+                textOverlays: [...textOverlays],
+                quotedReel: reel,
+                isQuoteNomination: true,
+                hasSelfieOverlay: true
+              }
+              localStorage.setItem('coolpeople-drafts', JSON.stringify([newDraft, ...existingDrafts]))
+            } catch (e) {
+              console.error('Failed to save draft:', e)
             }
-
-            const newDraft = {
-              id: `draft-${Date.now()}`,
-              type: 'video',
-              videoUrl: selfieVideo,
-              selfieVideoUrl: selfieVideo, // Explicit field for selfie video
-              thumbnail: reel.thumbnail,
-              isMirrored: true,
-              timestamp: Date.now(),
-              mode: currentMode,
-              raceName: raceName || null,
-              raceDeadline: raceDeadline || null,
-              taggedUser: reel.user || null,
-              textOverlays: [...textOverlays],
-              quotedReel: reel,
-              isQuoteNomination: true,
-              hasSelfieOverlay: true // Track that this draft has a selfie
-            }
-            localStorage.setItem('coolpeople-drafts', JSON.stringify([newDraft, ...existingDrafts]))
-          } catch (e) {
-            console.error('Failed to save draft:', e)
-          }
-          setShowEditClipScreen(false)
-          // Don't call onComplete - just close and return to reel with nominate still available
-          onClose?.()
-        }}
-      />,
+            setShowEditClipScreen(false)
+            onClose?.()
+          }}
+        />
+      </div>,
       document.body
     )
   }
 
   if (showPostScreen) {
     return createPortal(
-      <PostScreen
-        onClose={() => {
-          setShowPostScreen(false)
-          setShowEditClipScreen(true)
-        }}
-        onPost={handlePost}
-        isQuoteNomination={!isQuoteMode}
-        isNominateMode={currentMode === 'nominate'}
-        isRaceMode={currentMode === 'race'}
-        isQuoteMode={currentMode === 'quote'}
-        quotedUser={reel.user}
-        selectedRace={selectedRace}
-        quotedReel={reel}
-        recordedVideoUrl={recordedUrl}
-        isMirrored={true}
-        taggedUser={reel.user}
-        textOverlays={textOverlays}
-        raceName={raceName}
-        raceDeadline={raceDeadline}
-      />,
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99995 }}>
+        <PostScreen
+          onClose={() => {
+            setShowPostScreen(false)
+            setShowEditClipScreen(true)
+          }}
+          onPost={handlePost}
+          onDraftSaved={() => {
+            setShowPostScreen(false)
+            handleDeleteClip()
+            onClose?.()
+          }}
+          isQuoteNomination={currentMode !== 'quote'}
+          isNominateMode={currentMode === 'nominate'}
+          isRaceMode={currentMode === 'race'}
+          quotedReel={reel}
+          recordedVideoUrl={recordedUrl}
+          isMirrored={true}
+          taggedUser={reel.user}
+          textOverlays={textOverlays}
+          raceName={raceName}
+          raceDeadline={raceDeadline}
+          selfieSize={selfieSize}
+          selfiePosition={selfiePosition}
+          showSelfieOverlay={showSelfieOverlay}
+          showSelfieCam={true}
+          selectedSound={selectedSound}
+          trimStart={videoTrimStart}
+          trimEnd={videoTrimEnd}
+          videoEdits={videoEdits}
+          conversations={conversations}
+          userParty={userParty}
+          userRacesFollowing={userRacesFollowing}
+          userRacesCompeting={userRacesCompeting}
+          currentUserId={currentUser?.id}
+        />
+      </div>,
       document.body
     )
   }
@@ -280,7 +420,7 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
           <video
             ref={reelVideoRef}
             src={reel.videoUrl}
-            className="quote-reel-video"
+            className={`quote-reel-video ${reel.isMirrored ? 'mirrored' : ''}`}
             autoPlay
             loop
             muted
@@ -304,7 +444,6 @@ function QuoteNominateScreen({ reel, selectedRace, onClose, onComplete, isQuoteM
             src={recordedUrl}
             autoPlay
             loop
-            muted
             playsInline
             onCanPlay={(e) => e.target.play()}
             onLoadedMetadata={(e) => e.target.play()}

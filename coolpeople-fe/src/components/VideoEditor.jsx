@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import '../styling/VideoEditor.css'
 
-function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition, videoPlaylist }) {
+function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0, initialTrimEnd = null, initialSegments = null, initialSoundOffset = 0, initialSoundStartFrac = 0, initialSoundEndFrac = 1, initialVideoVolume = 100, initialSoundVolume = 100, onDone, onClose, showSelfieOverlay, selfieSize, selfiePosition, videoPlaylist, quotedReel }) {
   const videoRef = useRef(null)
+  const quotedVideoRef = useRef(null)
+  const selfieOverlayRef = useRef(null)
   const freezeCanvasRef = useRef(null)
   const thumbVideoRef = useRef(null)
   const timelineRef = useRef(null)
@@ -304,10 +306,12 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
     }
   }, [selectedSound])
 
-  // Pause audio when playback stops
+  // Pause audio + synced videos when playback stops
   useEffect(() => {
-    if (!isPlaying && soundAudioRef.current && !soundAudioRef.current.paused) {
-      soundAudioRef.current.pause()
+    if (!isPlaying) {
+      if (soundAudioRef.current && !soundAudioRef.current.paused) soundAudioRef.current.pause()
+      if (quotedVideoRef.current && !quotedVideoRef.current.paused) quotedVideoRef.current.pause()
+      if (selfieOverlayRef.current && !selfieOverlayRef.current.paused) selfieOverlayRef.current.pause()
     }
   }, [isPlaying])
 
@@ -501,6 +505,8 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
     if (isPlaying) {
       vid.pause()
+      if (quotedVideoRef.current) quotedVideoRef.current.pause()
+      if (selfieOverlayRef.current) selfieOverlayRef.current.pause()
       setIsPlaying(false)
     } else {
       const idx = playingSegIdxRef.current
@@ -528,6 +534,15 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
         }
       }
       vid.play().catch(err => console.warn('Video play failed:', err))
+      // Sync quoted reel and selfie overlay
+      if (quotedVideoRef.current) {
+        quotedVideoRef.current.currentTime = 0
+        quotedVideoRef.current.play().catch(() => {})
+      }
+      if (selfieOverlayRef.current) {
+        selfieOverlayRef.current.currentTime = vid.currentTime
+        selfieOverlayRef.current.play().catch(() => {})
+      }
       setIsPlaying(true)
     }
   }
@@ -1034,16 +1049,44 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
 
       {/* Video Preview */}
       <div className="video-editor-preview" ref={previewRef} onClick={togglePlay}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          className={`video-editor-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}`}
-          playsInline
-          preload="auto"
-          onLoadedMetadata={handleLoadedMetadata}
-          onPlay={() => { setIsPlaying(true); unfreezeFrame() }}
-          onPause={() => { if (!playlistSwappingRef.current) setIsPlaying(false) }}
-        />
+        {quotedReel ? (
+          <>
+            {/* Quoted reel as main background — mirrors EditClipScreen layout */}
+            <video
+              ref={quotedVideoRef}
+              src={quotedReel.videoUrl}
+              className={`video-editor-video quoted-main ${quotedReel.isMirrored ? 'mirrored' : ''}`}
+              playsInline
+              muted
+              onEnded={() => {
+                const qv = quotedVideoRef.current
+                if (qv) { qv.currentTime = 0; qv.play().catch(() => {}) }
+              }}
+            />
+            {/* Hidden editing video — still drives timeline/trimming */}
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+              playsInline
+              preload="auto"
+              onLoadedMetadata={handleLoadedMetadata}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => { if (!playlistSwappingRef.current) setIsPlaying(false) }}
+            />
+          </>
+        ) : (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className={`video-editor-video ${(videoPlaylist ? playlistMirrored : isMirrored) ? 'mirrored' : ''}`}
+            playsInline
+            preload="auto"
+            onLoadedMetadata={handleLoadedMetadata}
+            onPlay={() => { setIsPlaying(true); unfreezeFrame() }}
+            onPause={() => { if (!playlistSwappingRef.current) setIsPlaying(false) }}
+          />
+        )}
         <canvas ref={freezeCanvasRef} style={{ display: 'none', position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: 1 }} />
         {!isPlaying && (
           <div className="video-editor-play-btn">
@@ -1067,12 +1110,11 @@ function VideoEditor({ videoUrl, isMirrored, selectedSound, initialTrimStart = 0
               }}
             >
               <video
+                ref={selfieOverlayRef}
                 src={videoUrl}
                 className={`video-editor-selfie-video ${isMirrored ? 'mirrored' : ''}`}
-                autoPlay
-                loop
-                muted
                 playsInline
+                muted
               />
             </div>
           )

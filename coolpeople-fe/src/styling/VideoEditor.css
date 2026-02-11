@@ -77,6 +77,11 @@
   transform: scaleX(-1);
 }
 
+.video-editor-video.quoted-main {
+  position: absolute;
+  inset: 0;
+}
+
 .video-editor-play-btn {
   position: absolute;
   width: 60px;

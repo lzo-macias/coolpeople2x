@@ -23,6 +23,10 @@
   object-fit: cover;
 }
 
+.quote-reel-video.mirrored {
+  transform: scaleX(-1);
+}
+
 .quote-reel-thumbnail {
   width: 100%;
   height: 100%;

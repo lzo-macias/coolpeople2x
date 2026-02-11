@@ -1263,6 +1263,11 @@
   border-radius: 4px;
 }
 
+.media-grid-item > img.mirrored,
+.media-grid-item > video.mirrored {
+  transform: scaleX(-1);
+}
+
 .media-grid-item > video.media-grid-video {
   width: 100%;
   height: 100%;

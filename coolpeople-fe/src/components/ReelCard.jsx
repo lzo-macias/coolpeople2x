@@ -194,7 +194,7 @@ const formatNominations = (num) => num.toLocaleString()
 // Default race for nominations
 const DEFAULT_RACE = { id: 'coolpeople', name: 'CoolPeople', icon: '/coolpeople-icon.png' }
 
-function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [], hasOptedIn = false, onOptIn, currentUserId, userPartyId, canEnterPartyInRaces = false, onScoreboardRefresh }) {
+function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments, onUsernameClick, onPartyClick, onEngagementClick, onTrackActivity, onLikeChange, onRepostChange, onHide, userRacesFollowing = [], userRacesCompeting = [], hasOptedIn = false, onOptIn, currentUserId, userPartyId, canEnterPartyInRaces = false, onScoreboardRefresh, onPostCreated, conversations, userParty, currentUser }) {
   const videoRef = useRef(null)
   const cardRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
@@ -215,6 +215,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
     soundVolume: editMeta.soundVolume ?? 100,
     soundOffset: editMeta.soundOffset ?? 0,
     soundUrl: editMeta.soundUrl || null,
+    soundStartFrac: editMeta.soundStartFrac ?? 0,
+    soundEndFrac: editMeta.soundEndFrac ?? 1,
   }
 
   // IntersectionObserver to detect when video is in viewport
@@ -261,10 +263,18 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
   // --- Edit playback effects ---
 
-  // Apply video volume
+  // Apply video volume (quote posts: mute main video since edit screen plays quoted reel muted)
+  const isQuotePost = !!editMeta.quotedReelVideoUrl
   useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = (editMeta.videoVolume ?? 100) / 100
-  }, [editMeta.videoVolume])
+    if (videoRef.current) {
+      if (isQuotePost) {
+        videoRef.current.volume = 0
+        videoRef.current.muted = true
+      } else {
+        videoRef.current.volume = (editMeta.videoVolume ?? 100) / 100
+      }
+    }
+  }, [editMeta.videoVolume, isQuotePost])
 
   // Setup sound audio element
   useEffect(() => {
@@ -312,14 +322,16 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         if (idx < segs.length - 1) { segIdxRef.current = idx + 1; vid.currentTime = segs[idx + 1].start }
         else { segIdxRef.current = 0; vid.currentTime = segs[0].start }
       }
-      // Sync sound
+      // Sync sound (apply soundStartFrac so trim matches edit screen)
       const audio = soundAudioRef.current
       if (audio && audio.src) {
         let outputTime = 0
         for (let i = 0; i < segIdxRef.current; i++) outputTime += segs[i].end - segs[i].start
         const curSeg = segs[segIdxRef.current]
         if (curSeg) outputTime += Math.max(0, vid.currentTime - curSeg.start)
-        const targetAudioTime = (ed.soundOffset ?? 0) + outputTime
+        const startFrac = ed.soundStartFrac ?? 0
+        const sndStart = audio.duration ? startFrac * audio.duration : 0
+        const targetAudioTime = sndStart + (ed.soundOffset ?? 0) + outputTime
         if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
         if (audio.paused) audio.play().catch(() => {})
       }
@@ -729,9 +741,9 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
         />
       )}
 
-      {/* Selfie overlay for nominations */}
+      {/* Selfie overlay for nominations/quotes */}
       {(data.showSelfieOverlay || data.metadata?.showSelfieOverlay) &&
-       (data.selfieSize || data.metadata?.selfieSize) && data.videoUrl && (
+       (data.selfieSize || data.metadata?.selfieSize) && (data.metadata?.selfieVideoUrl || data.videoUrl) && (
         <div
           className="reel-selfie-overlay"
           style={{
@@ -741,18 +753,24 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             top: (data.selfiePosition || data.metadata?.selfiePosition)?.y || 80,
           }}
         >
-          {(data.videoUrl.startsWith('data:image/') || isImageUrl(data.videoUrl)) ? (
-            <img src={data.videoUrl} className={data.isMirrored ? 'mirrored' : ''} alt="" />
-          ) : (
-            <video
-              src={data.videoUrl}
-              className={data.isMirrored ? 'mirrored' : ''}
-              autoPlay
-              loop
-              muted
-              playsInline
-            />
-          )}
+          {(() => {
+            const selfieUrl = data.metadata?.selfieVideoUrl || data.videoUrl
+            const selfieMirrored = data.metadata?.selfieIsMirrored ?? data.isMirrored
+            // Quote posts: selfie carries the recorded audio (edit screen plays quoted reel muted + selfie with audio)
+            const isQuote = !!data.metadata?.quotedReelVideoUrl
+            return (selfieUrl.startsWith('data:image/') || isImageUrl(selfieUrl)) ? (
+              <img src={selfieUrl} className={selfieMirrored ? 'mirrored' : ''} alt="" />
+            ) : (
+              <video
+                src={selfieUrl}
+                className={selfieMirrored ? 'mirrored' : ''}
+                autoPlay
+                loop
+                muted={!isQuote}
+                playsInline
+              />
+            )
+          })()}
         </div>
       )}
 
@@ -797,6 +815,18 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
 
         {/* Bottom section wrapper */}
         <div className="reel-bottom-wrapper">
+          {/* Quoted user indicator - above sound marquee */}
+          {(data.metadata?.quotedReelUser) && (
+            <div className="reel-quoted-indicator">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Quoted </span>
+              <button className="reel-quoted-username" onClick={(e) => { e.stopPropagation(); pauseVideo(); onUsernameClick?.(data.metadata.quotedReelUser) }}>
+                @{data.metadata.quotedReelUser.username || 'user'}
+              </button>
+            </div>
+          )}
           {/* Sound name marquee */}
           {(data.soundName || data.metadata?.soundName) && (
             <div className="reel-sound-marquee">
@@ -1654,6 +1684,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             }
             resumeVideo()
           }}
+          onPostCreated={onPostCreated}
+          conversations={conversations}
+          userParty={userParty}
+          currentUser={currentUser}
+          userRacesFollowing={userRacesFollowing}
+          userRacesCompeting={userRacesCompeting}
         />
       )}
 
@@ -1674,6 +1710,12 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
             }
             resumeVideo()
           }}
+          onPostCreated={onPostCreated}
+          conversations={conversations}
+          userParty={userParty}
+          currentUser={currentUser}
+          userRacesFollowing={userRacesFollowing}
+          userRacesCompeting={userRacesCompeting}
         />
       )}
     </div>

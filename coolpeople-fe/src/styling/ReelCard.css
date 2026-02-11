@@ -50,6 +50,36 @@
   transform: scaleX(-1);
 }
 
+/* Quoted user indicator pill - inside reel-bottom-wrapper above sound marquee */
+.reel-quoted-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 16px;
+  margin: 0 16px 4px;
+  align-self: flex-start;
+}
+
+.reel-quoted-indicator svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.reel-quoted-username {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
 /* Text overlays from edit screen */
 .reel-text-overlay {
   position: absolute;

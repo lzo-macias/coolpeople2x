@@ -793,6 +793,8 @@ function AppContent() {
           selfieSize: postData.selfieSize || null,
           selfiePosition: postData.selfiePosition || null,
           showSelfieOverlay: postData.showSelfieOverlay ?? false,
+          selfieVideoUrl: postData.selfieVideoUrl || null,
+          selfieIsMirrored: postData.selfieIsMirrored ?? false,
           taggedUser: postData.taggedUser || null,
           isNomination: postData.isNomination || false,
           trimStart: postData.trimStart ?? 0,
@@ -803,6 +805,9 @@ function AppContent() {
           segments: postData.segments || null,
           soundUrl: postData.soundUrl || null,
           soundName: postData.soundName || null,
+          quotedReelId: postData.quotedReelId || null,
+          quotedReelVideoUrl: postData.quotedReelVideoUrl || null,
+          quotedReelUser: postData.quotedReelUser || null,
         },
       }
 
@@ -889,6 +894,8 @@ function AppContent() {
             selfieSize: postData.selfieSize || null,
             selfiePosition: postData.selfiePosition || null,
             showSelfieOverlay: postData.showSelfieOverlay ?? false,
+            selfieVideoUrl: postData.selfieVideoUrl || null,
+            selfieIsMirrored: postData.selfieIsMirrored ?? false,
             taggedUser: postData.taggedUser || null,
             isNomination: postData.isNomination || false,
             trimStart: postData.trimStart ?? 0,
@@ -899,6 +906,9 @@ function AppContent() {
             segments: postData.segments || null,
             soundUrl: postData.soundUrl || null,
             soundName: postData.soundName || null,
+            quotedReelId: postData.quotedReelId || null,
+            quotedReelVideoUrl: postData.quotedReelVideoUrl || null,
+            quotedReelUser: postData.quotedReelUser || null,
           },
         }
         // Add raceIds if we have a race (new or existing)
@@ -978,6 +988,13 @@ function AppContent() {
         isMirrored: postData.isMirrored || false,
         thumbnail: postData.videoUrl,
         user: currentUser,
+        selfieVideoUrl: postData.selfieVideoUrl || null,
+        selfieIsMirrored: postData.selfieIsMirrored ?? false,
+        selfieSize: postData.selfieSize || null,
+        selfiePosition: postData.selfiePosition || null,
+        showSelfieOverlay: postData.showSelfieOverlay ?? false,
+        quotedReelId: postData.quotedReelId || null,
+        quotedReelUser: postData.quotedReelUser || null,
       }
 
       // Send to each recipient
@@ -1809,6 +1826,11 @@ function AppContent() {
                   userPartyId={userParty?.id}
                   canEnterPartyInRaces={canEnterPartyInRaces}
                   onScoreboardRefresh={() => setScoreboardRefreshKey(prev => prev + 1)}
+                  onPostCreated={handlePostCreated}
+                  conversations={conversations}
+                  userParty={userParty}
+                  currentUser={currentUser}
+                  userRacesCompeting={userRacesCompeting}
                 />
               )
             })}

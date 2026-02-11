@@ -1297,6 +1297,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                       {/* Selfie overlay - scale from full-screen (430px) to card size (220px) */}
                       {(msg.metadata?.showSelfieOverlay) && (msg.metadata?.selfieSize) && (() => {
                         const s = 220 / 430
+                        const selfieUrl = msg.metadata?.selfieVideoUrl || getMessageVideoUrl(msg)
+                        const selfieMirrored = msg.metadata?.selfieIsMirrored ?? msg.metadata?.isMirrored
                         return (
                           <div
                             className="reel-selfie-overlay"
@@ -1308,8 +1310,8 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                             }}
                           >
                             <video
-                              src={getMessageVideoUrl(msg)}
-                              className={msg.metadata?.isMirrored ? 'mirrored' : ''}
+                              src={selfieUrl}
+                              className={selfieMirrored ? 'mirrored' : ''}
                               autoPlay
                               loop
                               muted
@@ -1318,6 +1320,15 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                           </div>
                         )
                       })()}
+                      {/* Quoted user indicator */}
+                      {msg.metadata?.quotedReelUser && (
+                        <div className="reel-quoted-indicator" style={{ fontSize: 10, padding: '3px 8px' }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          <span>Quoted @{msg.metadata.quotedReelUser.username || 'user'}</span>
+                        </div>
+                      )}
                       {/* Text overlays - scale positions from full-screen to card size */}
                       {msg.metadata?.textOverlays?.map((textItem, idx) => {
                         const s = 220 / 430

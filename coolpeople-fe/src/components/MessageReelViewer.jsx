@@ -19,6 +19,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const segIdxRef = useRef(0)
   const rafRef = useRef(null)
   const editDataRef = useRef(null)
+  const soundAudioRef = useRef(null)
 
   // Find the single target message directly
   const currentMessage = messages.find(msg => msg.id === initialMessageId)
@@ -151,7 +152,15 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
   const msgEditMeta = currentMessage?.metadata || {}
   const msgPlaybackSegments = msgEditMeta.segments || (msgEditMeta.trimEnd != null ? [{ start: msgEditMeta.trimStart ?? 0, end: msgEditMeta.trimEnd }] : null)
   const msgHasEditPlayback = !!msgPlaybackSegments
-  editDataRef.current = { segments: msgPlaybackSegments }
+  editDataRef.current = {
+    segments: msgPlaybackSegments,
+    videoVolume: msgEditMeta.videoVolume ?? 100,
+    soundVolume: msgEditMeta.soundVolume ?? 100,
+    soundOffset: msgEditMeta.soundOffset ?? 0,
+    soundUrl: msgEditMeta.soundUrl || null,
+    soundStartFrac: msgEditMeta.soundStartFrac ?? 0,
+    soundEndFrac: msgEditMeta.soundEndFrac ?? 1,
+  }
 
   // Seek to first segment on load
   useEffect(() => {
@@ -170,12 +179,13 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     return () => vid.removeEventListener('loadedmetadata', seekToStart)
   }, [msgHasEditPlayback, videoUrl])
 
-  // Segment boundary enforcement
+  // Segment boundary enforcement + sound sync
   useEffect(() => {
     if (!msgHasEditPlayback) return
     const tick = () => {
       const vid = videoRef.current
-      const segs = editDataRef.current?.segments
+      const ed = editDataRef.current
+      const segs = ed?.segments
       if (!vid || vid.paused || !segs) { rafRef.current = requestAnimationFrame(tick); return }
       const idx = segIdxRef.current
       const seg = segs[idx]
@@ -188,6 +198,19 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
           segIdxRef.current = 0
           vid.currentTime = segs[0].start
         }
+      }
+      // Sync sound audio
+      const audio = soundAudioRef.current
+      if (audio && audio.src) {
+        let outputTime = 0
+        for (let i = 0; i < segIdxRef.current; i++) outputTime += segs[i].end - segs[i].start
+        const curSeg = segs[segIdxRef.current]
+        if (curSeg) outputTime += Math.max(0, vid.currentTime - curSeg.start)
+        const startFrac = ed.soundStartFrac ?? 0
+        const sndStart = audio.duration ? startFrac * audio.duration : 0
+        const targetAudioTime = sndStart + (ed.soundOffset ?? 0) + outputTime
+        if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
+        if (audio.paused) audio.play().catch(() => {})
       }
       rafRef.current = requestAnimationFrame(tick)
     }
@@ -212,9 +235,63 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     return () => vid.removeEventListener('ended', handleEnded)
   }, [msgHasEditPlayback])
 
+  // Apply video volume from edit metadata (quote posts: mute main video)
+  const isMsgQuotePost = !!msgEditMeta.quotedReelVideoUrl
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isMsgQuotePost) {
+        videoRef.current.volume = 0
+        videoRef.current.muted = true
+      } else {
+        videoRef.current.volume = (msgEditMeta.videoVolume ?? 100) / 100
+      }
+    }
+  }, [msgEditMeta.videoVolume, isMsgQuotePost])
+
+  // Setup sound audio element from edit metadata
+  useEffect(() => {
+    const soundUrl = editDataRef.current?.soundUrl
+    if (!soundUrl) { soundAudioRef.current = null; return }
+    const audio = new Audio()
+    audio.preload = 'auto'
+    audio.volume = (editDataRef.current?.soundVolume ?? 100) / 100
+    audio.src = soundUrl
+    soundAudioRef.current = audio
+    return () => { audio.pause(); audio.src = ''; soundAudioRef.current = null }
+  }, [msgEditMeta.soundUrl])
+
+  // Update sound volume
+  useEffect(() => {
+    if (soundAudioRef.current) soundAudioRef.current.volume = (msgEditMeta.soundVolume ?? 100) / 100
+  }, [msgEditMeta.soundVolume])
+
+  // Sound sync for non-segment videos (no RAF loop from segment enforcement)
+  useEffect(() => {
+    if (msgHasEditPlayback) return // Segment RAF already handles sound sync
+    const soundUrl = editDataRef.current?.soundUrl
+    if (!soundUrl) return
+    const tick = () => {
+      const vid = videoRef.current
+      const audio = soundAudioRef.current
+      if (!vid || vid.paused || !audio || !audio.src) { rafRef.current = requestAnimationFrame(tick); return }
+      const ed = editDataRef.current
+      const startFrac = ed?.soundStartFrac ?? 0
+      const sndStart = audio.duration ? startFrac * audio.duration : 0
+      const targetAudioTime = sndStart + (ed?.soundOffset ?? 0) + vid.currentTime
+      if (Math.abs(audio.currentTime - targetAudioTime) > 0.3) audio.currentTime = targetAudioTime
+      if (audio.paused) audio.play().catch(() => {})
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [msgHasEditPlayback, msgEditMeta.soundUrl])
+
   // Cleanup on unmount
   useEffect(() => {
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+    return () => {
+      if (soundAudioRef.current) { soundAudioRef.current.pause(); soundAudioRef.current.src = '' }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
   }, [])
 
   // Debug log - important for troubleshooting action buttons
@@ -379,11 +456,17 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             className={`reel-media-video ${isMirrored ? 'mirrored' : ''}`}
             loop={!msgHasEditPlayback}
             playsInline
-            muted
             onCanPlay={() => {
               console.log('Video can play, starting playback')
               setVideoReady(true)
               if (videoRef.current) {
+                // Quote posts: mute main video (edit screen plays quoted reel muted, selfie has audio)
+                if (msgEditMeta.quotedReelVideoUrl) {
+                  videoRef.current.volume = 0
+                  videoRef.current.muted = true
+                } else {
+                  videoRef.current.volume = (msgEditMeta.videoVolume ?? 100) / 100
+                }
                 videoRef.current.play().catch(err => console.log('Video play error:', err))
               }
             }}
@@ -392,12 +475,14 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
               setVideoError(true)
             }}
             onClick={() => {
-              // Manual play on tap for browsers that block autoplay
+              // Manual play/pause on tap
               if (videoRef.current) {
                 if (videoRef.current.paused) {
                   videoRef.current.play().catch(err => console.log('Manual play error:', err))
+                  if (soundAudioRef.current) soundAudioRef.current.play().catch(() => {})
                 } else {
                   videoRef.current.pause()
+                  if (soundAudioRef.current) soundAudioRef.current.pause()
                 }
               }
             }}
@@ -440,11 +525,11 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
           }}
         >
           <video
-            src={videoUrl}
-            className={isMirrored ? 'mirrored' : ''}
+            src={currentMessage.metadata.selfieVideoUrl || videoUrl}
+            className={currentMessage.metadata.selfieIsMirrored ?? isMirrored ? 'mirrored' : ''}
             autoPlay
             loop
-            muted
+            muted={!currentMessage?.metadata?.quotedReelVideoUrl}
             playsInline
           />
         </div>

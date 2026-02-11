@@ -13,6 +13,8 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const freezeCanvasRef = useRef(null)
   const soundAudioRef = useRef(null)
   const previewRef = useRef(null)
+  const quotedVideoRef = useRef(null)
+  const selfieVideoRef = useRef(null)
   const [lockedDimensions, setLockedDimensions] = useState(null)
   const [fetchedPlatformUsers, setFetchedPlatformUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -297,6 +299,8 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
       setEditIsPlaying(false)
       if (videoRef.current) videoRef.current.pause()
       if (soundAudioRef.current) soundAudioRef.current.pause()
+      if (quotedVideoRef.current) quotedVideoRef.current.pause()
+      if (selfieVideoRef.current) selfieVideoRef.current.pause()
     } else {
       // Resuming — restart from first segment start
       if (videoRef.current && recordedVideoUrl) {
@@ -1068,10 +1072,10 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
   const pillRef = useRef(null)
   const dragStartRef = useRef({ x: 0, y: 0, pillX: 0, pillY: 0 })
 
-  // Convert taggedUser into a text overlay on mount so it uses the same system
+  // Convert taggedUser into a text overlay on mount — only for nominate mode, not regular quotes
   const tagConvertedRef = useRef(false)
   useEffect(() => {
-    if (taggedUser && !tagConvertedRef.current) {
+    if (taggedUser && !tagConvertedRef.current && isNominateMode) {
       tagConvertedRef.current = true
       const username = taggedUser.username || (getContactDisplayName ? getContactDisplayName(taggedUser) : taggedUser.phone)
       setTextOverlays(prev => [...prev, {
@@ -1709,11 +1713,20 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
         {/* Main Video */}
         {quotedReel?.videoUrl ? (
           <video
+            ref={quotedVideoRef}
             src={quotedReel.videoUrl}
-            className="edit-clip-video quoted-main"
+            className={`edit-clip-video quoted-main ${quotedReel.isMirrored ? 'mirrored' : ''}`}
             autoPlay
-            loop
             playsInline
+            muted
+            onEnded={() => {
+              // Quoted reel ended — if selfie is still playing, loop quoted reel
+              const qv = quotedVideoRef.current
+              if (qv) {
+                qv.currentTime = 0
+                qv.play().catch(() => {})
+              }
+            }}
           />
         ) : quotedReel?.thumbnail ? (
           <div
@@ -1829,12 +1842,24 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               <img src={recordedVideoUrl} className="edit-clip-selfie-video" alt="" />
             ) : (
               <video
+                ref={selfieVideoRef}
                 src={recordedVideoUrl}
                 className="edit-clip-selfie-video"
                 autoPlay
-                loop
-                muted
                 playsInline
+                onEnded={() => {
+                  // Selfie ended — restart both videos together
+                  const sv = selfieVideoRef.current
+                  const qv = quotedVideoRef.current
+                  if (sv) {
+                    sv.currentTime = 0
+                    sv.play().catch(() => {})
+                  }
+                  if (qv) {
+                    qv.currentTime = 0
+                    qv.play().catch(() => {})
+                  }
+                }}
               />
             )}
           </div>
@@ -2595,6 +2620,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
           showSelfieOverlay={showSelfieOverlay}
           selfieSize={selfieSize}
           selfiePosition={selfiePosition}
+          quotedReel={quotedReel}
           onDone={({ trimStart: ts, trimEnd: te, soundOffset, soundStartFrac, soundEndFrac, videoVolume, soundVolume, segments }) => {
             setTrimStart(ts)
             setTrimEnd(te)

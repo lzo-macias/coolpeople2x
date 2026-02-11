@@ -57,6 +57,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const touchStartX = useRef(0)
   const storyVideoRef = useRef(null)
   const storySoundRef = useRef(null)
+  const storySegIdxRef = useRef(0)
   const activeConversationRef = useRef(null) // Ref to track active conversation for socket handler
   const currentUsername = currentUser?.username || 'User'
 
@@ -1390,6 +1391,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
     setViewingStory({ userIndex, storyIndex: 0 })
     setStoryProgress(0)
+    storySegIdxRef.current = 0
   }
 
   const closeStory = () => {
@@ -1400,10 +1402,12 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
     setViewingStory(null)
     setStoryProgress(0)
+    storySegIdxRef.current = 0
   }
 
   const nextStory = () => {
     if (!viewingStory) return
+    storySegIdxRef.current = 0
     const currentUser = storyUsers[viewingStory.userIndex]
     if (viewingStory.storyIndex < currentUser.stories.length - 1) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex + 1 })
@@ -1418,6 +1422,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
 
   const prevStory = () => {
     if (!viewingStory) return
+    storySegIdxRef.current = 0
     if (viewingStory.storyIndex > 0) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex - 1 })
       setStoryProgress(0)
@@ -1768,16 +1773,22 @@ function Messages({ onConversationChange, conversations, setConversations, userS
               src={currentStory.videoUrl}
               style={currentStory.metadata?.isMirrored ? { transform: 'scaleX(-1)' } : undefined}
               autoPlay
-              loop
+              loop={!(currentStory.metadata?.segments?.length > 1)}
               playsInline
               muted={!currentStory.metadata?.videoVolume}
               onLoadedMetadata={(e) => {
                 const vid = e.target
                 const meta = currentStory.metadata
                 if (!meta) return
-                // Apply trim start
-                const start = meta.trimStart || 0
-                if (start > 0) vid.currentTime = start
+                // Segment-aware playback: start at first segment
+                const segs = meta.segments
+                if (segs && segs.length > 1) {
+                  storySegIdxRef.current = 0
+                  vid.currentTime = segs[0].start
+                } else {
+                  const start = meta.trimStart || 0
+                  if (start > 0) vid.currentTime = start
+                }
                 // Apply video volume
                 if (meta.videoVolume != null) {
                   vid.volume = Math.max(0, Math.min(1, meta.videoVolume / 100))
@@ -1798,10 +1809,39 @@ function Messages({ onConversationChange, conversations, setConversations, userS
                 const vid = e.target
                 const meta = currentStory.metadata
                 if (!meta) return
-                const start = meta.trimStart || 0
-                const end = meta.trimEnd
-                if (end && vid.currentTime >= end) {
-                  vid.currentTime = start
+                const segs = meta.segments
+                if (segs && segs.length > 1) {
+                  // Segment-aware playback: cycle through segments in order
+                  const idx = storySegIdxRef.current
+                  const seg = segs[idx]
+                  if (seg) {
+                    if (vid.currentTime >= seg.end - 0.1) {
+                      if (idx < segs.length - 1) {
+                        storySegIdxRef.current = idx + 1
+                        vid.currentTime = segs[idx + 1].start
+                      } else {
+                        storySegIdxRef.current = 0
+                        vid.currentTime = segs[0].start
+                      }
+                    } else if (vid.currentTime < seg.start - 0.2) {
+                      vid.currentTime = seg.start
+                    }
+                  }
+                } else {
+                  const start = meta.trimStart || 0
+                  const end = meta.trimEnd
+                  if (end && vid.currentTime >= end) {
+                    vid.currentTime = start
+                  }
+                }
+              }}
+              onEnded={(e) => {
+                // When loop is disabled (segment mode), restart from first segment
+                const segs = currentStory.metadata?.segments
+                if (segs && segs.length > 1) {
+                  storySegIdxRef.current = 0
+                  e.target.currentTime = segs[0].start
+                  e.target.play().catch(() => {})
                 }
               }}
             />
