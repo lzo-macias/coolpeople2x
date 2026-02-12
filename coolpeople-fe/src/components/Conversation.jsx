@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { mockConversations } from '../data/mockData'
-import { messagesApi, partiesApi, groupchatsApi } from '../services/api'
+import { messagesApi, partiesApi, groupchatsApi, storiesApi } from '../services/api'
 import { joinPartyRoom, leavePartyRoom, onPartyMessage } from '../services/socket'
 import { initializeSocket, joinConversation, leaveConversation, onConversationMessage, onNewMessage, getSocket, onDmReactionAdded, onDmReactionRemoved } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
@@ -171,6 +171,9 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
     return false
   }
 
+  // Check if a message is a story tag
+  const isStoryTag = (msg) => msg.metadata?.type === 'story_tag'
+
   // Get the video URL for a message (handles both top-level and metadata)
   const getMessageVideoUrl = (msg) => {
     return msg.mediaUrl || msg.metadata?.videoUrl || msg.metadata?.thumbnail
@@ -200,6 +203,27 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
 
   // Track message to show in reel viewer
   const [reelViewerMessageId, setReelViewerMessageId] = useState(null)
+  const [repostingStoryId, setRepostingStoryId] = useState(null)
+
+  // Repost a tagged story to own stories
+  const handleRepostStory = async (msg) => {
+    const meta = msg.metadata
+    if (!meta?.videoUrl || repostingStoryId === msg.id) return
+    setRepostingStoryId(msg.id)
+    try {
+      await storiesApi.createStory({
+        videoUrl: meta.videoUrl,
+        thumbnailUrl: meta.thumbnailUrl || null,
+        metadata: {
+          sourceReel: { id: meta.storyId, userId: meta.userId, username: meta.username },
+        },
+      })
+    } catch (err) {
+      console.error('Failed to repost story:', err)
+    } finally {
+      setRepostingStoryId(null)
+    }
+  }
 
   // Handle opening reel viewer for a message (party invite or video)
   const handleOpenReelViewer = (msg) => {
@@ -1278,6 +1302,56 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                       >
                         {msg.isOwn ? (isGroupChat ? 'Created' : 'Sent') : (msg.metadata.role === 'admin' ? 'Join as Admin' : 'Join Party')}
                       </button>
+                    </div>
+                  </div>
+                ) : isStoryTag(msg) ? (
+                  <div className="shared-story-tag-card">
+                    <div className="shared-story-tag-video">
+                      {msg.metadata?.videoUrl ? (
+                        <video
+                          src={msg.metadata.videoUrl}
+                          className="shared-story-tag-preview"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                      ) : msg.metadata?.thumbnailUrl ? (
+                        <img src={msg.metadata.thumbnailUrl} alt="Story" className="shared-story-tag-preview" />
+                      ) : (
+                        <div className="shared-story-tag-placeholder">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5">
+                            <rect x="2" y="2" width="20" height="20" rx="5" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="shared-story-tag-user">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="10" r="3" />
+                          <path d="M6.168 18.849A4 4 0 0 1 10 16h4a4 4 0 0 1 3.834 2.855" />
+                        </svg>
+                        <span>@{msg.metadata?.username || 'someone'}</span>
+                      </div>
+                    </div>
+                    <div className="shared-story-tag-footer">
+                      <span className="shared-story-tag-label">Tagged you in their story</span>
+                      {!msg.isOwn && (
+                        <button
+                          className={`shared-story-tag-repost ${repostingStoryId === msg.id ? 'reposting' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleRepostStory(msg); }}
+                          disabled={repostingStoryId === msg.id}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="17 1 21 5 17 9" />
+                            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                            <polyline points="7 23 3 19 7 15" />
+                            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                          </svg>
+                          {repostingStoryId === msg.id ? 'Posting...' : 'Repost to story'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : isSharedReel(msg) ? (

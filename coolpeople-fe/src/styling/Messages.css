@@ -822,6 +822,31 @@
   cursor: pointer;
 }
 
+/* Source credit tag — top left of story video */
+.story-source-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.story-source-tag svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
 /* Source reel badge on stories */
 .story-reel-badge {
   position: absolute;
@@ -1605,5 +1630,253 @@
 
 .message-muted-indicator:active {
   transform: scale(0.9);
+}
+
+/* ==================== Own Story Actions ==================== */
+.story-own-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 16px 24px 40px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+}
+
+.story-own-action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.story-own-action-item span {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.story-own-action-item:active {
+  opacity: 0.6;
+  transform: scale(0.92);
+}
+
+.story-viewers-avatars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-viewer-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  overflow: hidden;
+  margin-left: -6px;
+}
+
+.story-viewer-avatar:first-child {
+  margin-left: 0;
+}
+
+.story-viewer-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #444, #666);
+  border-radius: 50%;
+}
+
+/* ==================== Story Viewers Panel ==================== */
+.story-viewers-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100001;
+  display: flex;
+  align-items: flex-end;
+}
+
+.story-viewers-panel {
+  width: 100%;
+  max-height: 60vh;
+  min-height: 200px;
+  background: #1c1c1e;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  animation: storySlideUp 0.3s ease-out;
+}
+
+.story-viewers-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+}
+
+.story-viewers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.story-viewers-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.story-viewers-trash {
+  background: none;
+  border: none;
+  color: #FF3B30;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.story-viewers-trash:active {
+  background: rgba(255, 59, 48, 0.15);
+}
+
+.story-viewers-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+}
+
+.story-viewers-placeholder p {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ==================== Story More Menu ==================== */
+.story-more-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100001;
+  display: flex;
+  align-items: flex-end;
+}
+
+.story-more-menu {
+  width: 100%;
+  background: #1c1c1e;
+  border-radius: 16px 16px 0 0;
+  padding: 8px 0;
+  animation: storySlideUp 0.3s ease-out;
+}
+
+.story-more-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 20px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.story-more-option:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.story-more-option.danger {
+  color: #FF3B30;
+}
+
+.story-more-option.cancel {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+  padding-top: 16px;
+  color: #999;
+  justify-content: center;
+}
+
+@keyframes storySlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ==================== Story Tag Sheet ==================== */
+.story-tag-header {
+  padding: 14px 20px 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+}
+
+.story-tag-selected-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px 4px;
+}
+
+.story-tag-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 4px 10px 4px 4px;
+  cursor: pointer;
+}
+
+.story-tag-chip img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.story-tag-chip span {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 500;
+}
+
+.story-tag-chip svg {
+  color: #999;
+  flex-shrink: 0;
+}
+
+.story-tag-chip:active {
+  background: rgba(255, 255, 255, 0.06);
 }
 

@@ -451,6 +451,11 @@
   color: #FFFFFF;
 }
 
+.share-action-icon.imessage {
+  background: #34C759;
+  color: #FFFFFF;
+}
+
 .share-action-icon.messages {
   background: #10b981;
   color: #FFFFFF;

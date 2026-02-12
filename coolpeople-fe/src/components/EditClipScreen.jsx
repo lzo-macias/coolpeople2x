@@ -1785,8 +1785,8 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
     }
   }
 
-  // When loading an existing reel (story mode) that was recorded mirrored, apply scaleX(-1) to un-mirror
-  const unMirrorTransform = isStoryMode && isMirrored ? 'scaleX(-1) ' : ''
+  // When video was recorded with front camera, apply scaleX(-1) to un-mirror the preview
+  const unMirrorTransform = isMirrored ? 'scaleX(-1) ' : ''
   const videoZoomStyle = {
     objectFit: 'contain',
     transform: `${unMirrorTransform}scale(${videoScale}) translate(${videoTranslateX}px, ${videoTranslateY}px)`,

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { mockMessages, getPartyColor } from '../data/mockData'
-import { messagesApi, storiesApi, notificationsApi, searchApi, groupchatsApi } from '../services/api'
+import { messagesApi, storiesApi, notificationsApi, searchApi, groupchatsApi, usersApi } from '../services/api'
 import {
   initializeSocket,
   disconnectSocket,
@@ -60,6 +60,27 @@ function Messages({ onConversationChange, conversations, setConversations, userS
   const storySegIdxRef = useRef(0)
   const [storyReelPopup, setStoryReelPopup] = useState(null) // { reelId, userId, username }
   const [storyReturnState, setStoryReturnState] = useState(null) // saved viewingStory to return to
+  const [showStoryMoreMenu, setShowStoryMoreMenu] = useState(false)
+  const [showStoryViewersPanel, setShowStoryViewersPanel] = useState(false)
+  const [showStoryDeleteConfirm, setShowStoryDeleteConfirm] = useState(false)
+  const [showStoryShareSheet, setShowStoryShareSheet] = useState(false)
+  const [storyShareSearch, setStoryShareSearch] = useState('')
+  const [storyShareContacts, setStoryShareContacts] = useState([])
+  const [storyShareSelected, setStoryShareSelected] = useState([])
+  const [storyShareResults, setStoryShareResults] = useState([])
+  const [storyShareLoading, setStoryShareLoading] = useState(false)
+  const [storyShareSearching, setStoryShareSearching] = useState(false)
+  const [storyShareSending, setStoryShareSending] = useState(false)
+  const storyShareSearchTimeout = useRef(null)
+  const [showStoryTagSheet, setShowStoryTagSheet] = useState(false)
+  const [storyTagSearch, setStoryTagSearch] = useState('')
+  const [storyTagContacts, setStoryTagContacts] = useState([])
+  const [storyTagSelected, setStoryTagSelected] = useState([])
+  const [storyTagResults, setStoryTagResults] = useState([])
+  const [storyTagLoading, setStoryTagLoading] = useState(false)
+  const [storyTagSearching, setStoryTagSearching] = useState(false)
+  const [storyTagSending, setStoryTagSending] = useState(false)
+  const storyTagSearchTimeout = useRef(null)
   const activeConversationRef = useRef(null) // Ref to track active conversation for socket handler
   const currentUsername = currentUser?.username || 'User'
 
@@ -1407,12 +1428,22 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     setViewingStory(null)
     setStoryProgress(0)
     storySegIdxRef.current = 0
+    setShowStoryMoreMenu(false)
+    setShowStoryViewersPanel(false)
+    setShowStoryDeleteConfirm(false)
+    setShowStoryShareSheet(false)
+    setShowStoryTagSheet(false)
   }
 
   const nextStory = () => {
     if (!viewingStory) return
     storySegIdxRef.current = 0
     setStoryReelPopup(null)
+    setShowStoryMoreMenu(false)
+    setShowStoryViewersPanel(false)
+    setShowStoryDeleteConfirm(false)
+    setShowStoryShareSheet(false)
+    setShowStoryTagSheet(false)
     const currentUser = storyUsers[viewingStory.userIndex]
     if (viewingStory.storyIndex < currentUser.stories.length - 1) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex + 1 })
@@ -1429,6 +1460,11 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     if (!viewingStory) return
     storySegIdxRef.current = 0
     setStoryReelPopup(null)
+    setShowStoryMoreMenu(false)
+    setShowStoryViewersPanel(false)
+    setShowStoryDeleteConfirm(false)
+    setShowStoryShareSheet(false)
+    setShowStoryTagSheet(false)
     if (viewingStory.storyIndex > 0) {
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex - 1 })
       setStoryProgress(0)
@@ -1439,9 +1475,307 @@ function Messages({ onConversationChange, conversations, setConversations, userS
     }
   }
 
-  // Story auto-advance timer — use actual story duration
+  const handleDeleteStory = async () => {
+    if (!viewingStory) return
+    const storyUser = storyUsers[viewingStory.userIndex]
+    const storyToDelete = storyUser?.stories[viewingStory.storyIndex]
+    if (!storyToDelete) return
+
+    try {
+      await storiesApi.deleteStory(storyToDelete.id)
+      // Remove from stories state
+      setStories(prev => prev.map(group => {
+        if ((group.userId || group.user?.id) === currentUser?.id) {
+          return {
+            ...group,
+            stories: (group.stories || []).filter(s => s.id !== storyToDelete.id)
+          }
+        }
+        return group
+      }).filter(group => (group.stories || []).length > 0))
+
+      setShowStoryDeleteConfirm(false)
+      setShowStoryMoreMenu(false)
+      setShowStoryViewersPanel(false)
+
+      // Navigate to next story or close
+      const remainingStories = storyUser.stories.filter(s => s.id !== storyToDelete.id)
+      if (remainingStories.length > 0) {
+        const newIndex = Math.min(viewingStory.storyIndex, remainingStories.length - 1)
+        setViewingStory({ ...viewingStory, storyIndex: newIndex })
+        setStoryProgress(0)
+      } else {
+        closeStory()
+      }
+    } catch (err) {
+      console.error('Failed to delete story:', err)
+    }
+  }
+
+  // Helper to format "active" time
+  const formatActiveTime = (dateString) => {
+    if (!dateString) return null
+    const now = new Date()
+    const date = new Date(dateString)
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 60) return `${diffMins}m`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h`
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays < 7) return `${diffDays}d`
+    return null
+  }
+
+  // Fetch contacts for story share sheet
+  const fetchStoryShareContacts = useCallback(async () => {
+    if (!currentUser?.id) return
+    setStoryShareLoading(true)
+    try {
+      const contacts = []
+      const seenIds = new Set()
+      try {
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data) {
+          conversationsRes.data.forEach(conv => {
+            const otherUser = conv.otherUser
+            if (otherUser && !seenIds.has(`user-${otherUser.id}`)) {
+              seenIds.add(`user-${otherUser.id}`)
+              contacts.push({ id: `user-${otherUser.id}`, odId: otherUser.id, name: otherUser.handle || otherUser.name || 'User', avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/80?u=${otherUser.id}`, active: formatActiveTime(conv.lastMessageAt), type: 'user' })
+            }
+          })
+        }
+      } catch (e) { console.warn('Failed to fetch conversations:', e) }
+      try {
+        const groupChatsRes = await groupchatsApi.getAll()
+        if (groupChatsRes.data) {
+          groupChatsRes.data.forEach(gc => {
+            if (!seenIds.has(`group-${gc.id}`)) {
+              seenIds.add(`group-${gc.id}`)
+              contacts.push({ id: `group-${gc.id}`, odId: gc.id, name: gc.name || 'Group Chat', avatar: gc.avatarUrl || gc.avatar || `https://i.pravatar.cc/80?u=group-${gc.id}`, active: formatActiveTime(gc.lastMessageAt), type: 'group' })
+            }
+          })
+        }
+      } catch (e) { console.warn('Failed to fetch group chats:', e) }
+      try {
+        const followingRes = await usersApi.getFollowing(currentUser.id)
+        if (followingRes.data) {
+          followingRes.data.slice(0, 20).forEach(f => {
+            const followedUser = f.following || f
+            if (followedUser && !seenIds.has(`user-${followedUser.id}`)) {
+              seenIds.add(`user-${followedUser.id}`)
+              contacts.push({ id: `user-${followedUser.id}`, odId: followedUser.id, name: followedUser.handle || followedUser.name || 'User', avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/80?u=${followedUser.id}`, active: null, type: 'user' })
+            }
+          })
+        }
+      } catch (e) { console.warn('Failed to fetch following:', e) }
+      setStoryShareContacts(contacts)
+    } catch (error) {
+      console.error('Error fetching share contacts:', error)
+    } finally {
+      setStoryShareLoading(false)
+    }
+  }, [currentUser?.id])
+
+  // Search for story share sheet
+  const handleStoryShareSearch = useCallback(async (query) => {
+    if (!query || query.length < 2) { setStoryShareResults([]); setStoryShareSearching(false); return }
+    setStoryShareSearching(true)
+    try {
+      const res = await searchApi.search(query, { limit: 20 })
+      const results = []
+      const seenIds = new Set()
+      if (res.data?.users) {
+        res.data.users.forEach(u => {
+          if (!seenIds.has(`user-${u.id}`)) {
+            seenIds.add(`user-${u.id}`)
+            results.push({ id: `user-${u.id}`, odId: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}`, type: 'user' })
+          }
+        })
+      }
+      if (res.data?.parties) {
+        res.data.parties.forEach(p => {
+          if (!seenIds.has(`party-${p.id}`)) {
+            seenIds.add(`party-${p.id}`)
+            results.push({ id: `party-${p.id}`, odId: p.id, name: p.name || p.handle || 'Party', avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/80?u=party-${p.id}`, type: 'party' })
+          }
+        })
+      }
+      setStoryShareResults(results)
+    } catch (e) { console.warn('Search failed:', e); setStoryShareResults([]) }
+    finally { setStoryShareSearching(false) }
+  }, [])
+
+  // Debounced search for story share
   useEffect(() => {
-    if (viewingStory) {
+    if (storyShareSearchTimeout.current) clearTimeout(storyShareSearchTimeout.current)
+    if (storyShareSearch.length >= 2) {
+      storyShareSearchTimeout.current = setTimeout(() => handleStoryShareSearch(storyShareSearch), 300)
+    } else { setStoryShareResults([]) }
+    return () => { if (storyShareSearchTimeout.current) clearTimeout(storyShareSearchTimeout.current) }
+  }, [storyShareSearch, handleStoryShareSearch])
+
+  // Fetch contacts when story share sheet opens
+  useEffect(() => {
+    if (showStoryShareSheet) {
+      fetchStoryShareContacts()
+      setStoryShareSearch('')
+      setStoryShareResults([])
+      setStoryShareSelected([])
+    }
+  }, [showStoryShareSheet, fetchStoryShareContacts])
+
+  // Send story to selected contacts
+  const handleSendStoryToContacts = async () => {
+    if (storyShareSelected.length === 0 || storyShareSending) return
+    if (!viewingStory) return
+    const storyUser = storyUsers[viewingStory.userIndex]
+    const story = storyUser?.stories[viewingStory.storyIndex]
+    if (!story) return
+
+    setStoryShareSending(true)
+    const storyMeta = {
+      type: 'story',
+      storyId: story.id,
+      videoUrl: story.videoUrl || null,
+      thumbnailUrl: story.image || null,
+      username: currentUser?.username || '',
+      userId: currentUser?.id || '',
+    }
+
+    const allContacts = [...storyShareContacts, ...storyShareResults]
+    try {
+      const sends = storyShareSelected.map(contactId => {
+        const contact = allContacts.find(c => c.id === contactId)
+        if (!contact) return Promise.resolve()
+        if (contact.type === 'group') {
+          return groupchatsApi.sendMessage(contact.odId, 'Sent a story', storyMeta)
+        } else {
+          return messagesApi.sendMessage({ receiverId: contact.odId, content: 'Sent a story', metadata: storyMeta })
+        }
+      })
+      await Promise.all(sends)
+    } catch (err) {
+      console.error('Failed to send story:', err)
+    } finally {
+      setStoryShareSending(false)
+      setStoryShareSelected([])
+      setShowStoryShareSheet(false)
+    }
+  }
+
+  // Fetch contacts for story tag sheet (users only)
+  const fetchStoryTagContacts = useCallback(async () => {
+    if (!currentUser?.id) return
+    setStoryTagLoading(true)
+    try {
+      const contacts = []
+      const seenIds = new Set()
+      try {
+        const followingRes = await usersApi.getFollowing(currentUser.id)
+        if (followingRes.data) {
+          followingRes.data.slice(0, 30).forEach(f => {
+            const u = f.following || f
+            if (u && !seenIds.has(u.id)) {
+              seenIds.add(u.id)
+              contacts.push({ id: u.id, name: u.handle || u.username || u.name || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+            }
+          })
+        }
+      } catch (e) { console.warn('Failed to fetch following for tag:', e) }
+      try {
+        const conversationsRes = await messagesApi.getConversations()
+        if (conversationsRes.data) {
+          conversationsRes.data.forEach(conv => {
+            const u = conv.otherUser
+            if (u && !seenIds.has(u.id)) {
+              seenIds.add(u.id)
+              contacts.push({ id: u.id, name: u.handle || u.name || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+            }
+          })
+        }
+      } catch (e) { console.warn('Failed to fetch conversations for tag:', e) }
+      setStoryTagContacts(contacts)
+    } catch (error) {
+      console.error('Error fetching tag contacts:', error)
+    } finally {
+      setStoryTagLoading(false)
+    }
+  }, [currentUser?.id])
+
+  // Search users for story tag
+  const handleStoryTagSearch = useCallback(async (query) => {
+    if (!query || query.length < 2) { setStoryTagResults([]); setStoryTagSearching(false); return }
+    setStoryTagSearching(true)
+    try {
+      const res = await searchApi.search(query, { limit: 20 })
+      const results = []
+      if (res.data?.users) {
+        res.data.users.forEach(u => {
+          results.push({ id: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+        })
+      }
+      setStoryTagResults(results)
+    } catch (e) { console.warn('Tag search failed:', e); setStoryTagResults([]) }
+    finally { setStoryTagSearching(false) }
+  }, [])
+
+  // Debounced search for story tag
+  useEffect(() => {
+    if (storyTagSearchTimeout.current) clearTimeout(storyTagSearchTimeout.current)
+    if (storyTagSearch.length >= 2) {
+      storyTagSearchTimeout.current = setTimeout(() => handleStoryTagSearch(storyTagSearch), 300)
+    } else { setStoryTagResults([]) }
+    return () => { if (storyTagSearchTimeout.current) clearTimeout(storyTagSearchTimeout.current) }
+  }, [storyTagSearch, handleStoryTagSearch])
+
+  // Fetch contacts when story tag sheet opens
+  useEffect(() => {
+    if (showStoryTagSheet) {
+      fetchStoryTagContacts()
+      setStoryTagSearch('')
+      setStoryTagResults([])
+      setStoryTagSelected([])
+    }
+  }, [showStoryTagSheet, fetchStoryTagContacts])
+
+  // Send tag DMs to selected users
+  const handleSendStoryTags = async () => {
+    if (storyTagSelected.length === 0 || storyTagSending) return
+    if (!viewingStory) return
+    const storyUser = storyUsers[viewingStory.userIndex]
+    const story = storyUser?.stories[viewingStory.storyIndex]
+    if (!story) return
+
+    setStoryTagSending(true)
+    const storyMeta = {
+      type: 'story_tag',
+      storyId: story.id,
+      videoUrl: story.videoUrl || null,
+      thumbnailUrl: story.image || null,
+      username: currentUser?.username || '',
+      userId: currentUser?.id || '',
+    }
+
+    try {
+      const sends = storyTagSelected.map(userId =>
+        messagesApi.sendMessage({ receiverId: userId, content: `@${currentUser?.username || 'Someone'} tagged you in their story`, metadata: storyMeta })
+      )
+      await Promise.all(sends)
+    } catch (err) {
+      console.error('Failed to send story tags:', err)
+    } finally {
+      setStoryTagSending(false)
+      setStoryTagSelected([])
+      setShowStoryTagSheet(false)
+    }
+  }
+
+  // Story auto-advance timer — use actual story duration
+  // Pauses when any own-story overlay is open
+  const storyOverlayOpen = showStoryViewersPanel || showStoryMoreMenu || showStoryDeleteConfirm || showStoryShareSheet || showStoryTagSheet || !!storyReelPopup
+  useEffect(() => {
+    if (viewingStory && !storyOverlayOpen) {
       const currentUser = storyUsers[viewingStory.userIndex]
       const story = currentUser?.stories[viewingStory.storyIndex]
       const durationSec = story?.duration || 10 // fallback 10s
@@ -1459,7 +1793,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       }, intervalMs)
       return () => clearInterval(storyTimerRef.current)
     }
-  }, [viewingStory?.userIndex, viewingStory?.storyIndex])
+  }, [viewingStory?.userIndex, viewingStory?.storyIndex, storyOverlayOpen])
 
   // Story sound + volume setup when story changes
   useEffect(() => {
@@ -1990,19 +2324,384 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         )}
 
         {/* Story actions */}
-        <div className="story-actions">
-          <input type="text" placeholder="Send message..." className="story-reply-input" />
-          <button className="story-action-btn">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          </button>
-          <button className="story-action-btn">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
-        </div>
+        {currentUser.isOwnStory ? (
+          <div className="story-own-actions">
+            <button className="story-own-action-item" onClick={() => setShowStoryViewersPanel(true)}>
+              <div className="story-viewers-avatars">
+                <div className="story-viewer-avatar"><div className="story-viewer-avatar-placeholder" /></div>
+                <div className="story-viewer-avatar"><div className="story-viewer-avatar-placeholder" /></div>
+                <div className="story-viewer-avatar"><div className="story-viewer-avatar-placeholder" /></div>
+              </div>
+              <span>Activity</span>
+            </button>
+            <button className="story-own-action-item" onClick={() => setShowStoryShareSheet(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+              <span>Share</span>
+            </button>
+            <button className="story-own-action-item" onClick={() => setShowStoryTagSheet(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M14.5 9.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z" />
+                <path d="M14.5 12v1.5a2 2 0 0 0 4 0V12a6.5 6.5 0 1 0-3 5.5" />
+              </svg>
+              <span>Tag</span>
+            </button>
+            <button className="story-own-action-item" onClick={() => setShowStoryMoreMenu(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="19" r="1" />
+              </svg>
+              <span>More</span>
+            </button>
+          </div>
+        ) : (
+          <div className="story-actions">
+            <input type="text" placeholder="Send message..." className="story-reply-input" />
+            <button className="story-action-btn">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            </button>
+            <button className="story-action-btn">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Viewers panel overlay */}
+        {showStoryViewersPanel && (
+          <div className="story-viewers-overlay" onClick={() => setShowStoryViewersPanel(false)}>
+            <div className="story-viewers-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="story-viewers-handle" />
+              <div className="story-viewers-header">
+                <span className="story-viewers-title">Viewers</span>
+                <button className="story-viewers-trash" onClick={() => { setShowStoryViewersPanel(false); setShowStoryDeleteConfirm(true); }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+              <div className="story-viewers-placeholder">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <p>Story views coming soon</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* More menu overlay */}
+        {showStoryMoreMenu && (
+          <div className="story-more-overlay" onClick={() => setShowStoryMoreMenu(false)}>
+            <div className="story-more-menu" onClick={(e) => e.stopPropagation()}>
+              <button className="story-more-option danger" onClick={() => { setShowStoryMoreMenu(false); setShowStoryDeleteConfirm(true); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Delete story
+              </button>
+              <button className="story-more-option">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save
+              </button>
+              <button className="story-more-option cancel" onClick={() => setShowStoryMoreMenu(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete confirmation modal */}
+        {showStoryDeleteConfirm && (
+          <div className="modal-overlay" onClick={() => setShowStoryDeleteConfirm(false)} style={{ zIndex: 100002 }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ background: '#2a2a2e', borderRadius: 16, padding: '24px 20px', maxWidth: 300, textAlign: 'center' }}>
+              <h3 style={{ color: '#fff', margin: '0 0 8px', fontSize: 17 }}>Delete this story?</h3>
+              <p style={{ color: '#999', margin: '0 0 20px', fontSize: 14 }}>This action cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={() => setShowStoryDeleteConfirm(false)}
+                  style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteStory}
+                  style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#FF3B30', color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Story Share Sheet */}
+        {showStoryShareSheet && (
+          <div className="share-sheet-overlay" onClick={(e) => { e.stopPropagation(); setShowStoryShareSheet(false) }} style={{ zIndex: 100001 }}>
+            <div className="share-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="share-sheet-handle"></div>
+
+              <div className="share-search-row">
+                <div className="share-search-bar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search users & parties..."
+                    value={storyShareSearch}
+                    onChange={(e) => setStoryShareSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="share-contacts-grid">
+                {storyShareLoading && storyShareContacts.length === 0 ? (
+                  <div className="share-contacts-loading">Loading contacts...</div>
+                ) : storyShareSearching ? (
+                  <div className="share-contacts-loading">Searching...</div>
+                ) : storyShareSearch.length >= 2 ? (
+                  storyShareResults.length === 0 ? (
+                    <div className="share-contacts-empty">No results for "{storyShareSearch}"</div>
+                  ) : (
+                    storyShareResults.map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${storyShareSelected.includes(contact.id) ? 'selected' : ''} ${contact.type}`}
+                        onClick={() => setStoryShareSelected(prev => prev.includes(contact.id) ? prev.filter(id => id !== contact.id) : [...prev, contact.id])}
+                      >
+                        <div className={`share-contact-avatar-wrap ${storyShareSelected.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                  )
+                ) : storyShareContacts.length === 0 ? (
+                  <div className="share-contacts-empty">No contacts yet</div>
+                ) : (
+                  storyShareContacts
+                    .filter(c => !storyShareSearch || c.name.toLowerCase().includes(storyShareSearch.toLowerCase()))
+                    .map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${storyShareSelected.includes(contact.id) ? 'selected' : ''} ${contact.type}`}
+                        onClick={() => setStoryShareSelected(prev => prev.includes(contact.id) ? prev.filter(id => id !== contact.id) : [...prev, contact.id])}
+                      >
+                        <div className={`share-contact-avatar-wrap ${storyShareSelected.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                          {contact.active && <span className="share-contact-active">{contact.active}</span>}
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                )}
+              </div>
+
+              <div className="share-actions-row">
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  navigator.clipboard.writeText(shareUrl)
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                  </div>
+                  <span>Copy link</span>
+                </button>
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  const text = `Check out this story on CoolPeople`
+                  window.open(`sms:${/iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(text + ' ' + shareUrl)}`, '_blank')
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon imessage">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                  </div>
+                  <span>iMessage</span>
+                </button>
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  const text = `Check out this story on CoolPeople`
+                  window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + shareUrl)}`, '_blank')
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon whatsapp">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                  </div>
+                  <span>WhatsApp</span>
+                </button>
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  const text = `Check out this story on CoolPeople`
+                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`, '_blank')
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon x-twitter">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                  </div>
+                  <span>X</span>
+                </button>
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank')
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon facebook">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </div>
+                  <span>Facebook</span>
+                </button>
+                <button className="share-action-item" onClick={() => {
+                  const shareUrl = `${window.location.origin}/story/${currentStory?.id || ''}`
+                  const text = `Check out this story on CoolPeople`
+                  window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`, '_blank')
+                  setShowStoryShareSheet(false)
+                }}>
+                  <div className="share-action-icon telegram">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                    </svg>
+                  </div>
+                  <span>Telegram</span>
+                </button>
+              </div>
+
+              <button
+                className={`share-send-btn ${storyShareSelected.length > 0 ? 'active' : ''}`}
+                onClick={handleSendStoryToContacts}
+                disabled={storyShareSending || storyShareSelected.length === 0}
+              >
+                {storyShareSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Story Tag Sheet */}
+        {showStoryTagSheet && (
+          <div className="share-sheet-overlay" onClick={(e) => { e.stopPropagation(); setShowStoryTagSheet(false) }} style={{ zIndex: 100001 }}>
+            <div className="share-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="share-sheet-handle"></div>
+
+              <div className="story-tag-header">
+                <span>Tag People</span>
+              </div>
+
+              <div className="share-search-row">
+                <div className="share-search-bar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={storyTagSearch}
+                    onChange={(e) => setStoryTagSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {storyTagSelected.length > 0 && (
+                <div className="story-tag-selected-row">
+                  {storyTagSelected.map(userId => {
+                    const contact = [...storyTagContacts, ...storyTagResults].find(c => c.id === userId)
+                    if (!contact) return null
+                    return (
+                      <div key={userId} className="story-tag-chip" onClick={() => setStoryTagSelected(prev => prev.filter(id => id !== userId))}>
+                        <img src={contact.avatar} alt={contact.name} />
+                        <span>@{contact.name}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="share-contacts-grid">
+                {storyTagLoading && storyTagContacts.length === 0 ? (
+                  <div className="share-contacts-loading">Loading...</div>
+                ) : storyTagSearching ? (
+                  <div className="share-contacts-loading">Searching...</div>
+                ) : storyTagSearch.length >= 2 ? (
+                  storyTagResults.length === 0 ? (
+                    <div className="share-contacts-empty">No users found for "{storyTagSearch}"</div>
+                  ) : (
+                    storyTagResults.map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${storyTagSelected.includes(contact.id) ? 'selected' : ''}`}
+                        onClick={() => setStoryTagSelected(prev => prev.includes(contact.id) ? prev.filter(id => id !== contact.id) : [...prev, contact.id])}
+                      >
+                        <div className={`share-contact-avatar-wrap ${storyTagSelected.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                  )
+                ) : storyTagContacts.length === 0 ? (
+                  <div className="share-contacts-empty">No contacts yet</div>
+                ) : (
+                  storyTagContacts
+                    .filter(c => !storyTagSearch || c.name.toLowerCase().includes(storyTagSearch.toLowerCase()))
+                    .map((contact) => (
+                      <button
+                        key={contact.id}
+                        className={`share-contact ${storyTagSelected.includes(contact.id) ? 'selected' : ''}`}
+                        onClick={() => setStoryTagSelected(prev => prev.includes(contact.id) ? prev.filter(id => id !== contact.id) : [...prev, contact.id])}
+                      >
+                        <div className={`share-contact-avatar-wrap ${storyTagSelected.includes(contact.id) ? 'selected' : ''}`}>
+                          <img src={contact.avatar} alt={contact.name} className="share-contact-avatar" />
+                        </div>
+                        <span className="share-contact-name">{contact.name}</span>
+                      </button>
+                    ))
+                )}
+              </div>
+
+              <button
+                className={`share-send-btn ${storyTagSelected.length > 0 ? 'active' : ''}`}
+                onClick={handleSendStoryTags}
+                disabled={storyTagSending || storyTagSelected.length === 0}
+              >
+                {storyTagSending ? 'Tagging...' : `Tag ${storyTagSelected.length > 0 ? storyTagSelected.length + ' ' : ''}user${storyTagSelected.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
       </div>,
       document.body
     )
