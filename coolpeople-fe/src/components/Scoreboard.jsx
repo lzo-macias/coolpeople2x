@@ -264,6 +264,18 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
     return result
   })()
 
+  // Guard activeSection against out-of-bounds (e.g., after unfollowing races)
+  const safeActiveSection = activeSection >= sections.length
+    ? Math.max(0, sections.length - 1)
+    : activeSection
+
+  // Sync state if it was out of bounds
+  useEffect(() => {
+    if (activeSection >= sections.length) {
+      setActiveSection(Math.max(0, sections.length - 1))
+    }
+  }, [activeSection, sections.length])
+
   const handleSwipe = (e) => {
     // Accumulate horizontal scroll delta
     swipeRef.current.accumulatedDelta += e.deltaX
@@ -273,14 +285,14 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
 
     if (swipeRef.current.accumulatedDelta > threshold) {
       // Swipe left - go to next section
-      if (activeSection < sections.length - 1) {
-        setActiveSection(activeSection + 1)
+      if (safeActiveSection < sections.length - 1) {
+        setActiveSection(safeActiveSection + 1)
       }
       swipeRef.current.accumulatedDelta = 0
     } else if (swipeRef.current.accumulatedDelta < -threshold) {
       // Swipe right - go to previous section
-      if (activeSection > 0) {
-        setActiveSection(activeSection - 1)
+      if (safeActiveSection > 0) {
+        setActiveSection(safeActiveSection - 1)
       }
       swipeRef.current.accumulatedDelta = 0
     }
@@ -595,7 +607,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
       <div className="users-sections-container">
         <div className="section-header">
           <div className="section-header-top">
-            <span className="section-title">{sections[activeSection].label}</span>
+            <span className="section-title">{sections[safeActiveSection].label}</span>
             <div className="section-nav">
               {sections.length > 5 ? (
                 <div
@@ -608,7 +620,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                   {sections.slice(0, 5).map((_, index) => (
                     <span
                       key={index}
-                      className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                      className={`section-dot ${safeActiveSection === index ? 'active' : ''}`}
                     />
                   ))}
                   <span className="section-dot-more">+{sections.length - 5}</span>
@@ -618,7 +630,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                   {sections.slice(0, 5).map((_, index) => (
                     <span
                       key={index}
-                      className={`section-dot ${activeSection === index ? 'active' : ''}`}
+                      className={`section-dot ${safeActiveSection === index ? 'active' : ''}`}
                       onClick={() => setActiveSection(index)}
                     />
                   ))}
@@ -636,7 +648,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                       return (
                         <div
                           key={section.id}
-                          className={`races-overlay-card ${activeSection === index ? 'active' : ''}`}
+                          className={`races-overlay-card ${safeActiveSection === index ? 'active' : ''}`}
                           onClick={() => {
                             setActiveSection(index)
                             setIsDropdownOpen(false)
@@ -690,7 +702,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
         </div>
         <div className="sections-content" onWheel={handleSwipe}>
           {(() => {
-            const currentSection = sections[activeSection]
+            const currentSection = sections[safeActiveSection]
             const isPartyRace = currentSection.isPartyRace
 
             // Apply list filter (all vs favorited)

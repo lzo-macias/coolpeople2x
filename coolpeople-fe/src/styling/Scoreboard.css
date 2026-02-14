@@ -292,7 +292,10 @@
 }
 
 .section-dot-more {
-  display: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: #999;
+  margin-left: 2px;
 }
 
 /* Section dropdown for more than 5 races */
