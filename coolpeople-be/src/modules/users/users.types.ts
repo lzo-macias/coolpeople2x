@@ -34,6 +34,9 @@ export interface PublicProfile {
   racesFollowing?: { id: string; title: string; raceType: string }[];
   racesCompeting?: { id: string; title: string; raceType: string }[];
 
+  // Subscription tier (for privacy checks)
+  subscriptionTier?: string | null;
+
   // Candidate-only fields
   points?: {
     ledgerId: string;

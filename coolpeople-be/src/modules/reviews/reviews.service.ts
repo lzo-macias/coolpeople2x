@@ -21,7 +21,10 @@ import type {
 
 const reviewIncludes = {
   author: {
-    select: { id: true, username: true, displayName: true, avatarUrl: true },
+    select: {
+      id: true, username: true, displayName: true, avatarUrl: true,
+      subscription: { select: { tier: true, endDate: true } },
+    },
   },
   replies: {
     orderBy: { createdAt: 'asc' as const },
@@ -175,8 +178,19 @@ export const getUserReviews = async (
   const results = hasMore ? reviews.slice(0, -1) : reviews;
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
+  // Sort premium authors' reviews first, then by createdAt desc
+  const sorted = results.sort((a: any, b: any) => {
+    const aSub = a.author.subscription;
+    const bSub = b.author.subscription;
+    const aIsPremium = aSub && (!aSub.endDate || aSub.endDate > new Date());
+    const bIsPremium = bSub && (!bSub.endDate || bSub.endDate > new Date());
+    if (aIsPremium && !bIsPremium) return -1;
+    if (!aIsPremium && bIsPremium) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   return {
-    reviews: results.map((r) => formatReview(r)),
+    reviews: sorted.map((r: any) => formatReview(r)),
     nextCursor,
   };
 };
@@ -261,8 +275,19 @@ export const getPartyReviews = async (
   const results = hasMore ? reviews.slice(0, -1) : reviews;
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
+  // Sort premium authors' reviews first, then by createdAt desc
+  const sorted = results.sort((a: any, b: any) => {
+    const aSub = a.author.subscription;
+    const bSub = b.author.subscription;
+    const aIsPremium = aSub && (!aSub.endDate || aSub.endDate > new Date());
+    const bIsPremium = bSub && (!bSub.endDate || bSub.endDate > new Date());
+    if (aIsPremium && !bIsPremium) return -1;
+    if (!aIsPremium && bIsPremium) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   return {
-    reviews: results.map((r) => formatReview(r)),
+    reviews: sorted.map((r: any) => formatReview(r)),
     nextCursor,
   };
 };

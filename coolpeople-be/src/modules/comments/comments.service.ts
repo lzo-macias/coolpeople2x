@@ -60,7 +60,10 @@ export const getComments = async (
     orderBy: { createdAt: 'desc' },
     include: {
       user: {
-        select: { id: true, username: true, displayName: true, avatarUrl: true },
+        select: {
+          id: true, username: true, displayName: true, avatarUrl: true,
+          subscription: { select: { tier: true, endDate: true } },
+        },
       },
       _count: { select: { likes: true } },
       ...(viewerId && {
@@ -86,8 +89,19 @@ export const getComments = async (
   const results = hasMore ? comments.slice(0, -1) : comments;
   const nextCursor = hasMore ? results[results.length - 1].id : null;
 
+  // Sort premium users' comments first, then by createdAt desc
+  const sorted = results.sort((a: any, b: any) => {
+    const aSub = a.user.subscription;
+    const bSub = b.user.subscription;
+    const aIsPremium = aSub && (!aSub.endDate || aSub.endDate > new Date());
+    const bIsPremium = bSub && (!bSub.endDate || bSub.endDate > new Date());
+    if (aIsPremium && !bIsPremium) return -1;
+    if (!aIsPremium && bIsPremium) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   return {
-    comments: results.map((c) => formatComment(c, viewerId)),
+    comments: sorted.map((c: any) => formatComment(c, viewerId)),
     nextCursor,
   };
 };

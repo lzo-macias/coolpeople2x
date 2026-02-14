@@ -21,21 +21,32 @@ const SALT_ROUNDS = 12;
 // Helper: Strip sensitive fields from user
 // -----------------------------------------------------------------------------
 
-export const toSafeUser = (user: User & { party?: { id: string; name: string } | null }): SafeUser => ({
-  id: user.id,
-  email: user.email,
-  username: user.username,
-  displayName: user.displayName,
-  bio: user.bio,
-  avatarUrl: user.avatarUrl,
-  userType: user.userType,
-  isVerified: user.isVerified,
-  isFrozen: user.isFrozen,
-  isPrivate: user.isPrivate,
-  partyId: user.partyId,
-  party: user.party ? { id: user.party.id, name: user.party.name } : null,
-  createdAt: user.createdAt,
-});
+export const toSafeUser = (user: User & { party?: { id: string; name: string } | null; subscription?: { tier: string; billingCycle: string; endDate: Date | null } | null }): SafeUser => {
+  const sub = (user as any).subscription;
+  const isActive = sub ? (!sub.endDate || sub.endDate > new Date()) : false;
+
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    displayName: user.displayName,
+    bio: user.bio,
+    avatarUrl: user.avatarUrl,
+    userType: user.userType,
+    isVerified: user.isVerified,
+    isFrozen: user.isFrozen,
+    isPrivate: user.isPrivate,
+    partyId: user.partyId,
+    party: user.party ? { id: user.party.id, name: user.party.name } : null,
+    subscription: sub ? {
+      tier: sub.tier,
+      billingCycle: sub.billingCycle,
+      isActive,
+      endDate: sub.endDate,
+    } : null,
+    createdAt: user.createdAt,
+  };
+};
 
 // -----------------------------------------------------------------------------
 // Register
@@ -94,7 +105,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   const { identifier, password } = data;
 
-  // Find user by email or username, including party relation
+  // Find user by email or username, including party and subscription relations
   const user = await prisma.user.findFirst({
     where: {
       OR: [
@@ -105,6 +116,9 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     include: {
       party: {
         select: { id: true, name: true },
+      },
+      subscription: {
+        select: { tier: true, billingCycle: true, endDate: true },
       },
     },
   });
@@ -147,6 +161,9 @@ export const getCurrentUser = async (userId: string): Promise<SafeUser> => {
     include: {
       party: {
         select: { id: true, name: true },
+      },
+      subscription: {
+        select: { tier: true, billingCycle: true, endDate: true },
       },
     },
   });

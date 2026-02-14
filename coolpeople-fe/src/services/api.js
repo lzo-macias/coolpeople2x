@@ -771,6 +771,37 @@ export const groupchatsApi = {
 };
 
 // =============================================================================
+// Subscriptions API
+// =============================================================================
+
+export const subscriptionsApi = {
+  getMySubscription: () => apiFetch('/api/subscriptions/me'),
+
+  subscribe: (data) => apiFetch('/api/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  createCheckout: (data) => apiFetch('/api/subscriptions/checkout', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  createPortal: () => apiFetch('/api/subscriptions/portal', {
+    method: 'POST',
+  }),
+
+  cancel: () => apiFetch('/api/subscriptions/cancel', {
+    method: 'POST',
+  }),
+
+  validateCode: (code) => apiFetch('/api/subscriptions/validate-code', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  }),
+};
+
+// =============================================================================
 // Reports API
 // =============================================================================
 
@@ -825,4 +856,5 @@ export default {
   icebreakers: icebreakersApi,
   groupchats: groupchatsApi,
   reports: reportsApi,
+  subscriptions: subscriptionsApi,
 };

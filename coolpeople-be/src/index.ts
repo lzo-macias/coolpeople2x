@@ -32,6 +32,7 @@ import { reportsRouter } from './modules/reports/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
 import { searchRouter } from './modules/search/index.js';
 import groupchatsRoutes from './modules/groupchats/groupchats.routes.js';
+import { subscriptionsRoutes, stripeWebhookHandler } from './modules/subscriptions/index.js';
 
 // Jobs
 import { startStoryExpiryJob, stopStoryExpiryJob } from './jobs/storyExpiry.job.js';
@@ -55,6 +56,9 @@ app.use(cors({
   origin: isDev ? '*' : process.env.FRONTEND_URL,
   credentials: true,
 }));
+
+// Stripe webhook — must be BEFORE JSON parser (needs raw body for signature verification)
+app.post('/api/subscriptions/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
 
 // Request logging
 app.use(morgan(isDev ? 'dev' : 'combined'));
@@ -106,6 +110,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/groupchats', groupchatsRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
 
 // Temporary root route
 app.get('/', (_req, res) => {

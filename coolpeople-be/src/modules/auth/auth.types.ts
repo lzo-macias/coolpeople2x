@@ -47,6 +47,12 @@ export interface SafeUser {
   isPrivate: boolean;
   partyId: string | null;
   party: { id: string; name: string } | null;
+  subscription: {
+    tier: string;
+    billingCycle: string;
+    isActive: boolean;
+    endDate: Date | null;
+  } | null;
   createdAt: Date;
 }
 

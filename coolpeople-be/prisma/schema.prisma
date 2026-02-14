@@ -151,6 +151,9 @@ model User {
   googleId        String?   @unique
   appleId         String?   @unique
 
+  // Stripe
+  stripeCustomerId String?  @unique
+
   // Timestamps
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -1393,7 +1396,8 @@ model Subscription {
   userId          String    @unique
 
   // Subscription details
-  tier            String    @default("premium")  // For future tiers
+  tier            String    @default("premium")  // premium | privacy | adfree
+  billingCycle    String    @default("monthly")   // monthly | annual
 
   startDate       DateTime  @default(now())
   endDate         DateTime?
@@ -1401,7 +1405,27 @@ model Subscription {
   // Payment reference (Stripe, etc.)
   externalId      String?
 
+  // Discount code used
+  discountCodeId  String?
+  discountCode    DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DiscountCode {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  discountPercent Int       // 1-100
+  maxUses         Int       @default(0)    // 0 = unlimited
+  currentUses     Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+
+  createdAt       DateTime  @default(now())
+
+  subscriptions   Subscription[]
+
+  @@index([code])
 }
 
 // =============================================================================

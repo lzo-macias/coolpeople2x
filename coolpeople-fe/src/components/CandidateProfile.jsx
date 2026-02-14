@@ -544,6 +544,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         isFollowing: fetchedProfile.isFollowing ?? passedCandidate?.isFollowing ?? defaults.isFollowing,
         isFavorited: fetchedProfile.isFavorited ?? passedCandidate?.isFavorited ?? defaults.isFavorited,
         userType: fetchedProfile.userType,
+        subscriptionTier: fetchedProfile.subscriptionTier || null,
         // Map userType to status for EditProfile compatibility
         status: fetchedProfile.userType === 'CANDIDATE' ? 'Candidate' :
                 fetchedProfile.userType === 'PARTICIPANT' ? 'Participant' :
@@ -2358,7 +2359,18 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         )}
 
         {/* Details Tab */}
-        {activeTab === 'details' && (
+        {activeTab === 'details' && !isOwnProfile && (candidate.subscriptionTier === 'privacy' || candidate.subscriptionTier === 'adfree') && (
+          <div className="activity-feed">
+            <div className="empty-activity" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '12px' }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+              <p style={{ color: '#71717a', fontSize: '15px', fontWeight: 500 }}>This user's activity is private</p>
+            </div>
+          </div>
+        )}
+        {activeTab === 'details' && (isOwnProfile || (candidate.subscriptionTier !== 'privacy' && candidate.subscriptionTier !== 'adfree')) && (
           <div className="activity-feed">
             {displayActivity.length > 0 ? displayActivity.map((activity, index) => {
               const config = activityConfig[activity.type] || activityConfig.like

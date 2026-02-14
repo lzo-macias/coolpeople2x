@@ -5,7 +5,7 @@ import '../styling/ReelCard.css'
 import '../styling/PartyCreationFlow.css'
 import EditBio from './EditBio'
 import { useAuth } from '../contexts/AuthContext'
-import { partiesApi, usersApi } from '../services/api'
+import { partiesApi, usersApi, subscriptionsApi } from '../services/api'
 import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut, onOptIn }) {
@@ -1515,6 +1515,618 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
     )
   }
 
+  // Render Premium section
+  const [selectedPremiumTier, setSelectedPremiumTier] = useState(null)
+  const [premiumBillingCycle, setPremiumBillingCycle] = useState('monthly')
+  const [discountCode, setDiscountCode] = useState('')
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [currentSubscription, setCurrentSubscription] = useState(null)
+  const [isSubscribing, setIsSubscribing] = useState(false)
+  const [discountResult, setDiscountResult] = useState(null)
+  const [discountError, setDiscountError] = useState('')
+  const [subscriptionError, setSubscriptionError] = useState('')
+
+  // Fetch current subscription on mount
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const res = await subscriptionsApi.getMySubscription()
+        const sub = res.data?.subscription || res.subscription
+        if (sub && sub.isActive) {
+          setCurrentSubscription(sub)
+          setSelectedPremiumTier(sub.tier)
+          setPremiumBillingCycle(sub.billingCycle || 'monthly')
+        }
+      } catch {
+        // No subscription or error - that's fine
+      }
+    }
+    fetchSubscription()
+  }, [])
+
+  const handleSubscribe = async () => {
+    if (!selectedPremiumTier || isSubscribing) return
+    setIsSubscribing(true)
+    setSubscriptionError('')
+    try {
+      const res = await subscriptionsApi.createCheckout({
+        tier: selectedPremiumTier,
+        billingCycle: premiumBillingCycle,
+        ...(discountResult?.isValid && discountCode ? { discountCode } : {}),
+      })
+      const checkoutUrl = res.data?.checkoutUrl || res.checkoutUrl
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl
+      } else {
+        setSubscriptionError('Failed to create checkout session')
+        setIsSubscribing(false)
+      }
+    } catch (err) {
+      setSubscriptionError(err.message || 'Failed to start checkout')
+      setIsSubscribing(false)
+    }
+  }
+
+  const handleCancelSubscription = async () => {
+    setSubscriptionError('')
+    try {
+      const res = await subscriptionsApi.createPortal()
+      const portalUrl = res.data?.portalUrl || res.portalUrl
+      if (portalUrl) {
+        window.location.href = portalUrl
+      } else {
+        setSubscriptionError('Failed to open subscription management')
+      }
+    } catch (err) {
+      setSubscriptionError(err.message || 'Failed to open subscription management')
+    }
+  }
+
+  // Detect checkout success from Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('checkout') !== 'success') return
+
+    // Clean up URL
+    const url = new URL(window.location.href)
+    url.searchParams.delete('checkout')
+    url.searchParams.delete('session_id')
+    window.history.replaceState({}, '', url.pathname)
+
+    // Poll for subscription to appear (webhook may take a moment)
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      try {
+        const res = await subscriptionsApi.getMySubscription()
+        const sub = res.data?.subscription || res.subscription
+        if (sub && sub.isActive) {
+          setCurrentSubscription(sub)
+          setSelectedPremiumTier(sub.tier)
+          setPremiumBillingCycle(sub.billingCycle || 'monthly')
+          refreshUser?.()
+          clearInterval(poll)
+        }
+      } catch {}
+      if (attempts >= 5) clearInterval(poll)
+    }, 2000)
+
+    return () => clearInterval(poll)
+  }, [])
+
+  const handleValidateCode = async () => {
+    if (!discountCode.trim()) return
+    setDiscountError('')
+    setDiscountResult(null)
+    try {
+      const res = await subscriptionsApi.validateCode(discountCode.trim())
+      const result = res.data || res
+      if (result.isValid) {
+        setDiscountResult(result)
+      } else {
+        setDiscountError(result.message || 'Invalid discount code')
+      }
+    } catch (err) {
+      setDiscountError(err.message || 'Failed to validate code')
+    }
+  }
+
+  const premiumTiers = [
+    {
+      id: 'premium',
+      name: 'Premium',
+      tagline: 'Stand out from the crowd',
+      price: 10,
+      annualPrice: 96,
+      icon: 'star',
+      accentColor: '#2dd4bf',
+      accentGlow: 'rgba(45, 212, 191, 0.15)',
+      features: [
+        'Premium comments shown first',
+        'Premium reviews shown first',
+        'Priority visibility on all interactions',
+      ],
+      badge: null,
+    },
+    {
+      id: 'privacy',
+      name: 'Premium Privacy',
+      tagline: 'Browse in stealth mode',
+      price: 20,
+      annualPrice: 192,
+      icon: 'shield',
+      accentColor: '#a78bfa',
+      accentGlow: 'rgba(167, 139, 250, 0.15)',
+      features: [
+        'Activity details page hidden',
+        "Others can't see your likes, comments, or nominations",
+      ],
+      includesText: 'Everything in Premium',
+      badge: 'Most Popular',
+    },
+    {
+      id: 'adfree',
+      name: 'Ad Free',
+      tagline: 'Pure, uninterrupted experience',
+      price: 30,
+      annualPrice: 288,
+      icon: 'layers',
+      accentColor: '#f59e0b',
+      accentGlow: 'rgba(245, 158, 11, 0.15)',
+      features: [
+        'Completely ad-free experience',
+        'No sponsored content or promotions',
+      ],
+      includesText: 'Everything in Premium Privacy',
+      badge: 'Best Value',
+    },
+  ]
+
+  const PremiumStarIcon = ({ color }) => (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+
+  const PremiumShieldIcon = ({ color }) => (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  )
+
+  const PremiumLayersIcon = ({ color }) => (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  )
+
+  const PremiumCheckIcon = ({ color }) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+
+  const premiumIconMap = { star: PremiumStarIcon, shield: PremiumShieldIcon, layers: PremiumLayersIcon }
+
+  const getPremiumPrice = (tier) => {
+    let price = premiumBillingCycle === 'annual' ? Math.round(tier.annualPrice / 12) : tier.price
+    if (discountResult?.isValid) {
+      price = Math.round(price * (1 - discountResult.discountPercent / 100))
+    }
+    return `${price}`
+  }
+
+  const getPremiumSavings = (tier) => {
+    const monthlyCost = tier.price * 12
+    const saved = monthlyCost - tier.annualPrice
+    return Math.round((saved / monthlyCost) * 100)
+  }
+
+  const renderPremiumSection = () => (
+    <div style={{
+      minHeight: '100%',
+      background: '#0a0a0f',
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      color: '#e4e4e7',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Ambient background glow */}
+      <div style={{
+        position: 'fixed',
+        top: '-30%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '800px',
+        height: '800px',
+        background: 'radial-gradient(circle, rgba(167, 139, 250, 0.06) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Header */}
+      <div style={{
+        padding: '16px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        backdropFilter: 'blur(20px)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: 'rgba(10, 10, 15, 0.85)',
+      }}>
+        <button
+          onClick={() => { setActiveSection(null); setSelectedPremiumTier(null); setShowDiscount(false); }}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(255,255,255,0.03)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <span style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em' }}>Premium</span>
+      </div>
+
+      <div style={{ maxWidth: '440px', margin: '0 auto', padding: '24px 20px 40px' }}>
+        {/* Billing toggle */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <div style={{
+            display: 'flex',
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: '14px',
+            padding: '4px',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            {['monthly', 'annual'].map((cycle) => (
+              <button
+                key={cycle}
+                onClick={() => setPremiumBillingCycle(cycle)}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  fontFamily: 'inherit',
+                  transition: 'all 0.25s ease',
+                  background: premiumBillingCycle === cycle ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
+                  color: premiumBillingCycle === cycle ? '#e4e4e7' : '#71717a',
+                }}
+              >
+                {cycle === 'monthly' ? 'Monthly' : 'Annual'}
+                {cycle === 'annual' && (
+                  <span style={{
+                    marginLeft: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#2dd4bf',
+                    fontFamily: "'Space Mono', monospace",
+                  }}>
+                    -20%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tier cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {premiumTiers.map((tier, index) => {
+            const IconComponent = premiumIconMap[tier.icon]
+            const isSelected = selectedPremiumTier === tier.id
+            const isPopular = tier.badge === 'Most Popular'
+
+            return (
+              <div
+                key={tier.id}
+                onClick={() => setSelectedPremiumTier(selectedPremiumTier === tier.id ? null : tier.id)}
+                style={{
+                  position: 'relative',
+                  borderRadius: '20px',
+                  padding: '2px',
+                  background: isSelected
+                    ? `linear-gradient(135deg, ${tier.accentColor}40, ${tier.accentColor}10)`
+                    : isPopular
+                    ? `linear-gradient(135deg, ${tier.accentColor}30, transparent)`
+                    : 'rgba(255,255,255,0.06)',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {/* Badge */}
+                {tier.badge && (
+                  <div style={{ position: 'absolute', top: '-10px', right: '20px', zIndex: 2 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '4px 14px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontFamily: "'Space Mono', monospace",
+                      background: isPopular
+                        ? `linear-gradient(135deg, ${tier.accentColor}, ${tier.accentColor}cc)`
+                        : `${tier.accentColor}20`,
+                      color: isPopular ? '#0a0a0f' : tier.accentColor,
+                      boxShadow: isPopular ? `0 4px 20px ${tier.accentColor}40` : 'none',
+                    }}>
+                      {tier.badge}
+                    </span>
+                  </div>
+                )}
+
+                <div style={{
+                  borderRadius: '18px',
+                  padding: '24px',
+                  background: isSelected
+                    ? `linear-gradient(145deg, ${tier.accentGlow}, rgba(15, 15, 25, 0.98))`
+                    : 'rgba(15, 15, 25, 0.95)',
+                  borderLeft: `3px solid ${tier.accentColor}${isSelected ? '' : '40'}`,
+                  transition: 'all 0.3s ease',
+                }}>
+                  {/* Icon + Name + Price row */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '14px',
+                        background: `${tier.accentColor}12`,
+                        border: `1px solid ${tier.accentColor}25`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.3s ease',
+                        boxShadow: isSelected ? `0 0 24px ${tier.accentColor}20` : 'none',
+                      }}>
+                        <IconComponent color={tier.accentColor} />
+                      </div>
+                      <div>
+                        <h3 style={{
+                          fontSize: '18px',
+                          fontWeight: 700,
+                          margin: 0,
+                          letterSpacing: '-0.02em',
+                          color: '#f4f4f5',
+                        }}>
+                          {tier.name}
+                        </h3>
+                        <p style={{
+                          fontSize: '12px',
+                          color: tier.accentColor,
+                          margin: '2px 0 0',
+                          fontWeight: 500,
+                          opacity: 0.8,
+                        }}>
+                          {tier.tagline}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px', justifyContent: 'flex-end' }}>
+                        <span style={{
+                          fontSize: '28px',
+                          fontWeight: 700,
+                          fontFamily: "'Space Mono', monospace",
+                          letterSpacing: '-0.03em',
+                          color: '#f4f4f5',
+                        }}>
+                          {getPremiumPrice(tier)}
+                        </span>
+                        <span style={{ fontSize: '13px', color: '#52525b', fontWeight: 500 }}>/mo</span>
+                      </div>
+                      {premiumBillingCycle === 'annual' && (
+                        <span style={{
+                          fontSize: '11px',
+                          color: '#2dd4bf',
+                          fontFamily: "'Space Mono', monospace",
+                          fontWeight: 600,
+                        }}>
+                          Save {getPremiumSavings(tier)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Includes text */}
+                  {tier.includesText && (
+                    <p style={{
+                      fontSize: '12px',
+                      color: '#52525b',
+                      margin: '12px 0 0',
+                      paddingLeft: '62px',
+                      fontStyle: 'italic',
+                    }}>
+                      {tier.includesText} +
+                    </p>
+                  )}
+
+                  {/* Features */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    marginTop: '16px',
+                    paddingLeft: '62px',
+                  }}>
+                    {tier.features.map((feature, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ flexShrink: 0 }}>
+                          <PremiumCheckIcon color={tier.accentColor} />
+                        </div>
+                        <span style={{ fontSize: '14px', color: '#a1a1aa', lineHeight: 1.4 }}>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA Button */}
+                  {currentSubscription?.isActive && currentSubscription?.tier === tier.id ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleCancelSubscription(); }}
+                      style={{
+                        width: '100%',
+                        marginTop: '20px',
+                        padding: '14px',
+                        borderRadius: '14px',
+                        border: `1px solid ${tier.accentColor}30`,
+                        background: 'transparent',
+                        color: tier.accentColor,
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        fontFamily: 'inherit',
+                        letterSpacing: '-0.01em',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                      }}>
+                      Manage Subscription
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (isSelected) handleSubscribe(); }}
+                      disabled={isSelected && isSubscribing}
+                      style={{
+                        width: '100%',
+                        marginTop: '20px',
+                        padding: '14px',
+                        borderRadius: '14px',
+                        border: isSelected ? 'none' : `1px solid ${tier.accentColor}30`,
+                        background: isSelected
+                          ? `linear-gradient(135deg, ${tier.accentColor}, ${tier.accentColor}cc)`
+                          : 'transparent',
+                        color: isSelected ? '#0a0a0f' : tier.accentColor,
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        fontFamily: 'inherit',
+                        letterSpacing: '-0.01em',
+                        cursor: isSubscribing ? 'wait' : 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: isSelected ? `0 4px 24px ${tier.accentColor}30` : 'none',
+                        opacity: isSubscribing ? 0.6 : 1,
+                      }}>
+                      {isSelected ? (isSubscribing ? 'Redirecting...' : 'Subscribe Now') : `Get ${tier.name}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Discount code */}
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          {!showDiscount ? (
+            <button
+              onClick={() => setShowDiscount(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#52525b',
+                fontSize: '13px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textDecoration: 'underline',
+                textUnderlineOffset: '3px',
+              }}
+            >
+              Have a discount code?
+            </button>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Enter discount code"
+                  value={discountCode}
+                  onChange={(e) => { setDiscountCode(e.target.value.toUpperCase()); setDiscountError(''); setDiscountResult(null); }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: `1px solid ${discountResult?.isValid ? 'rgba(45, 212, 191, 0.3)' : discountError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                    background: 'rgba(255,255,255,0.03)',
+                    color: '#e4e4e7',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={handleValidateCode}
+                  style={{
+                    padding: '12px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #a78bfa, #2dd4bf)',
+                    color: '#0a0a0f',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}>
+                  Apply
+                </button>
+              </div>
+              {discountResult?.isValid && (
+                <p style={{ fontSize: '13px', color: '#2dd4bf', marginTop: '8px' }}>
+                  {discountResult.discountPercent}% discount applied!
+                </p>
+              )}
+              {discountError && (
+                <p style={{ fontSize: '13px', color: '#ef4444', marginTop: '8px' }}>
+                  {discountError}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Subscription error */}
+        {subscriptionError && (
+          <p style={{
+            textAlign: 'center',
+            fontSize: '13px',
+            color: '#ef4444',
+            marginTop: '16px',
+          }}>
+            {subscriptionError}
+          </p>
+        )}
+
+        {/* Footer note */}
+        <p style={{
+          textAlign: 'center',
+          fontSize: '12px',
+          color: '#3f3f46',
+          marginTop: '24px',
+          lineHeight: 1.5,
+        }}>
+          Cancel anytime. All plans auto-renew {premiumBillingCycle === 'annual' ? 'annually' : 'monthly'}.
+        </p>
+      </div>
+    </div>
+  )
+
   // Render placeholder section
   const renderPlaceholderSection = (title) => (
     <div className="settings-page">
@@ -1829,7 +2441,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
       {activeSection === 'nominations' && renderNominationsSection()}
       {activeSection === 'ballot' && renderPlaceholderSection('My Ballot')}
       {activeSection === 'account' && renderPlaceholderSection('Account')}
-      {activeSection === 'premium' && renderPlaceholderSection('Premium')}
+      {activeSection === 'premium' && renderPremiumSection()}
       {activeSection === 'security' && renderSecuritySection()}
       {activeSection === 'change-password' && renderChangePasswordSection()}
       {activeSection === 'connected-devices' && renderConnectedDevicesSection()}

@@ -46,6 +46,10 @@ export const getPublicProfile = async (
       party: {
         select: { id: true, name: true },
       },
+      // Subscription for premium tier checks
+      subscription: {
+        select: { tier: true, endDate: true },
+      },
       raceFollows: {
         include: {
           race: {
@@ -100,6 +104,10 @@ export const getPublicProfile = async (
     ? { id: user.party.id, name: user.party.name }
     : null;
 
+  // Determine active subscription tier
+  const sub = (user as any).subscription;
+  const activeSubTier = sub && (!sub.endDate || sub.endDate > new Date()) ? sub.tier : null;
+
   const profile: PublicProfile = {
     id: user.id,
     username: user.username,
@@ -115,6 +123,7 @@ export const getPublicProfile = async (
     party: primaryParty,
     isFollowing,
     isFavorited,
+    subscriptionTier: activeSubTier,
   };
 
   // Add race data for all users (sitewide)

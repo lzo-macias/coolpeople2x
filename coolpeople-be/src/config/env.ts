@@ -27,6 +27,13 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
+  // Stripe
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_'),
+
+  // Frontend URL (for Stripe redirect)
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+
   // Storage (optional for now)
   S3_BUCKET: z.string().optional(),
   S3_REGION: z.string().optional(),
