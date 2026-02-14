@@ -3,6 +3,7 @@ import '../styling/CommentsSection.css'
 import Comment from './Comment'
 import { mockComments } from '../data/mockData'
 import { commentsApi } from '../services/api'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onCommentAdded, onTrackActivity }) {
   // For reposted reels, use the original reel ID for all API calls
@@ -105,7 +106,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             const newReply = {
               id: replyId,
               username: createdComment?.user?.username || 'You',
-              avatar: createdComment?.user?.avatarUrl || 'https://i.pravatar.cc/40?img=20',
+              avatar: createdComment?.user?.avatarUrl || DEFAULT_USER_AVATAR,
               text: text,
               likes: 0,
               party: null
@@ -134,7 +135,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             const newReply = {
               id: newId,
               username: 'You',
-              avatar: 'https://i.pravatar.cc/40?img=20',
+              avatar: DEFAULT_USER_AVATAR,
               text: text,
               likes: 0,
               party: null
@@ -150,7 +151,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
           const newReply = {
             id: newId,
             username: 'You',
-            avatar: 'https://i.pravatar.cc/40?img=20',
+            avatar: DEFAULT_USER_AVATAR,
             text: text,
             likes: 0,
             party: null
@@ -177,7 +178,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             const newComment = {
               id: commentId,
               username: createdComment?.user?.username || 'You',
-              avatar: createdComment?.user?.avatarUrl || 'https://i.pravatar.cc/40?img=20',
+              avatar: createdComment?.user?.avatarUrl || DEFAULT_USER_AVATAR,
               text: text,
               likes: 0,
               party: null,
@@ -200,7 +201,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
             const newComment = {
               id: newId,
               username: 'You',
-              avatar: 'https://i.pravatar.cc/40?img=20',
+              avatar: DEFAULT_USER_AVATAR,
               text: text,
               likes: 0,
               party: null,
@@ -214,7 +215,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
           const newComment = {
             id: newId,
             username: 'You',
-            avatar: 'https://i.pravatar.cc/40?img=20',
+            avatar: DEFAULT_USER_AVATAR,
             text: text,
             likes: 0,
             party: null,
@@ -386,7 +387,7 @@ function CommentsSection({ reel, onClose, onUsernameClick, onPartyClick, onComme
       {/* Comment input */}
       <div className="comment-input-container">
         <img
-          src="https://i.pravatar.cc/40?img=20"
+          src={DEFAULT_USER_AVATAR}
           alt="Your avatar"
           className="input-avatar"
         />

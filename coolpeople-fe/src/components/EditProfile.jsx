@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/EditProfile.css'
 import '../styling/ReelCard.css'
@@ -6,6 +6,7 @@ import '../styling/PartyCreationFlow.css'
 import EditBio from './EditBio'
 import { useAuth } from '../contexts/AuthContext'
 import { partiesApi } from '../services/api'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut, onOptIn }) {
   const { logout, user: currentUser, updateUser, refreshUser } = useAuth()
@@ -36,6 +37,23 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
     status: candidate?.status || 'Participant',
     privacy: candidate?.privacy || 'Public',
   })
+
+  // Avatar file input ref
+  const avatarInputRef = useRef(null)
+
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result
+      setEditedCandidate(prev => ({ ...prev, avatar: dataUrl }))
+      onSave?.({ avatar: dataUrl })
+    }
+    reader.readAsDataURL(file)
+    // Reset input so selecting the same file triggers onChange again
+    e.target.value = ''
+  }
 
   // Username change tracking (can only change once every 2 weeks)
   const [lastUsernameChange, setLastUsernameChange] = useState(() => {
@@ -400,20 +418,21 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
 
       {/* Profile Picture */}
       <div className="settings-avatar-section">
-        <div className="settings-avatar-container">
+        <input
+          type="file"
+          ref={avatarInputRef}
+          onChange={handleAvatarFileChange}
+          accept="image/*"
+          style={{ display: 'none' }}
+        />
+        <div className="settings-avatar-container" onClick={() => avatarInputRef.current?.click()} style={{ cursor: 'pointer' }}>
           {editedCandidate.avatar ? (
             <img src={editedCandidate.avatar} alt="Profile" className="settings-avatar" />
           ) : (
-            <div className="settings-avatar-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="12" cy="10" r="3" />
-                <path d="M6 21v-1a6 6 0 0 1 12 0v1" />
-              </svg>
-            </div>
+            <img src={DEFAULT_USER_AVATAR} alt="Default avatar" className="settings-avatar" />
           )}
         </div>
-        <button className="edit-picture-link">Edit profile picture</button>
+        <button className="edit-picture-link" onClick={() => avatarInputRef.current?.click()}>Edit profile picture</button>
       </div>
 
       {/* Account Section */}
@@ -1749,7 +1768,7 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
         <div className="private-profile-mock">
           <div className="private-avatar-section">
             <div className="private-avatar">
-              <img src={editedCandidate.avatar || 'https://i.pravatar.cc/150?img=12'} alt="Profile" />
+              <img src={editedCandidate.avatar || DEFAULT_USER_AVATAR} alt="Profile" />
             </div>
             <h2 className="private-username">{editedCandidate.username || 'Username'}</h2>
             <span className="private-badge">Private Account</span>

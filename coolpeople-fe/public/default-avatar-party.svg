@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="100" fill="#2a2a2a"/>
+  <!-- Center person -->
+  <circle cx="100" cy="72" r="22" fill="#666"/>
+  <path d="M100 100c-24 0-42 13-42 32v8h84v-8c0-19-18-32-42-32z" fill="#666"/>
+  <!-- Left person (behind) -->
+  <circle cx="55" cy="80" r="16" fill="#555"/>
+  <path d="M55 100c-18 0-30 10-30 24v6h34v-14c0-6 2-11 5-16h-9z" fill="#555"/>
+  <!-- Right person (behind) -->
+  <circle cx="145" cy="80" r="16" fill="#555"/>
+  <path d="M145 100c18 0 30 10 30 24v6h-34v-14c0-6-2-11-5-16h9z" fill="#555"/>
+</svg>

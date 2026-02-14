@@ -8,6 +8,7 @@ import { usersApi, reelsApi } from '../services/api'
 import '../styling/MyProfile.css'
 import '../styling/CandidateProfile.css' // For stat modal styles
 import { isImageUrl } from '../utils/media'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 // Activity type colors and icons (same as CandidateProfile)
 const activityConfig = {
@@ -99,7 +100,7 @@ function ActivityVideoItem({ activity, activityConfig, getPartyColor, onClick })
       {/* Action indicator at top - full width */}
       <div className="activity-action-badge">
         <img
-          src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+          src={actor.avatar || DEFAULT_USER_AVATAR}
           alt={actor.username}
           className="activity-actor-avatar"
         />
@@ -256,7 +257,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       setFollowersState(followers.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -281,7 +282,7 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
       setFollowingState(following.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -614,9 +615,11 @@ function MyProfile({ onPartyClick, onOptIn, onOptOut, userParty, userPosts = [],
                   className="my-profile-avatar"
                 />
               ) : (
-                <div className="my-profile-avatar-placeholder">
-                  <span>add a profile photo</span>
-                </div>
+                <img
+                  src={DEFAULT_USER_AVATAR}
+                  alt="Default avatar"
+                  className="my-profile-avatar"
+                />
               )}
             </label>
             <div className="my-profile-info">

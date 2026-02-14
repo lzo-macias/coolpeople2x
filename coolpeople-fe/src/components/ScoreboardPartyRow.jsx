@@ -1,6 +1,7 @@
 import '../styling/ScoreboardPartyRow.css'
 import Sparkline from './Sparkline'
 import { getTierFromPoints } from '../data/mockData'
+import { DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // Rank colors for top 3
 const RANK_COLORS = {
@@ -28,7 +29,7 @@ function ScoreboardPartyRow({ party, rank, onToggleFavorite, onOpenProfile, show
       <div className="party-avatar-container" onClick={() => onOpenProfile?.(party)}>
         <div className="party-avatar-ring" style={{ borderColor: party.color }}>
           <img
-            src={party.avatar}
+            src={party.avatar || DEFAULT_PARTY_AVATAR}
             alt={party.partyName}
             className="party-avatar"
           />

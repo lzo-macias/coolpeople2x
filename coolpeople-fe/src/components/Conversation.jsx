@@ -11,6 +11,7 @@ import ChatSettings from './ChatSettings'
 import MessageReelViewer from './MessageReelViewer'
 import '../styling/Conversation.css'
 import '../styling/PartyCreationFlow.css'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // Audio Message Component
 function AudioMessage({ src, duration }) {
@@ -770,7 +771,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
   }, [isPartyChat, user?.id, partyId])
 
   // Fallback avatar if none provided
-  const userAvatar = currentUserAvatar || 'https://i.pravatar.cc/40?img=12'
+  const userAvatar = currentUserAvatar || DEFAULT_USER_AVATAR
 
   const reactionEmojis = ['❤️', '😂', '😮', '😢', '😡', '👍']
 
@@ -1096,7 +1097,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                     className="conversation-avatar-stacked"
                     style={{ marginLeft: idx > 0 ? -12 : 0, zIndex: 3 - idx }}
                   >
-                    <img src={recipient.avatarUrl || recipient.avatar} alt={recipient.username} />
+                    <img src={recipient.avatarUrl || recipient.avatar || DEFAULT_USER_AVATAR} alt={recipient.username} />
                   </div>
                 ))}
               </div>
@@ -1121,7 +1122,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
                 onClick={() => onOpenProfile?.({ id: user.id, username: user.username, avatar: user.avatar, party: user.party })}
                 style={{ cursor: 'pointer' }}
               >
-                <img src={user.avatar} alt={user.username} />
+                <img src={user.avatar || DEFAULT_USER_AVATAR} alt={user.username} />
               </div>
               <span
                 className="conversation-username"
@@ -1207,7 +1208,7 @@ function Conversation({ conversation, onBack, sharedConversations, setSharedConv
             >
               {!msg.isOwn && (
                 <div className="chat-message-avatar">
-                  <img src={msg.senderAvatar || user.avatar} alt={msg.senderName || user.username} />
+                  <img src={msg.senderAvatar || user.avatar || DEFAULT_USER_AVATAR} alt={msg.senderName || user.username} />
                 </div>
               )}
               <div className="chat-bubble-wrapper">

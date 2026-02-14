@@ -4,10 +4,11 @@ import { getPartyColor } from '../data/mockData'
 import Sparkline from './Sparkline'
 import EditBio from './EditBio'
 import SinglePostView from './SinglePostView'
-import { partiesApi, reelsApi, pointsApi } from '../services/api'
+import { partiesApi, reelsApi, pointsApi, reviewsApi } from '../services/api'
 import { joinRace, leaveRace, onPointsUpdate } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
 import { isImageUrl } from '../utils/media'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -114,7 +115,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const party = {
     ...passedParty,
     ...(partyData || {}),
-    avatar: partyData?.avatarUrl || passedParty?.avatar || passedParty?.avatarUrl,
+    avatar: partyData?.avatarUrl || passedParty?.avatar || passedParty?.avatarUrl || DEFAULT_PARTY_AVATAR,
   }
 
   // Check if this is a new party (just created)
@@ -155,7 +156,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
   const formattedMembers = members.map(m => ({
     id: m.userId,
     username: m.username,
-    avatar: m.avatarUrl || 'https://i.pravatar.cc/40',
+    avatar: m.avatarUrl || DEFAULT_USER_AVATAR,
     party: party.name,
     role: m.permissions?.includes('leader') ? 'Leader' : m.permissions?.includes('admin') ? 'Admin' : m.permissions?.includes('moderate') ? 'Moderator' : 'Member',
     joinedAt: formatRelativeTime(m.joinedAt),
@@ -226,7 +227,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
       user: {
         id: r.author.id,
         username: r.author.username,
-        avatar: r.author.avatarUrl || 'https://i.pravatar.cc/40',
+        avatar: r.author.avatarUrl || DEFAULT_USER_AVATAR,
         party: r.author.partyName,
       },
       text: r.content,
@@ -334,7 +335,7 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
       id: f.id,
       userId: f.userId,
       username: f.username,
-      avatar: f.avatarUrl || 'https://i.pravatar.cc/40',
+      avatar: f.avatarUrl || DEFAULT_USER_AVATAR,
       party: f.partyName,
       isFollowing: f.isFollowing || false,
     }))
@@ -1620,13 +1621,17 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
             />
             <button
               className="review-modal-submit"
-              onClick={() => {
+              onClick={async () => {
                 if (reviewText.trim() && reviewRating > 0) {
+                  const partyId = passedParty?.id
+                  if (!partyId) return
+
+                  // Optimistic local update
                   const newReview = {
                     id: `member-${Date.now()}`,
                     user: {
                       username: 'You',
-                      avatar: 'https://i.pravatar.cc/40?img=68',
+                      avatar: null,
                       party: null,
                     },
                     text: reviewText,
@@ -1635,10 +1640,45 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
                     media: null,
                   }
                   setCommunityTestimonials([newReview, ...communityTestimonials])
+                  setShowReviewModal(false)
+                  setReviewText('')
+                  setReviewRating(0)
+
+                  try {
+                    const res = await partiesApi.createReview(partyId, {
+                      rating: reviewRating,
+                      content: reviewText,
+                    })
+                    if (res?.data) {
+                      // Replace optimistic review with real one from backend
+                      setCommunityTestimonials(prev => prev.map(r =>
+                        r.id === newReview.id ? {
+                          id: res.data.id,
+                          user: {
+                            id: res.data.author?.id,
+                            username: res.data.author?.username || 'You',
+                            avatar: res.data.author?.avatarUrl || null,
+                            party: res.data.author?.partyName || null,
+                          },
+                          text: res.data.content || reviewText,
+                          rating: res.data.rating || reviewRating,
+                          timestamp: 'Just now',
+                          media: null,
+                          isPaid: false,
+                          replies: res.data.replies || [],
+                        } : r
+                      ))
+                    }
+                  } catch (err) {
+                    console.error('Failed to submit review:', err)
+                    // Remove optimistic review on failure
+                    setCommunityTestimonials(prev => prev.filter(r => r.id !== newReview.id))
+                  }
+                } else {
+                  setShowReviewModal(false)
+                  setReviewText('')
+                  setReviewRating(0)
                 }
-                setShowReviewModal(false)
-                setReviewText('')
-                setReviewRating(0)
               }}
             >
               Submit Review
@@ -1661,13 +1701,30 @@ function PartyProfile({ party: passedParty, onMemberClick, onOpenComments, isOwn
               <button
                 className="response-post-btn"
                 disabled={!responseText.trim()}
-                onClick={() => {
+                onClick={async () => {
+                  const reviewId = respondingTo.id
+                  const content = responseText.trim()
+                  if (!content) return
+
+                  // Optimistic local update
                   setReviewResponses(prev => ({
                     ...prev,
-                    [respondingTo.id]: responseText
+                    [reviewId]: content
                   }))
                   setRespondingTo(null)
                   setResponseText('')
+
+                  try {
+                    await reviewsApi.replyToReview(reviewId, { content })
+                  } catch (err) {
+                    console.error('Failed to post reply:', err)
+                    // Revert optimistic update on failure
+                    setReviewResponses(prev => {
+                      const updated = { ...prev }
+                      delete updated[reviewId]
+                      return updated
+                    })
+                  }
                 }}
               >
                 Post

@@ -16,6 +16,7 @@ import {
 } from '../services/socket'
 import Conversation from './Conversation'
 import CreateScreen from './CreateScreen'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 import '../styling/Messages.css'
 
 // Stories will come from API - followed users and party members
@@ -290,19 +291,25 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         const existingIndex = prev.findIndex(s => s.user?.id === story.user.id)
 
         if (existingIndex >= 0) {
+          const existing = prev[existingIndex]
+          // Deduplicate - skip if story already in group
+          if ((existing.stories || []).some(s => s.id === story.id)) return prev
           const updated = [...prev]
           updated[existingIndex] = {
-            ...updated[existingIndex],
-            stories: [story, ...(updated[existingIndex].stories || [])],
+            ...existing,
+            stories: [story, ...(existing.stories || [])],
             hasUnread: true,
           }
           return updated
         }
 
-        // New user story
+        // New user story - check no duplicate group exists by userId
+        if (prev.some(s => (s.userId || s.user?.id) === story.user.id)) return prev
+
         return [{
           id: story.id,
           userId: story.user.id,
+          user: story.user,
           username: story.user.username || story.user.displayName,
           avatar: story.user.party?.avatarUrl || story.user.avatarUrl,
           hasUnread: true,
@@ -1469,9 +1476,16 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       setViewingStory({ ...viewingStory, storyIndex: viewingStory.storyIndex - 1 })
       setStoryProgress(0)
     } else if (viewingStory.userIndex > 0) {
-      const prevUser = storyUsers[viewingStory.userIndex - 1]
-      setViewingStory({ userIndex: viewingStory.userIndex - 1, storyIndex: prevUser.stories.length - 1 })
-      setStoryProgress(0)
+      // Find previous user that actually has stories
+      let prevIdx = viewingStory.userIndex - 1
+      while (prevIdx >= 0 && (!storyUsers[prevIdx].stories || storyUsers[prevIdx].stories.length === 0)) {
+        prevIdx--
+      }
+      if (prevIdx >= 0) {
+        const prevUser = storyUsers[prevIdx]
+        setViewingStory({ userIndex: prevIdx, storyIndex: prevUser.stories.length - 1 })
+        setStoryProgress(0)
+      }
     }
   }
 
@@ -1541,7 +1555,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             const otherUser = conv.otherUser
             if (otherUser && !seenIds.has(`user-${otherUser.id}`)) {
               seenIds.add(`user-${otherUser.id}`)
-              contacts.push({ id: `user-${otherUser.id}`, odId: otherUser.id, name: otherUser.handle || otherUser.name || 'User', avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/80?u=${otherUser.id}`, active: formatActiveTime(conv.lastMessageAt), type: 'user' })
+              contacts.push({ id: `user-${otherUser.id}`, odId: otherUser.id, name: otherUser.handle || otherUser.name || 'User', avatar: otherUser.avatarUrl || otherUser.avatar || DEFAULT_USER_AVATAR, active: formatActiveTime(conv.lastMessageAt), type: 'user' })
             }
           })
         }
@@ -1552,7 +1566,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
           groupChatsRes.data.forEach(gc => {
             if (!seenIds.has(`group-${gc.id}`)) {
               seenIds.add(`group-${gc.id}`)
-              contacts.push({ id: `group-${gc.id}`, odId: gc.id, name: gc.name || 'Group Chat', avatar: gc.avatarUrl || gc.avatar || `https://i.pravatar.cc/80?u=group-${gc.id}`, active: formatActiveTime(gc.lastMessageAt), type: 'group' })
+              contacts.push({ id: `group-${gc.id}`, odId: gc.id, name: gc.name || 'Group Chat', avatar: gc.avatarUrl || gc.avatar || DEFAULT_PARTY_AVATAR, active: formatActiveTime(gc.lastMessageAt), type: 'group' })
             }
           })
         }
@@ -1564,7 +1578,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             const followedUser = f.following || f
             if (followedUser && !seenIds.has(`user-${followedUser.id}`)) {
               seenIds.add(`user-${followedUser.id}`)
-              contacts.push({ id: `user-${followedUser.id}`, odId: followedUser.id, name: followedUser.handle || followedUser.name || 'User', avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/80?u=${followedUser.id}`, active: null, type: 'user' })
+              contacts.push({ id: `user-${followedUser.id}`, odId: followedUser.id, name: followedUser.handle || followedUser.name || 'User', avatar: followedUser.avatarUrl || followedUser.avatar || DEFAULT_USER_AVATAR, active: null, type: 'user' })
             }
           })
         }
@@ -1589,7 +1603,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         res.data.users.forEach(u => {
           if (!seenIds.has(`user-${u.id}`)) {
             seenIds.add(`user-${u.id}`)
-            results.push({ id: `user-${u.id}`, odId: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}`, type: 'user' })
+            results.push({ id: `user-${u.id}`, odId: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR, type: 'user' })
           }
         })
       }
@@ -1597,7 +1611,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
         res.data.parties.forEach(p => {
           if (!seenIds.has(`party-${p.id}`)) {
             seenIds.add(`party-${p.id}`)
-            results.push({ id: `party-${p.id}`, odId: p.id, name: p.name || p.handle || 'Party', avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/80?u=party-${p.id}`, type: 'party' })
+            results.push({ id: `party-${p.id}`, odId: p.id, name: p.name || p.handle || 'Party', avatar: p.avatarUrl || p.avatar || DEFAULT_PARTY_AVATAR, type: 'party' })
           }
         })
       }
@@ -1678,7 +1692,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             const u = f.following || f
             if (u && !seenIds.has(u.id)) {
               seenIds.add(u.id)
-              contacts.push({ id: u.id, name: u.handle || u.username || u.name || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+              contacts.push({ id: u.id, name: u.handle || u.username || u.name || 'User', avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR })
             }
           })
         }
@@ -1690,7 +1704,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
             const u = conv.otherUser
             if (u && !seenIds.has(u.id)) {
               seenIds.add(u.id)
-              contacts.push({ id: u.id, name: u.handle || u.name || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+              contacts.push({ id: u.id, name: u.handle || u.name || 'User', avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR })
             }
           })
         }
@@ -1712,7 +1726,7 @@ function Messages({ onConversationChange, conversations, setConversations, userS
       const results = []
       if (res.data?.users) {
         res.data.users.forEach(u => {
-          results.push({ id: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}` })
+          results.push({ id: u.id, name: u.handle || u.username || u.displayName || 'User', avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR })
         })
       }
       setStoryTagResults(results)
@@ -3480,9 +3494,11 @@ function MessageItem({ message, isPinned, isSilenced, isHidden, isLongPressActiv
           {party?.avatarUrl || user?.avatar ? (
             <img src={party?.avatarUrl || user.avatar} alt={displayName} />
           ) : (
-            <div className="message-avatar-placeholder">
-              {isPartyChat || party ? '🎉' : (user?.username?.[0] || '?')}
-            </div>
+            <img
+              src={isPartyChat || party ? DEFAULT_PARTY_AVATAR : DEFAULT_USER_AVATAR}
+              alt=""
+              className="message-avatar"
+            />
           )}
         </div>
       </div>

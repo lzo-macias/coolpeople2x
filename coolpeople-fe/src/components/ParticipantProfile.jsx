@@ -7,6 +7,7 @@ import { usersApi, reelsApi } from '../services/api'
 import EditProfile from './EditProfile'
 import SinglePostView from './SinglePostView'
 import { isImageUrl } from '../utils/media'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 const activityConfig = {
   like: { color: '#FF4D6A', icon: '♥' },
@@ -267,7 +268,7 @@ function ParticipantProfile({
       setFollowersState(followers.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -292,7 +293,7 @@ function ParticipantProfile({
       setFollowingState(following.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -417,13 +418,7 @@ function ParticipantProfile({
               className="participant-avatar-ring"
               style={{ borderColor: hasParty ? partyColor : '#FF2A55' }}
             >
-              {participant.avatar ? (
-                <img src={participant.avatar} alt={participant.username} className="participant-avatar" />
-              ) : (
-                <div className="participant-avatar-placeholder">
-                  {participant.username?.charAt(0)?.toUpperCase() || '?'}
-                </div>
-              )}
+              <img src={participant.avatar || DEFAULT_USER_AVATAR} alt={participant.username} className="participant-avatar" />
             </div>
             <div className="participant-info">
               <h2 className="participant-username">{participant.username}</h2>
@@ -630,7 +625,7 @@ function ParticipantProfile({
         {activeTab === 'tagged' && (
           <div className="posts-grid">
             {fetchedTaggedReels.length === 0 ? (
-              <div className="posts-empty">
+              <div className="empty-reposts">
                 <p>No tagged posts yet</p>
               </div>
             ) : (
@@ -674,7 +669,7 @@ function ParticipantProfile({
                 <div key={activity.id} className="activity-item">
                   <div className="activity-action-badge">
                     <img
-                      src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+                      src={actor.avatar || DEFAULT_USER_AVATAR}
                       alt={actor.username}
                       className="activity-action-badge-avatar"
                     />

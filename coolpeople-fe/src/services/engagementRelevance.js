@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
+
 /**
  * Engagement Relevance Engine
  *
@@ -87,7 +89,7 @@ export function normalizeScoreboardEntry(entry, idx, fallbackSparkline) {
     username: isPartyEntry
       ? entity.name
       : (entity.handle || entity.username || entity.displayName || `Candidate ${idx + 1}`),
-    avatar: entity.avatarUrl || entity.avatar || `https://i.pravatar.cc/40?img=${(idx % 70) + 1}`,
+    avatar: entity.avatarUrl || entity.avatar || DEFAULT_USER_AVATAR,
     party: isPartyEntry ? entity.name : (entity.party?.name || null),
     sparklineData: sparklinePoints.length > 0 ? sparklinePoints : [],
     recentChange: todayChange ? (todayChange > 0 ? `+${todayChange}` : `${todayChange}`) : null,

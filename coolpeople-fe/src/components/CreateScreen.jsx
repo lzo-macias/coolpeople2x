@@ -8,6 +8,7 @@ import { messagesApi, usersApi, partiesApi, searchApi, reelsApi } from '../servi
 import { useAuth } from '../contexts/AuthContext'
 import { combineMediaItems } from '../utils/combineMedia'
 import { loadDraftBlob, cleanExpiredDraftBlobs } from '../utils/draftBlobStore'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // Mock phone contacts
 const mockContacts = [
@@ -247,7 +248,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 id: otherUser.id,
                 username: otherUser.handle || otherUser.username || otherUser.displayName || 'user',
                 name: otherUser.name || otherUser.displayName || otherUser.handle || 'User',
-                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/100?u=${otherUser.id}`,
+                avatar: otherUser.avatarUrl || otherUser.avatar || DEFAULT_USER_AVATAR,
                 isOnPlatform: true,
                 type: 'user',
               })
@@ -273,7 +274,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                   id: followedUser.id,
                   username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
                   name: followedUser.name || followedUser.displayName || followedUser.handle || 'User',
-                  avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/100?u=${followedUser.id}`,
+                  avatar: followedUser.avatarUrl || followedUser.avatar || DEFAULT_USER_AVATAR,
                   isOnPlatform: true,
                   type: 'user',
                 })
@@ -300,7 +301,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 id: party.id,
                 username: party.handle || party.name,
                 name: party.name,
-                avatar: party.avatarUrl || `https://i.pravatar.cc/100?u=${party.id}`,
+                avatar: party.avatarUrl || DEFAULT_PARTY_AVATAR,
                 isOnPlatform: true,
                 type: 'party',
               })
@@ -354,7 +355,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 id: user.id,
                 username: user.username || user.displayName || 'user',
                 name: user.displayName || user.username || 'User',
-                avatar: user.avatarUrl || `https://i.pravatar.cc/100?u=${user.id}`,
+                avatar: user.avatarUrl || DEFAULT_USER_AVATAR,
                 isOnPlatform: true,
                 type: 'user',
               })
@@ -372,7 +373,7 @@ function CreateScreen({ onClose, isConversationMode, conversationUser, onSendToC
                 id: party.id,
                 username: party.handle || party.name,
                 name: party.name,
-                avatar: party.avatarUrl || `https://i.pravatar.cc/100?u=${party.id}`,
+                avatar: party.avatarUrl || DEFAULT_PARTY_AVATAR,
                 isOnPlatform: true,
                 type: 'party',
               })

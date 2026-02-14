@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import '../styling/PartyCreationFlow.css'
 import { usersApi, favoritesApi, partiesApi, searchApi } from '../services/api'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVideoBase64, isMirrored, currentUserId, conversations = {}, prefilledData = null }) {
   // Check if this is a conversion from groupchat
@@ -1361,7 +1362,7 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
                     onClick={() => handlePickerAddUser(user)}
                   >
                     <img
-                      src={user.avatar || `https://ui-avatars.com/api/?name=${user.username}&background=random`}
+                      src={user.avatar || DEFAULT_USER_AVATAR}
                       alt={user.name || user.username}
                       className="user-picker-avatar"
                     />
@@ -1395,7 +1396,7 @@ function PartyCreationFlow({ onClose, onComplete, recordedVideoUrl, recordedVide
                 <div className="user-picker-selected-list">
                   {(userPickerMode === 'admin' ? adminInvites : memberInvites).map(user => (
                     <div key={user.id} className="user-picker-selected-chip">
-                      <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.username}&background=random`} alt={user.username} />
+                      <img src={user.avatar || DEFAULT_USER_AVATAR} alt={user.username} />
                       <span>@{user.username}</span>
                       <button onClick={() => userPickerMode === 'admin' ? handleRemoveAdmin(user.id) : handleRemoveMember(user.id)}>
                         ×

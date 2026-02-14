@@ -478,6 +478,11 @@ export const partiesApi = {
 
   getReviews: (partyId, cursor) => apiFetch(`/api/parties/${partyId}/reviews${cursor ? `?cursor=${cursor}` : ''}`),
 
+  createReview: (partyId, data) => apiFetch(`/api/parties/${partyId}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
   joinParty: (partyId, options = {}) => apiFetch(`/api/parties/${partyId}/join`, {
     method: 'POST',
     body: JSON.stringify(options),
@@ -660,6 +665,11 @@ export const reviewsApi = {
 
   deleteReview: (reviewId) => apiFetch(`/api/reviews/${reviewId}`, {
     method: 'DELETE',
+  }),
+
+  replyToReview: (reviewId, data) => apiFetch(`/api/reviews/${reviewId}/reply`, {
+    method: 'POST',
+    body: JSON.stringify(data),
   }),
 };
 

@@ -278,6 +278,8 @@ export const onNewStory = (callback) => {
       id: data.id,
       videoUrl: data.videoUrl,
       thumbnailUrl: data.thumbnailUrl,
+      duration: data.duration ?? null,
+      metadata: data.metadata ?? null,
       createdAt: new Date(data.createdAt),
       expiresAt: new Date(data.expiresAt),
       user: data.user,

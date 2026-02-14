@@ -5,6 +5,7 @@ import { usersApi, searchApi, favoritesApi, reelsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/PostScreen.css'
 import '../styling/PartyCreationFlow.css'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 import '../styling/VideoEditor.css'
 
 function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode, raceName, raceDeadline, recordedVideoUrl, recordedVideoBase64, isMirrored, showSelfieCam, taggedUser, getContactDisplayName, textOverlays, userParty, userRacesFollowing = [], userRacesCompeting = [], conversations = {}, isQuoteNomination, quotedReel, currentUserId, selfieSize, selfiePosition, showSelfieOverlay, trimStart = 0, trimEnd = null, selectedSound, videoEdits, videoPlaylist }) {
@@ -903,7 +904,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                 className={`post-tag active user-tag ${item.isChat ? 'chat-tag' : ''}`}
                 onClick={() => toggleSendToUser(item)}
               >
-                <img src={item.avatar || `https://ui-avatars.com/api/?name=${item.name || item.username}&background=random`} alt="" className="tag-avatar" />
+                <img src={item.avatar || DEFAULT_USER_AVATAR} alt="" className="tag-avatar" />
                 {item.name || item.username}
                 <span className="tag-remove">×</span>
               </button>
@@ -1063,7 +1064,7 @@ function PostScreen({ onClose, onPost, onDraftSaved, isRaceMode, isNominateMode,
                   >
                     <div className="send-to-avatar-wrap">
                       <img
-                        src={item.avatar || `https://ui-avatars.com/api/?name=${item.name || item.username}&background=random`}
+                        src={item.avatar || DEFAULT_USER_AVATAR}
                         alt={item.name || item.username}
                         className="user-picker-avatar"
                       />

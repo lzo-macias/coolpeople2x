@@ -7,6 +7,7 @@ import QuoteNominateScreen from './QuoteNominateScreen'
 import { getPartyColor } from '../data/mockData'
 import { racesApi, reelsApi } from '../services/api'
 import { isImageUrl } from '../utils/media'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // Helper to format points for display (e.g., 25000 -> "25,000")
 const formatPoints = (points) => {
@@ -463,8 +464,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 : (entry.user?.displayName || entry.user?.username || 'Unknown')
               const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
               const entityAvatar = isPartyEntry
-                ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
-                : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                ? (entry.party?.avatarUrl || DEFAULT_PARTY_AVATAR)
+                : (entry.user?.avatarUrl || DEFAULT_USER_AVATAR)
 
               // Extract and validate sparkline data - filter out non-numeric values
               const rawSparkline = entry.sparkline?.map(s => s.points) || []
@@ -719,7 +720,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
   const isBothFeedsPost = !isPartyPost && (!!data.partyId || !!data.party)
   // For party posts from API, use party identity; for local posts, user is already set to party
   const partyName = data.party?.name || data.user?.party
-  const partyAvatar = (data.party?.avatarUrl) || data.user?.avatar || 'https://i.pravatar.cc/40?img=1'
+  const partyAvatar = (data.party?.avatarUrl) || data.user?.avatar || DEFAULT_USER_AVATAR
 
   if (isPreview) {
     return (
@@ -944,7 +945,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 // Both-feeds post: show gray party tag above, party + user inline below
                 <>
                   <img
-                    src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    src={data.user?.avatar || DEFAULT_USER_AVATAR}
                     alt={data.user?.username || 'user'}
                     className="reel-user-avatar clickable"
                     style={{ borderColor: getPartyColor(data.user?.party) }}
@@ -960,7 +961,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                       </button>
                       <div className="username-with-avatar" onClick={() => { pauseVideo(); onUsernameClick?.(data.user) }}>
                         <img
-                          src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                          src={data.user?.avatar || DEFAULT_USER_AVATAR}
                           alt={data.user?.username || 'user'}
                           className="username-mini-avatar"
                         />
@@ -975,7 +976,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                 // User-only post: show user identity
                 <>
                   <img
-                    src={data.user?.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    src={data.user?.avatar || DEFAULT_USER_AVATAR}
                     alt={data.user?.username || 'user'}
                     className="reel-user-avatar clickable"
                     style={{ borderColor: getPartyColor(data.user?.party) }}
@@ -1239,8 +1240,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                                   : (entry.user?.displayName || entry.user?.username || 'Unknown')
                                 const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
                                 const entityAvatar = isPartyEntry
-                                  ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
-                                  : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                                  ? (entry.party?.avatarUrl || DEFAULT_PARTY_AVATAR)
+                                  : (entry.user?.avatarUrl || DEFAULT_USER_AVATAR)
                                 // Validate sparkline data
                                 const rawSparkline = entry.sparkline?.map(s => s.points) || []
                                 const validSparkline = rawSparkline.filter(v => typeof v === 'number' && !isNaN(v))
@@ -1307,8 +1308,8 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                                 : (entry.user?.displayName || entry.user?.username || 'Unknown')
                               const entityHandle = isPartyEntry ? entry.party?.handle : entry.user?.username
                               const entityAvatar = isPartyEntry
-                                ? (entry.party?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.party?.name || 'P')}&background=random`)
-                                : (entry.user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.user?.username || 'U')}&background=random`)
+                                ? (entry.party?.avatarUrl || DEFAULT_PARTY_AVATAR)
+                                : (entry.user?.avatarUrl || DEFAULT_USER_AVATAR)
                               // Validate sparkline data
                               const rawSparkline = entry.sparkline?.map(s => s.points) || []
                               const validSparkline = rawSparkline.filter(v => typeof v === 'number' && !isNaN(v))
@@ -1640,7 +1641,7 @@ function ReelCard({ reel, isPreview = false, isPageActive = true, onOpenComments
                     setShowNominateOptions(true)
                   }}
                 >
-                  <img src={race.avatarUrl || race.icon || `https://i.pravatar.cc/40?u=${race.id}`} alt={race.name} className="nominate-race-icon" />
+                  <img src={race.avatarUrl || race.icon || DEFAULT_USER_AVATAR} alt={race.name} className="nominate-race-icon" />
                   <span className="nominate-race-name">{race.name}</span>
                 </button>
               ))}

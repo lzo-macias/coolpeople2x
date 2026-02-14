@@ -4,6 +4,7 @@ import { getPartyColor } from '../data/mockData'
 import { messagesApi, groupchatsApi } from '../services/api'
 import PartyCreationFlow from './PartyCreationFlow'
 import '../styling/ChatSettings.css'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, groupChatCreatorId = null, onClose, conversation, onSettingsChange, groupChatId = null, currentUserId = null, onPartyCreated = null, onOpenProfile }) {
   const [activeSection, setActiveSection] = useState(null)
@@ -17,7 +18,7 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
 
   const [chatData, setChatData] = useState({
     name: chat?.name || chat?.username || 'Chat',
-    avatar: chat?.avatar || 'https://i.pravatar.cc/150?img=47',
+    avatar: chat?.avatar || DEFAULT_USER_AVATAR,
     color: partyColor,
     notifications: !conversation?.isMuted, // Initialize from conversation settings
   })
@@ -144,17 +145,17 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
     ? groupChatMembers.map((m) => ({
         id: m.id,
         username: m.username || m.displayName,
-        avatar: m.avatarUrl || m.avatar || 'https://i.pravatar.cc/40',
+        avatar: m.avatarUrl || m.avatar || DEFAULT_USER_AVATAR,
         isOwner: groupChatCreatorId ? m.id === groupChatCreatorId : false, // Creator is the owner
       }))
     : isGroupChat
     ? [
-        { id: 1, username: chat?.name || 'user1', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: true },
+        { id: 1, username: chat?.name || 'user1', avatar: chat?.avatar || DEFAULT_USER_AVATAR, isOwner: true },
         { id: 2, username: 'sarah.2024', avatar: 'https://i.pravatar.cc/40?img=5', isOwner: false },
         { id: 3, username: 'mike_politics', avatar: 'https://i.pravatar.cc/40?img=8', isOwner: false },
       ]
     : [
-        { id: 1, username: chat?.name || chat?.username || 'User', avatar: chat?.avatar || 'https://i.pravatar.cc/40?img=1', isOwner: false },
+        { id: 1, username: chat?.name || chat?.username || 'User', avatar: chat?.avatar || DEFAULT_USER_AVATAR, isOwner: false },
       ]
 
   // Tab state for Links & Content
@@ -620,7 +621,7 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
                       onClick={() => toggleUserSelection(user.id)}
                     >
                       <img
-                        src={user.avatarUrl || 'https://i.pravatar.cc/40'}
+                        src={user.avatarUrl || DEFAULT_USER_AVATAR}
                         alt={user.username}
                         className="add-member-avatar"
                       />
@@ -930,7 +931,7 @@ function ChatSettings({ chat, isGroupChat = false, groupChatMembers = null, grou
         id: m.id,
         username: m.username,
         name: m.username,
-        avatar: m.avatar || `https://ui-avatars.com/api/?name=${m.username}&background=random`
+        avatar: m.avatar || DEFAULT_USER_AVATAR
       }))
 
     return {

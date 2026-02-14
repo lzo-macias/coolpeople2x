@@ -1,6 +1,7 @@
 import '../styling/ScoreboardUserRow.css'
 import Sparkline from './Sparkline'
 import { getPartyColor, getTierFromPoints } from '../data/mockData'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 // Rank colors for top 3
 const RANK_COLORS = {
@@ -33,7 +34,7 @@ function ScoreboardUserRow({ user, rank, onToggleFavorite, onOpenProfile, onPart
       <div className="user-avatar-container" onClick={() => onOpenProfile?.(user)}>
         <div className="user-avatar-ring" style={{ borderColor: tier.color }}>
           <img
-            src={user.avatar}
+            src={user.avatar || DEFAULT_USER_AVATAR}
             alt={user.username}
             className="user-avatar"
           />

@@ -5,6 +5,7 @@ import ScoreboardUserRow from './ScoreboardUserRow'
 import ScoreboardPartyRow from './ScoreboardPartyRow'
 import InviteFriends from './InviteFriends'
 import { racesApi, favoritesApi, searchApi, partiesApi } from '../services/api'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 import { mockScoreboard, mockPartyScoreboard, getPartyColor } from '../data/mockData'
 
 // Mock recommended users
@@ -95,7 +96,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                     partyId: entry.party?.id || entry.id,
                     partyName: entry.party?.name || entry.name,
                     color: entry.party?.color || '#e91e8c',
-                    avatar: entry.party?.avatarUrl || entry.avatarUrl,
+                    avatar: entry.party?.avatarUrl || entry.avatarUrl || DEFAULT_PARTY_AVATAR,
                     members: entry.party?.memberCount || entry.memberCount || 0,
                     score: entry.totalPoints || 0,
                     change: entry.change || 0,
@@ -115,7 +116,7 @@ function Scoreboard({ onOpenProfile, onOpenPartyProfile, isActive, refreshKey = 
                     rank: idx + 1,
                     userId: entry.user?.id || entry.id,
                     username: entry.user?.username || entry.username,
-                    avatar: entry.user?.avatarUrl || entry.avatarUrl,
+                    avatar: entry.user?.avatarUrl || entry.avatarUrl || DEFAULT_USER_AVATAR,
                     party: entry.user?.party?.name || entry.party,
                     partyId: entry.user?.party?.id || null,
                     score: entry.totalPoints,

@@ -5,6 +5,7 @@ import { getPartyColor } from '../data/mockData'
 import { reelsApi, usersApi, messagesApi, groupchatsApi, searchApi, reportsApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import EditClipScreen from './EditClipScreen'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 // Helper to format "active" time from lastMessageAt
 const formatActiveTime = (dateString) => {
@@ -74,7 +75,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 id: `user-${u.id}`,
                 odId: u.id,
                 name: u.handle || u.username || u.displayName || 'User',
-                avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/80?u=${u.id}`,
+                avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR,
                 active: null,
                 type: 'user',
               })
@@ -90,7 +91,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 id: `party-${p.id}`,
                 odId: p.id,
                 name: p.name || p.handle || 'Party',
-                avatar: p.avatarUrl || p.avatar || `https://i.pravatar.cc/80?u=party-${p.id}`,
+                avatar: p.avatarUrl || p.avatar || DEFAULT_PARTY_AVATAR,
                 active: null,
                 type: 'party',
               })
@@ -149,7 +150,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 id: `user-${otherUser.id}`,
                 odId: otherUser.id,
                 name: otherUser.handle || otherUser.name || 'User',
-                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/80?u=${otherUser.id}`,
+                avatar: otherUser.avatarUrl || otherUser.avatar || DEFAULT_USER_AVATAR,
                 active: formatActiveTime(conv.lastMessageAt),
                 type: 'user',
               })
@@ -171,7 +172,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 id: `group-${gc.id}`,
                 odId: gc.id,
                 name: gc.name || 'Group Chat',
-                avatar: gc.avatarUrl || gc.avatar || `https://i.pravatar.cc/80?u=group-${gc.id}`,
+                avatar: gc.avatarUrl || gc.avatar || DEFAULT_PARTY_AVATAR,
                 active: formatActiveTime(gc.lastMessageAt),
                 type: 'group',
                 memberCount: gc.memberCount || gc.members?.length || 0,
@@ -195,7 +196,7 @@ function ReelActions({ user, stats, onOpenComments, onTrackActivity, reel, onLik
                 id: `user-${followedUser.id}`,
                 odId: followedUser.id,
                 name: followedUser.handle || followedUser.name || 'User',
-                avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/80?u=${followedUser.id}`,
+                avatar: followedUser.avatarUrl || followedUser.avatar || DEFAULT_USER_AVATAR,
                 active: null,
                 type: 'user',
               })

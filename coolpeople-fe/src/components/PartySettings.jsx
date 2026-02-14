@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { messagesApi, partiesApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/PartySettings.css'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, onSettingsChange, onLeave, onCreateGroupChat, onOpenProfile }) {
   const { user: currentUser } = useAuth()
@@ -31,7 +32,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
           const transformedMembers = response.data.map(member => ({
             id: member.userId,
             username: member.username || member.displayName || 'Member',
-            avatar: member.avatarUrl || 'https://i.pravatar.cc/40',
+            avatar: member.avatarUrl || DEFAULT_USER_AVATAR,
             role: permissionsToRole(member.permissions || []),
           }))
           setMembers(transformedMembers)
@@ -59,7 +60,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
           const transformedBanned = response.data.map(ban => ({
             id: ban.userId,
             username: ban.username || ban.displayName || 'User',
-            avatar: ban.avatarUrl || 'https://i.pravatar.cc/40',
+            avatar: ban.avatarUrl || DEFAULT_USER_AVATAR,
             bannedDate: new Date(ban.bannedAt).toLocaleDateString(),
           }))
           setBannedUsers(transformedBanned)
@@ -76,7 +77,7 @@ function PartySettings({ party, isAdmin = true, onClose, onSave, conversation, o
 
   const [partyData, setPartyData] = useState({
     name: party?.name || 'The Pink Lady Party',
-    avatar: party?.avatar || 'https://i.pravatar.cc/150?img=47',
+    avatar: party?.avatar || DEFAULT_PARTY_AVATAR,
     color: party?.color || '#EC4899',
     description: party?.description || 'A party for the people, by the people.',
     isPrivate: party?.isPrivate ?? false, // Read from backend: false = public, true = private

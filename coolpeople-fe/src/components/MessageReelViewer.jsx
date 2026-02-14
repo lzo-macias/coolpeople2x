@@ -6,6 +6,7 @@ import ReelActions from './ReelActions'
 import CommentsSection from './CommentsSection'
 import { getPartyColor } from '../data/mockData'
 import { reelsApi, partiesApi } from '../services/api'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite, senderUser, currentUserAvatar, onTrackActivity, onLikeChange, onCommentAdded, onOpenProfile, onOpenPartyProfile }) {
   // Track video load errors to fallback to thumbnail
@@ -130,7 +131,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
     }
     return currentMessage?.isOwn ? {
       username: 'You',
-      avatar: currentUserAvatar || 'https://i.pravatar.cc/40?img=12',
+      avatar: currentUserAvatar || DEFAULT_USER_AVATAR,
       party: null
     } : {
       username: senderUser?.username || 'Unknown',
@@ -614,7 +615,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
             {isDirectVideo ? (
               <div className="reel-user-row">
                 <img
-                  src={user.avatar || 'https://i.pravatar.cc/40?img=1'}
+                  src={user.avatar || DEFAULT_USER_AVATAR}
                   alt={user.username}
                   className="reel-user-avatar"
                   style={{ borderColor: getPartyColor(user.party) }}
@@ -704,7 +705,7 @@ function MessageReelViewer({ messages, initialMessageId, onClose, onAcceptInvite
                 {/* User row with clickable party tag */}
                 <div className="reel-user-row">
                   <img
-                    src={user.avatar || 'https://i.pravatar.cc/40?img=1'}
+                    src={user.avatar || DEFAULT_USER_AVATAR}
                     alt={user.username}
                     className="reel-user-avatar clickable"
                     style={{ borderColor: getPartyColor(user.party) }}

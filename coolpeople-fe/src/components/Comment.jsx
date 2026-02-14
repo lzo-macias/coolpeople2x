@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import '../styling/Comment.css'
 import { getPartyColor } from '../data/mockData'
 import { commentsApi } from '../services/api'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply, onPaywall, userReplies = [], reelId }) {
   const [isLiked, setIsLiked] = useState(comment.isLiked || false)
@@ -72,7 +73,7 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
   return (
     <div id={comment.id} className={`comment ${isCP ? 'cp-comment' : ''}`}>
       <img
-        src={comment.avatar}
+        src={comment.avatar || DEFAULT_USER_AVATAR}
         alt={comment.username}
         className="comment-avatar"
         style={{ borderColor: partyColor }}
@@ -131,7 +132,7 @@ function Comment({ comment, isCP = false, onUsernameClick, onPartyClick, onReply
             {allReplies.map((reply) => (
               <div key={reply.id} id={reply.id} className="reply">
                 <img
-                  src={reply.avatar}
+                  src={reply.avatar || DEFAULT_USER_AVATAR}
                   alt={reply.username}
                   className="reply-avatar"
                   style={{ borderColor: getPartyColor(reply.party) }}

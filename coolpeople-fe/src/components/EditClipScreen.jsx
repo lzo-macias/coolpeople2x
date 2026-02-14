@@ -5,6 +5,7 @@ import { racesApi, messagesApi, usersApi, searchApi, groupchatsApi, partiesApi, 
 import { useAuth } from '../contexts/AuthContext'
 import '../styling/EditClipScreen.css'
 import '../styling/VideoEditor.css'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from '../utils/avatarDefaults'
 
 function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits, initialTrimStart = 0, initialTrimEnd = null, selectedSound, onSelectSound, isRaceMode, isNominateMode, raceName, onRaceNameChange, raceDeadline, onRaceDeadlineChange, raceType, onRaceTypeChange, winMethod, onWinMethodChange, selectedExistingRace, onSelectedExistingRaceChange, recordedVideoUrl, recordedVideoBase64, isMirrored, videoPlaylist, isConversationMode, conversationUser, onSend, taggedUser, getContactDisplayName, textOverlays, setTextOverlays, onCompleteToScoreboard, onSaveDraft, currentMode, onModeChange, quotedReel, isFromDraft, selfieSize, setSelfieSize, selfiePosition, setSelfiePosition, showSelfieOverlay, setShowSelfieOverlay, isBackgrounded, isFromDeviceMedia, deviceMediaType, isStoryMode, sourceReel }) {
   const { user: authUser } = useAuth()
@@ -469,7 +470,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               users.push({
                 id: otherUser.id,
                 username: otherUser.handle || otherUser.username || otherUser.displayName || 'user',
-                avatar: otherUser.avatarUrl || otherUser.avatar || `https://i.pravatar.cc/40?u=${otherUser.id}`,
+                avatar: otherUser.avatarUrl || otherUser.avatar || DEFAULT_USER_AVATAR,
                 type: 'user',
               })
             }
@@ -494,7 +495,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 users.push({
                   id: followedUser.id,
                   username: followedUser.handle || followedUser.username || followedUser.displayName || 'user',
-                  avatar: followedUser.avatarUrl || followedUser.avatar || `https://i.pravatar.cc/40?u=${followedUser.id}`,
+                  avatar: followedUser.avatarUrl || followedUser.avatar || DEFAULT_USER_AVATAR,
                   type: 'user',
                 })
               }
@@ -524,7 +525,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                   partyId: gc.partyId || gc.party?.id,
                   groupChatId: gc.id,
                   username: gc.party?.name || gc.name || 'Party',
-                  avatar: gc.party?.avatarUrl || gc.avatarUrl || `https://i.pravatar.cc/40?u=${pid}`,
+                  avatar: gc.party?.avatarUrl || gc.avatarUrl || DEFAULT_PARTY_AVATAR,
                   type: 'party',
                   members: gc.members || [],
                 })
@@ -541,7 +542,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                   id: gcId,
                   groupChatId: gc.id,
                   username: gc.name || memberNames || 'Group chat',
-                  avatar: gc.avatarUrl || gc.members?.[0]?.avatarUrl || `https://i.pravatar.cc/40?u=group-${gc.id}`,
+                  avatar: gc.avatarUrl || gc.members?.[0]?.avatarUrl || DEFAULT_PARTY_AVATAR,
                   type: 'group',
                   members: gc.members || [],
                 })
@@ -571,7 +572,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 id: pid,
                 partyId: p.id,
                 username: p.name || p.handle || 'Party',
-                avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=party-${p.id}`,
+                avatar: p.avatarUrl || DEFAULT_PARTY_AVATAR,
                 type: 'party',
               })
             }
@@ -592,7 +593,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
             users.push({
               id: favUser.id,
               username: favUser.handle || favUser.username || favUser.displayName || 'user',
-              avatar: favUser.avatarUrl || favUser.avatar || `https://i.pravatar.cc/40?u=${favUser.id}`,
+              avatar: favUser.avatarUrl || favUser.avatar || DEFAULT_USER_AVATAR,
               type: 'user',
             })
           }
@@ -643,7 +644,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 results.push({
                   id: u.id,
                   username: u.handle || u.username || u.displayName || 'user',
-                  avatar: u.avatarUrl || u.avatar || `https://i.pravatar.cc/40?u=${u.id}`,
+                  avatar: u.avatarUrl || u.avatar || DEFAULT_USER_AVATAR,
                   type: 'user',
                 })
               }
@@ -667,7 +668,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                     id: pid,
                     partyId: p.id,
                     username: p.name || p.handle || 'Party',
-                    avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=party-${p.id}`,
+                    avatar: p.avatarUrl || DEFAULT_PARTY_AVATAR,
                     type: 'party',
                   })
                 }
@@ -1238,7 +1239,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 id: u.id,
                 username: u.username || u.displayName || 'user',
                 name: u.displayName || u.username || 'User',
-                avatar: u.avatarUrl || `https://i.pravatar.cc/40?u=${u.id}`,
+                avatar: u.avatarUrl || DEFAULT_USER_AVATAR,
                 type: 'user',
               })
             }
@@ -1255,7 +1256,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
                 id: p.id,
                 username: p.handle || p.name,
                 name: p.name,
-                avatar: p.avatarUrl || `https://i.pravatar.cc/40?u=${p.id}`,
+                avatar: p.avatarUrl || DEFAULT_PARTY_AVATAR,
                 type: 'party',
               })
             }
@@ -2430,7 +2431,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               onClick={handleAddToStory}
             >
               <img
-                src={authUser?.avatarUrl || 'https://i.pravatar.cc/40?img=3'}
+                src={authUser?.avatarUrl || DEFAULT_USER_AVATAR}
                 alt="Profile"
                 className="edit-clip-story-avatar"
               />
@@ -2459,7 +2460,7 @@ function EditClipScreen({ onClose, onNext, onVideoEditsChange, initialVideoEdits
               onClick={handleAddToStory}
             >
               <img
-                src={authUser?.avatarUrl || 'https://i.pravatar.cc/40?img=3'}
+                src={authUser?.avatarUrl || DEFAULT_USER_AVATAR}
                 alt="Profile"
                 className="edit-clip-story-avatar"
               />

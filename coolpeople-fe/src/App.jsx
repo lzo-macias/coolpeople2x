@@ -25,6 +25,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { reelsApi, messagesApi, partiesApi, storiesApi, usersApi, groupchatsApi, racesApi } from './services/api'
 import { initializeSocket, onFollowUpdate, disconnectSocket } from './services/socket'
 import { mockReels, mockConversations, mockMessages } from './data/mockData'
+import { DEFAULT_USER_AVATAR, DEFAULT_PARTY_AVATAR } from './utils/avatarDefaults'
 import { selectEngagementForReel, normalizeScoreboardEntry } from './services/engagementRelevance'
 
 // Pages: 0 = Scoreboard, 1 = Home/Reels, 2 = Search, 3 = Messages, 4 = Campaign/Ballot, 5 = Profile
@@ -564,7 +565,7 @@ function AppContent() {
         thumbnail: video.thumbnail || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&h=700&fit=crop',
         videoUrl: video.videoUrl || null,
         isMirrored: video.isMirrored || false,
-        user: video.user || { username: 'unknown', avatar: 'https://i.pravatar.cc/40?img=1', party: null },
+        user: video.user || { username: 'unknown', avatar: DEFAULT_USER_AVATAR, party: null },
         race: video.targetRace || null,
         likes: video.stats?.likes || '0',
         comments: video.stats?.comments || '0',
@@ -762,7 +763,7 @@ function AppContent() {
       const isPartyOnlyPost = isPostingToPartyFeed && !isPostingToFeed
 
       // Party avatar for party-only posts
-      const partyAvatar = effectiveParty?.photo || effectiveParty?.avatarUrl || (effectiveParty?.name ? `https://ui-avatars.com/api/?name=${encodeURIComponent(effectiveParty.name)}&background=${effectiveParty.color?.replace('#', '') || 'e91e8c'}&color=fff&size=150` : null)
+      const partyAvatar = effectiveParty?.photo || effectiveParty?.avatarUrl || DEFAULT_PARTY_AVATAR
 
       const newReel = {
         id: `reel-${timestamp}`,
@@ -1279,7 +1280,7 @@ function AppContent() {
         handle: userParty.handle,
         color: userParty.color,
         type: userParty.type,
-        avatar: userParty.photo || userParty.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userParty.name)}&background=${userParty.color?.replace('#', '') || 'e91e8c'}&color=fff&size=150`,
+        avatar: userParty.photo || userParty.avatarUrl || DEFAULT_PARTY_AVATAR,
         bio: userParty.bio || userParty.description,
         posts: partyPosts,
         isUserParty: true,
@@ -1869,12 +1870,26 @@ function AppContent() {
             startConversationWith={messageTargetUser}
             onConversationStarted={() => setMessageTargetUser(null)}
             isActive={currentPage === 3}
-            onViewReel={(reel) => {
+            onViewReel={async (reel) => {
               // Navigate to home feed and scroll to the reel
               setCurrentPage(1)
 
               // Find the reel index and scroll to it
-              const reelIndex = reels.findIndex(r => r.id === reel.id)
+              let reelIndex = reels.findIndex(r => r.id === reel.id)
+
+              // If not in feed, fetch it and inject at front
+              if (reelIndex < 0 && reel.id) {
+                try {
+                  const res = await reelsApi.getReel(reel.id)
+                  if (res.data) {
+                    setReels(prev => [res.data, ...prev])
+                    reelIndex = 0
+                  }
+                } catch (e) {
+                  console.error('Failed to fetch reel:', e)
+                }
+              }
+
               if (reelIndex >= 0 && reelsFeedRef.current) {
                 // Scroll to the reel after a short delay to ensure page transition
                 setTimeout(() => {

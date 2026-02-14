@@ -8,6 +8,7 @@ import SinglePostView from './SinglePostView'
 import { usersApi, reelsApi, reviewsApi, favoritesApi, pointsApi } from '../services/api'
 import { joinRace, leaveRace, onPointsUpdate } from '../services/socket'
 import { isImageUrl } from '../utils/media'
+import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 // CoolPeople Tier System
 const CP_TIERS = [
@@ -487,7 +488,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
   const candidate = useMemo(() => {
     const defaults = {
       username: 'User',
-      avatar: null,
+      avatar: DEFAULT_USER_AVATAR,
       party: 'Independent',
       followers: '0',
       following: '0',
@@ -810,7 +811,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       setFollowersState(followers.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -835,7 +836,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       setFollowingState(following.map(f => ({
         id: f.id,
         username: f.username,
-        avatar: f.avatar || f.profilePicture || 'https://i.pravatar.cc/40',
+        avatar: f.avatar || f.profilePicture || DEFAULT_USER_AVATAR,
         party: f.party?.name || f.partyName || null,
         isFollowing: f.isFollowing || false,
       })))
@@ -853,9 +854,9 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
       const transformedReviews = fetchedReviews.map(r => ({
         id: r.id,
         user: {
-          username: r.reviewer?.username || 'Anonymous',
-          avatar: r.reviewer?.avatarUrl || null,
-          party: r.reviewer?.party || null,
+          username: r.author?.username || r.reviewer?.username || 'Anonymous',
+          avatar: r.author?.avatarUrl || r.reviewer?.avatarUrl || null,
+          party: r.author?.party || r.reviewer?.party || null,
         },
         text: r.content || '',
         rating: r.rating || 0,
@@ -1336,9 +1337,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 className="profile-avatar-ring placeholder"
                 style={{ borderColor: partyColor, cursor: 'pointer' }}
               >
-                <div className="profile-avatar-placeholder">
-                  <span>add a profile photo</span>
-                </div>
+                <img src={DEFAULT_USER_AVATAR} alt="Default avatar" className="profile-avatar" />
               </label>
             ) : (
               <div
@@ -1346,7 +1345,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 style={{ borderColor: partyColor }}
                 onClick={isOwnProfile ? () => avatarInputRef.current?.click() : undefined}
               >
-                <img src={candidate.avatar} alt={candidate.username} className="profile-avatar" />
+                <img src={candidate.avatar || DEFAULT_USER_AVATAR} alt={candidate.username} className="profile-avatar" />
               </div>
             )}
             <div className="profile-info">
@@ -1639,7 +1638,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
         {activeTab === 'tagged' && (
           <div className="posts-grid">
             {fetchedTaggedReels.length === 0 ? (
-              <div className="posts-empty">
+              <div className="empty-reposts">
                 <p>No tagged posts yet</p>
               </div>
             ) : (
@@ -2126,7 +2125,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <>
                   <div className="nomination-response">
                     <div className="response-header">
-                      <img src={candidate.avatar} alt={candidate.username} className="response-avatar" />
+                      <img src={candidate.avatar || DEFAULT_USER_AVATAR} alt={candidate.username} className="response-avatar" />
                       <span className="response-author">{candidate.username}</span>
                     </div>
                     <p className="response-text">{reviewResponses[nomination.id]}</p>
@@ -2383,7 +2382,7 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                 <div key={activity.id} className="activity-item">
                   <div className="activity-action-badge">
                     <img
-                      src={actor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(actor.username)}&background=random`}
+                      src={actor.avatar || DEFAULT_USER_AVATAR}
                       alt={actor.username}
                       className="activity-action-badge-avatar"
                     />
@@ -2896,13 +2895,17 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             />
             <button
               className="review-modal-submit"
-              onClick={() => {
+              onClick={async () => {
                 if (reviewText.trim() && reviewRating > 0) {
+                  const targetId = candidate?.id || candidate?.userId
+                  if (!targetId) return
+
+                  // Optimistic local update
                   const newReview = {
                     id: `nom-${Date.now()}`,
                     user: {
                       username: 'You',
-                      avatar: 'https://i.pravatar.cc/40?img=68',
+                      avatar: null,
                       party: null,
                     },
                     text: reviewText,
@@ -2912,10 +2915,43 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
                     isPaid: false,
                   }
                   setCommunityReviews([newReview, ...communityReviews])
+                  setShowReviewModal(false)
+                  setReviewText('')
+                  setReviewRating(0)
+
+                  try {
+                    const res = await reviewsApi.createReview(targetId, {
+                      rating: reviewRating,
+                      content: reviewText,
+                    })
+                    if (res?.data) {
+                      // Replace optimistic review with real one from backend
+                      setCommunityReviews(prev => prev.map(r =>
+                        r.id === newReview.id ? {
+                          id: res.data.id,
+                          user: {
+                            username: res.data.author?.username || 'You',
+                            avatar: res.data.author?.avatarUrl || null,
+                            party: res.data.author?.party || null,
+                          },
+                          text: res.data.content || reviewText,
+                          rating: res.data.rating || reviewRating,
+                          timestamp: 'Just now',
+                          media: null,
+                          isPaid: false,
+                        } : r
+                      ))
+                    }
+                  } catch (err) {
+                    console.error('Failed to submit review:', err)
+                    // Remove optimistic review on failure
+                    setCommunityReviews(prev => prev.filter(r => r.id !== newReview.id))
+                  }
+                } else {
+                  setShowReviewModal(false)
+                  setReviewText('')
+                  setReviewRating(0)
                 }
-                setShowReviewModal(false)
-                setReviewText('')
-                setReviewRating(0)
               }}
             >
               Submit Review
