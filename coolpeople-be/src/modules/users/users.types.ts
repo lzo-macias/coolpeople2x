@@ -94,6 +94,7 @@ export interface FollowRequestResponse {
 // -----------------------------------------------------------------------------
 
 export interface UpdateProfileRequest {
+  username?: string;
   displayName?: string;
   bio?: string;
   avatarUrl?: string;

@@ -5,7 +5,7 @@ import '../styling/ReelCard.css'
 import '../styling/PartyCreationFlow.css'
 import EditBio from './EditBio'
 import { useAuth } from '../contexts/AuthContext'
-import { partiesApi } from '../services/api'
+import { partiesApi, usersApi } from '../services/api'
 import { DEFAULT_USER_AVATAR } from '../utils/avatarDefaults'
 
 function EditProfile({ candidate, profileSections, onSave, onClose, initialSection = null, onOptOut, onOptIn }) {
@@ -1672,12 +1672,22 @@ function EditProfile({ candidate, profileSections, onSave, onClose, initialSecti
                 </button>
                 <button
                   className="warning-btn confirm"
-                  onClick={() => {
-                    setEditedCandidate(prev => ({ ...prev, username: pendingUsername }))
-                    setLastUsernameChange(new Date())
-                    setPendingUsername('')
-                    setShowUsernameWarning(false)
-                    setActiveSection(null)
+                  onClick={async () => {
+                    try {
+                      const userId = candidate?.id || currentUser?.id || currentUser?.userId
+                      await usersApi.updateUser(userId, { username: pendingUsername })
+                      setEditedCandidate(prev => ({ ...prev, username: pendingUsername }))
+                      updateUser?.({ username: pendingUsername })
+                      onSave?.({ username: pendingUsername })
+                      setLastUsernameChange(new Date())
+                      setPendingUsername('')
+                      setShowUsernameWarning(false)
+                      setActiveSection(null)
+                      refreshUser?.()
+                    } catch (err) {
+                      console.error('Failed to update username:', err)
+                      alert(err.message?.includes('409') ? 'Username already taken' : 'Failed to update username')
+                    }
                   }}
                 >
                   Confirm

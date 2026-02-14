@@ -304,6 +304,16 @@ export const updateProfile = async (
   userId: string,
   data: UpdateProfileRequest
 ): Promise<PrivateProfile> => {
+  // Check if username is already taken (if being updated)
+  if (data.username) {
+    const existingUsername = await prisma.user.findUnique({
+      where: { username: data.username },
+    });
+    if (existingUsername && existingUsername.id !== userId) {
+      throw new ConflictError('Username already in use');
+    }
+  }
+
   // Check if phone number is already taken (if being updated)
   if (data.phone) {
     const existingPhone = await prisma.user.findUnique({
@@ -317,6 +327,7 @@ export const updateProfile = async (
   await prisma.user.update({
     where: { id: userId },
     data: {
+      ...(data.username && { username: data.username }),
       ...(data.displayName && { displayName: data.displayName }),
       ...(data.bio !== undefined && { bio: data.bio }),
       ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),

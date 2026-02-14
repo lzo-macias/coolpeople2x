@@ -2461,6 +2461,11 @@ function CandidateProfile({ candidate: passedCandidate, onClose, onPartyClick, o
             candidate={candidate}
             profileSections={profileSections}
             onSave={(updatedData) => {
+              // Handle username change - update cached profile so useMemo picks it up
+              if (updatedData.username) {
+                setFetchedProfile(prev => prev ? { ...prev, username: updatedData.username } : prev)
+              }
+
               setProfileSections(prev => {
                 const newSections = { ...prev }
 
